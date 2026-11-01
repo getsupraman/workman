@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1238 200" width="1238" height="200" role="img" aria-label="20 work_* tools on one server; 5 conditions guard done; a worker&#x27;s token sees 6 tools; 935 tests passing">
+<rect x="18" y="18" width="287" height="164" rx="14" fill="#f6f8fa" stroke="#d0d7de"/>
+<text x="42" y="82" font-family="Archivo,-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif" font-weight="800" font-size="46" fill="#b06c00">20</text>
+<text x="42" y="114" font-family="Archivo,-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif" font-weight="600" font-size="17" fill="#1f2430">work_* tools, one server</text>
+<text font-family="Archivo,-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif" font-size="14" fill="#59636e"><tspan x="42" y="142">19 for every orchestrator, plus</tspan><tspan x="42" y="162">work_import behind its own grant</tspan></text><rect x="323" y="18" width="287" height="164" rx="14" fill="#f6f8fa" stroke="#d0d7de"/>
+<text x="347" y="82" font-family="Archivo,-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif" font-weight="800" font-size="46" fill="#b06c00">5</text>
+<text x="347" y="114" font-family="Archivo,-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif" font-weight="600" font-size="17" fill="#1f2430">conditions guard done</text>
+<text font-family="Archivo,-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif" font-size="14" fill="#59636e"><tspan x="347" y="142">criteria, an orchestrator&#x27;s verify,</tspan><tspan x="347" y="162">children, blockers, a commit</tspan></text><rect x="628" y="18" width="287" height="164" rx="14" fill="#f6f8fa" stroke="#d0d7de"/>
+<text x="652" y="82" font-family="Archivo,-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif" font-weight="800" font-size="46" fill="#b06c00">6</text>
+<text x="652" y="114" font-family="Archivo,-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif" font-weight="600" font-size="17" fill="#1f2430">tools a worker&#x27;s token sees</text>
+<text font-family="Archivo,-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif" font-size="14" fill="#59636e"><tspan x="652" y="142">workers report and verify;</tspan><tspan x="652" y="162">only an orchestrator closes</tspan></text><rect x="933" y="18" width="287" height="164" rx="14" fill="#f6f8fa" stroke="#d0d7de"/>
+<text x="957" y="82" font-family="Archivo,-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif" font-weight="800" font-size="46" fill="#b06c00">935</text>
+<text x="957" y="114" font-family="Archivo,-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif" font-weight="600" font-size="17" fill="#1f2430">tests passing</text>
+<text font-family="Archivo,-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif" font-size="14" fill="#59636e"><tspan x="957" y="142">the .NET server and the plugin,</tspan><tspan x="957" y="162">run by CI on every change</tspan></text>
+</svg>
