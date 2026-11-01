@@ -1,6 +1,6 @@
 ---
-name: workstate
-description: "Plan, propose and triage work in the WorkState store (the `work_*` MCP tools) without executing any of it. Turns a request like \"plan feature XY\" into a run in WorkState: a goal, units or phases with done-criteria and a verification command each, binding rules, open assumptions and ordering. Answers \"what should we build next\" by reading the board and the repo and ranking candidates. Grooms a backlog by proposing what to close, defer, merge or reorder. Then it stops at the approval gate, and the human hands the plan to an executor: \"approved, execute as /rlarch:controller\" or \"/rlarch:orchestrate\". It writes no product code, launches no agent and starts nothing. USE FOR: planning a feature, fix or migration before anyone builds it; \"propose what we should build next\"; triaging or grooming a backlog; \"where are we\" or \"show me the workstate\"; revising a plan after feedback. DO NOT USE FOR: executing a plan (use /rlarch:controller or /rlarch:orchestrate), importing existing PLAN.md or TODO files (use /rlarch:workstate-import), or installing the server (use /rlarch:workstate-setup)."
+name: plan
+description: "Plan, propose and triage work in the WorkState store (the `work_*` MCP tools) without executing any of it. Turns a request like \"plan feature XY\" into a run in WorkState: a goal, units or phases with done-criteria and a verification command each, binding rules, open assumptions and ordering. Answers \"what should we build next\" by reading the board and the repo and ranking candidates. Grooms a backlog by proposing what to close, defer, merge or reorder. Then it stops at the approval gate, and the human hands the plan to an executor: \"approved, execute as /workman:controller\" or \"/workman:orchestrate\". It writes no product code, launches no agent and starts nothing. USE FOR: planning a feature, fix or migration before anyone builds it; \"propose what we should build next\"; triaging or grooming a backlog; \"where are we\" or \"show me the workstate\"; revising a plan after feedback. DO NOT USE FOR: executing a plan (use /workman:controller or /workman:orchestrate), importing existing PLAN.md or TODO files (use /workman:import), or installing the server (use /workman:setup)."
 ---
 
 # WorkState: plan, propose, triage
@@ -9,8 +9,8 @@ You are the **planner**, not the builder. Your output is records in WorkState an
 in chat. Nothing in the repo changes: no product code, no branch, no worktree, no agent. Execution
 starts only when the human says so, in words, and it starts in an executor skill:
 
-> *"approved, execute as /rlarch:controller"*: many mostly independent units, one nested session each.
-> *"approved, execute as /rlarch:orchestrate"*: one plan, run in that session with subagents.
+> *"approved, execute as /workman:controller"*: many mostly independent units, one nested session each.
+> *"approved, execute as /workman:orchestrate"*: one plan, run in that session with subagents.
 
 The plan lives in the store so that handoff costs nothing. The executor calls `work_brief`, finds the
 run you made, and starts from it. Anything you leave only in chat is lost at that handoff.
@@ -23,8 +23,8 @@ Call **`work_brief(repo: {remote, root})`**. `remote` is `git remote get-url ori
 there is no origin). `root` is the parent directory of
 `git rev-parse --path-format=absolute --git-common-dir`.
 
-- **No `work_*` tools** → *"/rlarch:workstate needs the WorkState MCP server. Run
-  `/rlarch:workstate-setup`."* Stop. There is no markdown fallback.
+- **No `work_*` tools** → *"/workman:plan needs the WorkState MCP server. Run
+  `/workman:setup`."* Stop. There is no markdown fallback.
 - **`work_create` is missing** → the session has a worker token, and workers cannot plan. Say so in
   one line and stop.
 - **`session  unnamed`** → `work_session(name:)` with the name `ListAgents` prints first.
@@ -63,7 +63,7 @@ each gate.
    - **Controller** when the work splits into units that are each big enough for their own context
      window and mostly independent. Shape: one `run` (the queue), one `task` per unit.
    - **Orchestrate** when it is one connected plan. Shape: one `run`, then `phase`s, then `task`s, as
-     `/rlarch:orchestrate` `references/decompose.md` describes.
+     `/workman:orchestrate` `references/decompose.md` describes.
    - **No executor** when it is one small task. Say so and offer to do it directly. A run for a
      ten-line change is overhead.
 4. **Write it**, one `work_create` per level, top-down, reading back each call's refs:
@@ -71,7 +71,7 @@ each gate.
      When it belongs to a project that already exists, `work_update(ref, repo:)` binds it instead.
      Never create a second project for one repo.
    - the **run**: `parent:` the project, `ref:` a short kebab slug (required under a project), `intent:` the goal paragraph plus
-     *"planned by /rlarch:workstate, awaiting approval; executor: controller|orchestrate"*.
+     *"planned by /workman:plan, awaiting approval; executor: controller|orchestrate"*.
    - its **tasks** (and phases): each with `criteria` that state outcomes, not activities, and a
      `verify_cmd` that would fail if the work were wrong. `work_create` refuses a task without both.
      Put *where it is specified* in `intent`: file and section, never a restatement.
@@ -88,7 +88,7 @@ each gate.
    - the executor you recommend and why,
    - the open questions and assumptions the human should look at,
    - the dashboard link (the `web` line `work_brief`/`work_get` print for the run),
-   - the literal handoff line: *"approved, execute as /rlarch:controller"* (or orchestrate).
+   - the literal handoff line: *"approved, execute as /workman:controller"* (or orchestrate).
 
    Do not start anything. Do not ask "shall I start?" either. The handoff line is how the human
    approves.
@@ -168,7 +168,7 @@ same gate.
 
 ## 7. Handoff: what the executor does with your run
 
-When the human answers *"approved, execute as /rlarch:controller"* (or orchestrate), the executor
+When the human answers *"approved, execute as /workman:controller"* (or orchestrate), the executor
 skill loads in the same session or a new one, and:
 
 1. `work_brief` finds the run you created. The human's message names it, or it is the run awaiting

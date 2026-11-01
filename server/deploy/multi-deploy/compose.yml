@@ -1,6 +1,6 @@
 # WorkState on a multi-deploy server (github.com/r-Larch/multi-deploy), behind its Traefik.
 # Copy this folder to /opt/multi-deploy/apps/workstate/, run ./gen-env.sh once, then `app deploy workstate`.
-# Keep the services in step with plugin/skills/workstate-setup/assets/compose.yml; this file adds
+# Keep the services in step with plugin/skills/setup/assets/compose.yml; this file adds
 # the Traefik labels, the `web` network, the public origin and the trusted proxy, and publishes no port.
 # The image is pinned by WORKSTATE_VERSION in .env: an upgrade is a deliberate edit, after a backup.
 

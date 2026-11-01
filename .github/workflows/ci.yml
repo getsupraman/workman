@@ -71,10 +71,10 @@ jobs:
 
       # Only the *.test.mjs files: test/ also holds helpers (fake-claude.mjs, …) that a bare
       # `node --test` would run as tests.
-      - name: nested-claude server
-        working-directory: plugin/skills/nested-claude/server
+      - name: agents server
+        working-directory: plugin/skills/agents/server
         run: node --test test/*.test.mjs
 
-      - name: workstate-setup assets
-        working-directory: plugin/skills/workstate-setup/assets
+      - name: setup assets
+        working-directory: plugin/skills/setup/assets
         run: node --test test/*.test.mjs

@@ -121,8 +121,8 @@ Rules:
 
 ## 3. The `agents` stdio server (plugin)
 
-`plugin/.mcp.json` → server `agents`: `node ${CLAUDE_PLUGIN_ROOT}/skills/nested-claude/server/agents.mjs`.
-Tools appear as `mcp__plugin_rlarch_agents__<tool>`. No npm dependencies; plain ES modules with
+`plugin/.mcp.json` → server `agents`: `node ${CLAUDE_PLUGIN_ROOT}/skills/agents/server/agents.mjs`.
+Tools appear as `mcp__plugin_workman_agents__<tool>`. No npm dependencies; plain ES modules with
 `// @ts-check`, like `ts-source`. Speaks MCP over newline-delimited JSON-RPC on stdio.
 
 ### `agent_launch`
@@ -146,7 +146,7 @@ Tools appear as `mcp__plugin_rlarch_agents__<tool>`. No npm dependencies; plain 
 | `dry_run` | bool | false | everything except minting and spawning; returns the argv (token shown as `<minted>`) |
 
 Every variadic flag is closed by the next flag and the prompt goes last, exactly as the scripts do
-(nested-claude §1, "Traps"). Arguments are passed as an argv array (no shell), so quoting traps are
+(agents §1, "Traps"). Arguments are passed as an argv array (no shell), so quoting traps are
 gone. If `workstate.role` is not `none` and minting fails (no env file, server down, 4xx), the launch
 is **refused** with the reason — never silently launched with the inherited controller registration.
 
@@ -169,7 +169,7 @@ fix. No result ever contains a token.
   the argv order. The skill says the tool is the primary path.
 - Header-named sessions (doc 11) keep working for registrations that cannot mint (human sessions
   with `--header X-WorkState-Agent`). Foreman mints with its OAuth token (§2, "Minting with OAuth").
-- `workstate-setup` still registers the user-level server with a static token. Making setup itself
+- `/workman:setup` still registers the user-level server with a static token. Making setup itself
   token-free is doc 12 §7.4, not in this unit.
 
 ## 5. Verification the controller runs before release

@@ -382,7 +382,7 @@ public sealed partial class BoardReader(WorkStateQueries queries, BoardQueries b
     public const string UnnamedKeyed = "session  unnamed — work_session(name:\"<the name ListAgents shows for you>\")";
 
     public const string UnnamedBare =
-        "session  unnamed — /rlarch:workstate-setup installs the session helper; then start a new session";
+        "session  unnamed — /workman:setup installs the session helper; then start a new session";
 
     /// <summary>
     /// doc 11 — a caller with no session writes as its role alone, and two of them on one token

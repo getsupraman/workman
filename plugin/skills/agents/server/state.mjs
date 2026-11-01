@@ -20,12 +20,21 @@ import path from 'node:path'
  * @property {string} launchedAt
  */
 
-/** @param {NodeJS.ProcessEnv} [env] */
-export function stateDir(env = process.env) {
-    const base = env.CLAUDE_PLUGIN_DATA || path.join(os.tmpdir(), 'rlarch-agents')
+/** @param {NodeJS.ProcessEnv} [env] @param {string} [tmp] */
+export function stateDir(env = process.env, tmp = os.tmpdir()) {
+    const base = env.CLAUDE_PLUGIN_DATA || fallbackBase(tmp)
     const dir = path.join(base, 'agents')
     fs.mkdirSync(dir, { recursive: true })
     return dir
+}
+
+// Records written before the plugin was renamed from rlarch stay where they are, so
+// agent_list and agent_stop still find the agents launched under the old name.
+/** @param {string} tmp */
+function fallbackBase(tmp) {
+    const current = path.join(tmp, 'workman-agents')
+    const legacy = path.join(tmp, 'rlarch-agents')
+    return !fs.existsSync(current) && fs.existsSync(legacy) ? legacy : current
 }
 
 /** @param {string} name */

@@ -113,28 +113,28 @@ The plugin and the server now **version separately**: the plugin updates through
 server when you rebuild it. A skill that assumes `work_status` exists breaks against an older server,
 **silently**, because a missing tool is simply absent from `tools/list` (measured — doc 01 §6).
 
-`McpServerOptions.ServerInfo.Version` is already set (`0.4.0` as of rlarch 2.2.0). **Bump it deliberately**, and have
+`McpServerOptions.ServerInfo.Version` is already set (`0.4.0` as of plugin 2.2.0). **Bump it deliberately**, and have
 the rewritten skills state the minimum they need, so the failure is a sentence rather than a mystery.
 
-`0.5.0` (rlarch 2.3.0) carries one project per repository (repo binding), the project brief, archive,
+`0.5.0` (plugin 2.3.0) carries one project per repository (repo binding), the project brief, archive,
 the prompt catalogue and `work_import`.
 
-`0.6.0` (rlarch 2.4.0) carries session self-naming (the client key, `work_session`) and the bare
+`0.6.0` (plugin 2.4.0) carries session self-naming (the client key, `work_session`) and the bare
 `work_brief()` project chooser.
 
-`0.7.0` (rlarch 2.5.0) carries the gate brief (`for:"gate"`, also over the read API), `work_search`
+`0.7.0` (plugin 2.5.0) carries the gate brief (`for:"gate"`, also over the read API), `work_search`
 over assumptions, rules and notes with `scope`, the raised `tools/list` budgets, the dashboard's
 `fullRef` field, and two indexes (`item_ref_lower_idx`, `note_search_idx`).
 
-`0.7.1` (rlarch 2.5.1) carries readable dashboard links (`/r/<project/run/ref>`, the `web` line in
+`0.7.1` (plugin 2.5.1) carries readable dashboard links (`/r/<project/run/ref>`, the `web` line in
 `work_brief` and `work_get`, optional `WORKSTATE_PUBLIC_URL`) and the dashboard's split run page.
 
-`0.8.0` (rlarch 2.7.0) carries OAuth 2.1 sign-in for `/mcp` (OpenIddict; client-ID metadata
+`0.8.0` (plugin 2.7.0) carries OAuth 2.1 sign-in for `/mcp` (OpenIddict; client-ID metadata
 documents and dynamic registration; PKCE S256; keys held in Postgres), the `/connect/signin` and
 `/connect/consent` pages with the client's icon, `WORKSTATE_TRUSTED_PROXIES`, and one additive
 migration (`OAuthServer`). Static and minted `wss_` tokens are unchanged.
 
-`0.9.0` (rlarch 2.7.0, no plugin change) carries OAuth for the read API, `/api/stream` and the
+`0.9.0` (plugin 2.7.0, no plugin change) carries OAuth for the read API, `/api/stream` and the
 agent-session mint (resource `<origin>/api`, scopes `workstate.read` and `workstate.sessions`), the
 cascade that ends `wss_` sessions minted under a revoked authorization, the launcher takeover of a
 name by Claude session id, the name release (dashboard Sessions page and
@@ -188,7 +188,7 @@ question's answer when it closes, and gives the dashboard a phone layout.
 the OAuth authorizations they hold in the workspace and revokes one, which also revokes the agent
 sessions minted under it.
 
-`1.1.4` (with rlarch 2.8.2, no migration) names items under a project or its backlog with a
+`1.1.4` (with plugin 2.8.2, no migration) names items under a project or its backlog with a
 required kebab `ref`, which the skills link for the human. It shows the product as Workman to a
 person; every machine-facing name stays `workstate`.
 
@@ -197,7 +197,7 @@ person; every machine-facing name stays `workstate`.
 ## 3. Should the skills use it? — Yes, and as a **hard** dependency
 
 > **SCOPE CORRECTED 2026-09-22 — it is two skills, not three.** This section and doc 03's Phase 6
-> both say *“rewrite `orchestrate`, `controller` and `nested-claude`”*. Measured: `nested-claude`
+> both say *“rewrite `orchestrate`, `controller` and `/workman:agents`”*. Measured: `/workman:agents`
 > contains **zero** references to a ledger, `PLAN.md`, `CONVENTIONS.md` or the orchestration
 > directory. Its nine sections are launching a session, addressing it, the READY/BLOCKED/DONE
 > protocol, steering, watching, wrapping up, concurrency, restart recovery and writing the brief.
@@ -214,7 +214,7 @@ warns about — and the file path would rot, because nobody would exercise it.
 
 - **Hard dependency, with a preflight.** The skill's first instruction is `work_brief`. If the server
   is unreachable, the skill says **the one command that starts it**. That is
-  `nested-claude`'s *"every prohibition needs a route"* applied to a skill: a requirement without a
+  `/workman:agents`'s *"every prohibition needs a route"* applied to a skill: a requirement without a
   route is a trap.
 - **This is a MAJOR bump** per AGENTS.md — the behaviour of an existing skill changes for everyone.
 - **What gets deleted, not adapted:** `references/decompose.md` §PLAN.md and §LEDGER.md,
@@ -471,7 +471,7 @@ image, the port it listens on (8080) and the code path are the same. The reverse
 docker compose -f server/compose.yml up -d
 ```
 
-…or, with no clone at all, `/rlarch:workstate-setup` (its script) writes `~/.workstate/compose.yml`,
+…or, with no clone at all, `/workman:setup` (its script) writes `~/.workstate/compose.yml`,
 which **pulls the published image** instead of building one, and runs the same command against it.
 
 > **Changed 2026-10-26 — a published image.** `.github/workflows/image.yml` builds
@@ -479,7 +479,7 @@ which **pulls the published image** instead of building one, and runs the same c
 > (since 2026-10-28; before that, on every push to `master` touching `server/**`). The tag must equal
 > `ServerInfo.Version`, and a version already on ghcr is refused rather than rebuilt. It pushes `ghcr.io/getsupraman/workman:<ServerInfo.Version>` and `:latest`, labelled
 > `org.opencontainers.image.source=https://github.com/getsupraman/workman`. The pull-only compose is
-> `plugin/skills/workstate-setup/assets/compose.yml`: the same services, volume and project
+> `plugin/skills/setup/assets/compose.yml`: the same services, volume and project
 > name (`workstate`) as `server/compose.yml`, so a machine can move between them and keep its data.
 > `server/compose.yml` stays the build-from-source compose for development. The Dockerfile's build
 > stages run on the builder's platform and cross-target (`-a $TARGETARCH`): `dotnet restore` under
@@ -501,7 +501,7 @@ task at logon. Same result, more moving parts.
 - **It becomes a single point of failure and a single backup target.** Every project's plan, ledger
   and evidence lives in one Postgres volume. **Back that volume up**, or the thing that replaced 181
   markdown files in git becomes the one artifact that is not in git. *(2026-10-26: scripted —
-  `workstate-setup.sh --backup <file>` / `--restore <file>` run `pg_dump -Fc` / `pg_restore --clean`
+  `setup.sh --backup <file>` / `--restore <file>` run `pg_dump -Fc` / `pg_restore --clean`
   inside the `db` container; a restore writes a safety dump first. Not automated on a schedule.)*
 - **Bind to localhost.** `compose.dev.yml` already publishes `127.0.0.1:55433`. Keep the API the same
   until there is a reason not to, because the bearer tokens are currently throwaways and the
@@ -531,7 +531,7 @@ watch it happen.
 It is written and proved, so the temptation is to drop it straight into `plugin/`. Two
 reasons not to, and the second is the real one:
 
-- **It is not free to install.** The moment it ships, every session in every repo with the rlarch
+- **It is not free to install.** The moment it ships, every session in every repo with the workman
   plugin tries to reach `127.0.0.1:5290`. If the stack is not up or `WORKSTATE_TOKEN` is unset, the
   result is a failed MCP connection notice — in every project, whether or not that project has
   anything to do with WorkState. That is a cost the owner should choose, not inherit.

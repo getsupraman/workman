@@ -1,4 +1,4 @@
-# Publishes the Workman server image that plugin/skills/workstate-setup/assets/compose.yml pulls.
+# Publishes the Workman server image that plugin/skills/setup/assets/compose.yml pulls.
 # Never runs on pull_request: a fork's branch must not be able to push to the package.
 # A release is a git tag `v<ServerInfo.Version>` (e.g. v1.1.4). The tag must match ApiHost.cs, and a
 # version already on ghcr is never rebuilt, so a published version cannot change.

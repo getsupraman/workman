@@ -73,7 +73,7 @@ open ──▶ ready ──▶ in_progress ──▶ review ──▶ done
 
 > **Changed 2026-10-22 (ws/8).** The `in_progress` row locked the run: every unit fell back to the
 > run's key, so two units of one run in separate git worktrees could not both be in progress — the
-> shape `/rlarch:controller` runs. `work_status` now takes `tree:`; one writer per worktree, many per
+> shape `/workman:controller` runs. `work_status` now takes `tree:`; one writer per worktree, many per
 > run. Without it the behaviour is unchanged, except that a ref-scope fallback key no longer collides
 > with a same-named run in another workspace. An expired claim's attention line names its tree and
 > retakes with it.
@@ -240,7 +240,7 @@ That second is the parallel-orchestrator rule: **two units in different worktree
 concurrently, even in one run; two sharing a working tree do not.** Read-only claims (recon) do not
 take the lock.
 
-> This is the machine answer to `nested-claude`'s *"a parked agent is indistinguishable from a busy
+> This is the machine answer to `/workman:agents`'s *"a parked agent is indistinguishable from a busy
 > one"*. A parked agent stops writing, its lease lapses, and the store says so.
 
 ---

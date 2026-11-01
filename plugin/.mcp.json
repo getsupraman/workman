@@ -2,7 +2,7 @@
   "mcpServers": {
     "agents": {
       "command": "node",
-      "args": ["${CLAUDE_PLUGIN_ROOT}/skills/nested-claude/server/agents.mjs"]
+      "args": ["${CLAUDE_PLUGIN_ROOT}/skills/agents/server/agents.mjs"]
     }
   }
 }

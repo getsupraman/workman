@@ -15,8 +15,8 @@ Invoking this skill is the user's explicit authorization to spawn subagents. You
 
 **Call `work_brief(repo: {remote, root})`.** This skill keeps its plan, rules, evidence and record in WorkState and has no other place to keep them. A project is bound to its repository, and the repo is how you find yours: `remote` is `git remote get-url origin` (omit it when there is no origin), `root` is the parent directory of `git rev-parse --path-format=absolute --git-common-dir` — the main checkout, the same from every worktree. A session launched by `agent_launch` already carries both, so a bare `work_brief()` finds the project too.
 
-- **No `work_*` tools in your list** → tell the user in one line: *"orchestrate needs the WorkState MCP server and this session cannot see it — run `/rlarch:workstate-setup`."* Then stop. Do not fall back to markdown files; there is no second mode.
-- **`work_brief` exists but `work_constrain` does not** → the server is older than this skill. Say so in one line, point at `/rlarch:workstate-setup`, and stop.
+- **No `work_*` tools in your list** → tell the user in one line: *"orchestrate needs the WorkState MCP server and this session cannot see it — run `/workman:setup`."* Then stop. Do not fall back to markdown files; there is no second mode.
+- **`work_brief` exists but `work_constrain` does not** → the server is older than this skill. Say so in one line, point at `/workman:setup`, and stop.
 - **It says `session  unnamed — work_session(…)`** → sign your work first: `work_session(name:)` with the name `ListAgents` gives in its first line, *"This session is <name> [ref]"* (the name, not the ref).
 - **It answers** → read it. It is the goal, where the run stands, the literal next action, the rules that bind, and the open assumptions. If it names a run in flight that is this undertaking ("continue orchestrating phase 4"), **resume the loop from its NEXT line**: Phase 0 and its approval gate do not re-fire, and the per-phase gate is the discipline from then on. On an empty server it answers with onboarding; that is Phase 0.
 
@@ -100,8 +100,8 @@ You cannot budget without prices. Rough order of magnitude:
 
 6. **Gate: present the plan and get approval before the first writing agent runs.** Show `work_tree(scope: "<run ref>")` — phases, tasks, and the verification command each will be judged by — and the open assumptions. Then stop and wait. This is the only mandatory user gate; after it, run to completion unless an escalation trigger fires.
 
-   **A run planned by `/rlarch:workstate`** is already in the store and, once the human says
-   *"approved, execute as /rlarch:orchestrate"*, already approved. Skip steps 4 and 5, record the
+   **A run planned by `/workman:plan`** is already in the store and, once the human says
+   *"approved, execute as /workman:orchestrate"*, already approved. Skip steps 4 and 5, record the
    approval with `work_note(kind: "decision", from: "<run ref>", body: "plan approved by <human>:
    execute as orchestrate")`, run the plan audit below on it, and start Phase 1. Ask again only if
    the audit finds a defect that changes the plan.

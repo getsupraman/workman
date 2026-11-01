@@ -124,7 +124,7 @@ CREATE TABLE project_repo (
 
 The server cannot run git, so the client computes the keys and the server normalises whatever it
 receives. The rule exists twice — `RepoKeys` in `WorkState.Core/Domain/Repos.cs` and
-`nested-claude/server/repo.mjs` — and both test suites run the one table in
+`agents/server/repo.mjs` — and both test suites run the one table in
 [`repo-keys.json`](repo-keys.json).
 
 **Binding.** `work_create(items:[{kind:"project", …, repo:{remote, root}}])` binds the keys it is
@@ -269,7 +269,7 @@ only; a later change to them is a migration, which a fresh database runs too.
 ### Parallel orchestrators — what actually has to serialize
 
 Two runs against **different worktrees** may write at the same time; two runs against the **same**
-working tree may not. That is `nested-claude` §7 exactly (*"a `--bg` agent cannot edit your checkout
+working tree may not. That is `/workman:agents` §7 exactly (*"a `--bg` agent cannot edit your checkout
 at all"*), so the lock is keyed on the tree, not on the run:
 
 ```sql
@@ -527,7 +527,7 @@ CREATE TABLE attempt (
   item_id     uuid NOT NULL REFERENCES item ON DELETE CASCADE,
   n           int  NOT NULL,                    -- 1, 2, 3 …
   agent_name  text,                             -- 'fix-B-07'
-  agent_kind  text,                             -- 'general-purpose' | 'Explore' | 'nested-claude'
+  agent_kind  text,                             -- 'general-purpose' | 'Explore' | 'agents'
   session_id  text,                             -- the .jsonl transcript handle
   brief_doc_id uuid REFERENCES doc,             -- the brief AS ISSUED (immutable snapshot)
   started_at  timestamptz NOT NULL DEFAULT now(),
@@ -678,7 +678,7 @@ Three things this enables that a file cannot:
   briefs missing the rule that was added after they were written.
 - **Coverage checking** (plan-audit check #6). `covers_risk` vs the `risk_tags` of *upcoming* items
   answers *"does `CONVENTIONS.md` still forbid everything the remaining tasks can destroy?"* as a set
-  difference. The `route` column is `nested-claude`'s hardest-won lesson made structural: a
+  difference. The `route` column is `/workman:agents`'s hardest-won lesson made structural: a
   prohibition row without a route is itself a defect, because *"a rule that demands a capability the
   agent does not have is a trap you set yourself."* `work_constrain` refuses a `red_line` that
   carries no `route` — the one kind that is a prohibition, and the one case where the guard is
@@ -821,7 +821,7 @@ live claim with a session from `agent_session.user_id`; the rest keep NULL.
 > its run across the upgrade.
 
 An expired lease is not silently reaped — it surfaces in `attention` and, on the next
-`work_status`/`work_brief`, is released with a `claim_expired` event. `nested-claude`'s
+`work_status`/`work_brief`, is released with a `claim_expired` event. `/workman:agents`'s
 *"a parked agent is indistinguishable from a busy one"* becomes *"a parked agent stops heartbeating
 and the store says so."*
 

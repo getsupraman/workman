@@ -51,7 +51,7 @@ server-less agent what to do, it is contaminated.*
 
 ## 4. The one known contaminant, stated rather than hidden
 
-The agent is launched by `nested-claude`'s `Start-NestedAgent.ps1`, which **prepends ~20 lines** to
+The agent is launched by `/workman:agents`'s `Start-NestedAgent.ps1`, which **prepends ~20 lines** to
 every brief: who its controller is, the `READY` / `BLOCKED` / `DONE` protocol, and *"if you hit a
 permission prompt you cannot clear, send BLOCKED naming the exact operation."*
 

@@ -67,7 +67,7 @@ claims are released and journalled, with the user as the actor and `human` as th
 **Or by naming itself (2026-10-26, unit `mature/session-names`).** A hand-started session shares the
 user-scope static registration, so it has no header of its own — and a fixed `X-WorkState-Agent` in
 `~/.claude.json` would give every session the same name. The registration's `headersHelper`,
-`session-header.mjs` (installed by `workstate-setup`), sends `X-WorkState-Client:
+`session-header.mjs` (installed by `/workman:setup`), sends `X-WorkState-Client:
 <host>/<pid>/<start epoch s>` of the nearest Claude Code ancestor process — found in the process table,
 never from `CLAUDE_PID`/`CLAUDE_JOB_DIR`, which are inherited from whoever started the process — and
 `X-WorkState-Agent` too when `claude agents --json` lists that pid with a name (background sessions;

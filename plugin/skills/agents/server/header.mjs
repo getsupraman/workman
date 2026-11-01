@@ -49,7 +49,7 @@ export const READONLY_TOOLS = Object.freeze([
     'PowerShell(git diff:*)', 'PowerShell(git log:*)',
 ])
 
-// `git push` is deliberately absent and must stay absent (nested-claude SKILL.md §3).
+// `git push` is deliberately absent and must stay absent (agents SKILL.md §3).
 export const FIX_TOOLS = Object.freeze([
     ...READONLY_TOOLS,
     'Write', 'Edit',
