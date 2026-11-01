@@ -36,9 +36,10 @@ public sealed class ImportVisibilityTests(PostgresFixture fixture)
     /// (search-scope); both re-pinned when work_brief, work_get, work_threads and work_status lost
     /// the sentences that restated the server instructions or a sibling line (tool-budget); the orchestrator list re-pinned
     /// when work_create's ref named the project/backlog rule (readable-refs).
+    /// Both are hashed sorted by name with LF line endings, so every host and checkout pins the same bytes.
     /// </summary>
-    private const string WorkerList = "7188cae747703f90ba12fae0559822fb8997f4d22314bcfb3707c89efc80d3fd";
-    private const string OrchestratorList = "4145b48e8f2894c8fda4a9f753a89fd7e42430a700ddda3f1795e2f4eed37237";
+    private const string WorkerList = "f85b6bceea63adfedb64ccb10138c7731bbd6086c6c7ab30348dad44eca55e23";
+    private const string OrchestratorList = "ad7bee69d3484603fb8d866d49e901fb3ef9a02a32b8f6d27b1fd55d6179181a";
     private const string ControllerList = OrchestratorList;
 
     [Fact]
@@ -191,7 +192,9 @@ public sealed class ImportVisibilityTests(PostgresFixture fixture)
     internal static async Task<(string Hash, IReadOnlyList<string> Names)> ListAsync(McpClient client)
     {
         var tools = await client.ListToolsAsync(cancellationToken: Ct);
-        var payload = JsonSerializer.Serialize(tools.Select(t => t.ProtocolTool));
+        // tools/list order is not stable across hosts, and a CRLF checkout puts \r\n into the raw-string descriptions.
+        var payload = JsonSerializer.Serialize(tools.OrderBy(t => t.Name, StringComparer.Ordinal).Select(t => t.ProtocolTool))
+            .Replace("\\r\\n", "\\n", StringComparison.Ordinal);
         return (Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(payload))), [.. tools.Select(t => t.Name)]);
     }
 
