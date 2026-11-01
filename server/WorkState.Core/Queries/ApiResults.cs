@@ -30,7 +30,7 @@ public sealed record Placement(Guid ItemId, Guid? RunId, Guid? ProjectId);
 /// <summary>A journal event the caller may see, and the run its item is in.</summary>
 public sealed record StreamPlacement(Guid? ItemId, Guid? RunId);
 
-/// <summary>doc 10's <c>Rollup</c>: leaf kinds only, every status including the two that close undone.</summary>
+/// <summary>doc 10's <c>Rollup</c>: leaf kinds plus empty phases and features, every status including the two that close undone.</summary>
 public sealed record LeafRollup(
     Guid Id,
     int Open,

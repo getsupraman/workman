@@ -157,6 +157,37 @@ check('Needs attention (stop or claimed)', shape(plan(board, 'attention')), [['P
 check('indent under a phase', plan(board, 'all', true)[2].rows.map((r) => r.indent), [0, 1, 0, 0])
 check('cancelled lines the toggle counts', cancelledLines(board), 1)
 
+console.log('\n── an empty phase: listed as itself, counted as one item ────────────────────')
+// The real case: one done task, two open follow-ups, one open phase with nothing in it yet.
+const emptyRows = [
+  row(ref('run', 'in_progress'), 0),
+  row(ref('task', 'done', 'shipped'), 1, { verification: proven }),
+  row(ref('followup', 'open', 'fu-a'), 1),
+  row(ref('followup', 'open', 'fu-b'), 1),
+  row(ref('phase', 'open', 'Empty'), 1),
+]
+const empty = { rows: emptyRows }
+check('Open lists the open empty phase, no rows below it', shape(plan(empty, 'open')), [['Tasks', 2, '-'], ['Empty', 0, '0/0']])
+check('All lists it too, unchanged', shape(plan(empty, 'all')), [['Tasks', 3, '-'], ['Empty', 0, '0/0']])
+check('Needs attention leaves out an idle empty phase', shape(plan(empty, 'attention')), [])
+check('tally() counts it: 1 of 4, as the rollup does', progress(tally(emptyRows)), '1 of 4 done.')
+const emptyRollup = { total: 4, done: 1, inProgress: 0, review: 0, blocked: 0, open: 3, cancelled: 0, superseded: 0 }
+check('the API rollup of that run, counted', counted(emptyRollup), { done: 1, total: 4, cancelled: 0 })
+const lone = (phase) => ({ rows: [row(ref('run', 'in_progress'), 0), phase] })
+const donePhase = lone(row(ref('phase', 'done', 'Closed'), 1))
+check('a done empty phase stays hidden under Open', shape(plan(donePhase, 'open')), [])
+check('a done empty phase is listed under All', shape(plan(donePhase, 'all')), [['Closed', 0, '0/0']])
+check('a done empty phase is one done item', [tally(donePhase.rows).done, tally(donePhase.rows).total], [1, 1])
+check('a blocked empty phase needs attention', shape(plan(lone(row(ref('phase', 'blocked', 'Stuck'), 1)), 'attention')), [['Stuck', 0, '0/0']])
+check('an expired claim on an empty phase needs attention', shape(plan(lone(row(ref('phase', 'open', 'Held'), 1, { claim: { expired: true } })), 'attention')), [['Held', 0, '0/0']])
+const gonePhase = lone(row(ref('phase', 'cancelled', 'Gone'), 1))
+check('a cancelled empty phase: hidden, the toggle counts it', [shape(plan(gonePhase, 'all')), cancelledLines(gonePhase)], [[], 1])
+const onlyCancelled = { rows: [row(ref('run', 'in_progress'), 0), row(ref('phase', 'open', 'P'), 1, { hasChildren: true }), row(ref('task', 'cancelled'), 2)] }
+check('a phase whose only child is cancelled is not empty', shape(plan(onlyCancelled, 'open')), [])
+check('a phase with children is still not counted itself', tally(rows).total, 6)
+check('hasChildren alone keeps a phase out of the count', tally([row(ref('phase', 'open'), 1, { hasChildren: true })]).total, 0)
+check('an empty run or a finding is not an item of work', tally([row(ref('run', 'open'), 0), row(ref('finding', 'open'), 1)]).total, 0)
+
 console.log('\n── the run page opens on Open, and its links keep an explicit filter ───────')
 check('no filter in the URL is Open', asFilter(undefined), 'open')
 check('an unknown filter is Open', asFilter('bogus'), 'open')

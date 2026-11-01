@@ -3,6 +3,9 @@ import type { BoardRow, ItemPage, ItemRef, Rollup } from './api.ts'
 /** doc 10's Rollup leaves: the kinds that are a unit of work rather than a container of it. */
 export const LEAF = new Set(['task', 'followup', 'subtask', 'spike', 'question', 'incident'])
 
+/** Containers that are one unit of work while empty; `ApiQueries.RollupsAsync` counts the same. */
+export const EMPTY_COUNTED = new Set(['phase', 'feature'])
+
 export const CLOSED = new Set(['done', 'cancelled', 'superseded'])
 
 export type StateKey = 'gone' | 'stop' | 'doing' | 'proven' | 'claimed' | 'wait' | 'idle'
@@ -89,12 +92,20 @@ export const refState = (ref: ItemRef): State =>
 
 export type Tally = Record<StateKey, number> & { total: number; done: number; cancelled: number; leaves: BoardRow[] }
 
-/** The segmented bar's numbers: every leaf under `rows`, gone ones counted but never drawn. */
+/** A leaf, or a phase or feature with nothing below it: `rows` is pre-order, so a child is the next row. */
+const counts = (rows: BoardRow[], i: number): boolean => {
+  const row = rows[i]!
+  if (LEAF.has(row.item.kind)) return true
+  return EMPTY_COUNTED.has(row.item.kind) && !row.hasChildren && !((rows[i + 1]?.depth ?? -1) > row.depth)
+}
+
+/** The segmented bar's numbers: every counted item under `rows`, gone ones counted but never drawn. */
 export function tally(rows: BoardRow[]): Tally {
   const t: Tally = { gone: 0, stop: 0, doing: 0, proven: 0, claimed: 0, wait: 0, idle: 0, total: 0, done: 0, cancelled: 0, leaves: [] }
 
-  for (const row of rows) {
-    if (!LEAF.has(row.item.kind)) continue
+  for (let i = 0; i < rows.length; i++) {
+    if (!counts(rows, i)) continue
+    const row = rows[i]!
     const k = rowState(row).k
     t[k] += 1
     if (row.item.status === 'cancelled') t.cancelled += 1
@@ -122,7 +133,7 @@ export function progress(t: Tally): string {
   )
 }
 
-/** The same denominator as `tally()` from a server rollup, whose `total` counts every leaf. */
+/** The same denominator as `tally()` from a server rollup, whose `total` counts every leaf and every empty phase. */
 export const counted = (r: Rollup): { done: number; total: number; cancelled: number } => ({
   done: r.done,
   total: r.total - r.cancelled - r.superseded,
