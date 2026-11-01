@@ -1,7 +1,8 @@
 #!/usr/bin/env node
-// session-header.mjs — the WorkState registration's headersHelper. Prints ONE JSON object of headers:
-//   X-WorkState-Client  "<host>/<pid>/<start epoch s>" of the nearest Claude Code ancestor process
-//   X-WorkState-Agent   that process's name, only when `claude agents --json` lists its pid with one
+// session-header.mjs — the workman registration's headersHelper. Prints ONE JSON object of headers:
+//   X-Workman-Client  "<host>/<pid>/<start epoch s>" of the nearest Claude Code ancestor process
+//   X-Workman-Agent   that process's name, only when `claude agents --json` lists its pid with one
+// each also under its old X-WorkState-* name, which a server older than the rename reads (until 2.0).
 // Anything that goes wrong prints {} and exits 0: a session without the headers is merely unnamed.
 // Identity comes from the process table only. CLAUDE_PID and CLAUDE_JOB_DIR are inherited from
 // whatever started the process and would name a session after another one (doc 11), so they are
@@ -61,13 +62,27 @@ export function nearestClaude(table, self) {
  */
 export function headersFor(claude, host, agents) {
     /** @type {Record<string, string>} */
-    const headers = { 'X-WorkState-Client': `${host}/${claude.pid}/${claude.start}` }
+    const headers = { Client: `${host}/${claude.pid}/${claude.start}` }
     const list = Array.isArray(agents)
         ? agents
         : ['agents', 'sessions', 'items'].map((k) => /** @type {any} */ (agents)?.[k]).find(Array.isArray) ?? []
     const mine = list.find((a) => Number(a?.pid) === claude.pid)
-    if (typeof mine?.name === 'string' && mine.name.trim()) headers['X-WorkState-Agent'] = mine.name.trim()
-    return headers
+    if (typeof mine?.name === 'string' && mine.name.trim()) headers.Agent = mine.name.trim()
+    return bothFamilies(headers)
+}
+
+/**
+ * Each header under X-Workman-* and under its old X-WorkState-* name: the server reads the new one first and
+ * the old one until 2.0, and a server from before the rename reads only the old one.
+ * @param {Record<string, string>} bare  names without the prefix, e.g. {Agent: 'm27'}
+ * @returns {Record<string, string>}
+ */
+export function bothFamilies(bare) {
+    /** @type {Record<string, string>} */
+    const out = {}
+    for (const [k, v] of Object.entries(bare)) out[`X-Workman-${k}`] = v
+    for (const [k, v] of Object.entries(bare)) out[`X-WorkState-${k}`] = v
+    return out
 }
 
 /** @param {string} text */

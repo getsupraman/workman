@@ -16,9 +16,11 @@
                          oauth when the server offers it (its OAuth metadata answers 200), else token
   -Role <role>           orchestrator (default) | controller | worker - whose token to register
                          (token only: an OAuth sign-in always gets the controller toolset)
-  -Name <name>           registration name (default workstate)
+  -Name <name>           registration name (default workman). Without -Name, a registration named
+                         workstate (the name before the rename) in the same scope is moved to workman:
+                         same url, headers and headersHelper; nothing is printed of its token
   -Agent <session>       register at LOCAL scope (this directory's project only) with the header
-                         X-WorkState-Agent: <session>, so sessions here are recorded by that name
+                         X-Workman-Agent: <session>, so sessions here are recorded by that name
   -Port <port>           host port, written only into a NEW .env (default 5290)
   -Project <name>        compose project (default workstate)
   -ImageVersion <tag>    image tag for the pull-only compose (default latest)
@@ -36,7 +38,7 @@ param(
     [string]$HomeDir,
     [ValidateSet('oauth', 'token')][string]$Auth,
     [ValidateSet('orchestrator', 'controller', 'worker')][string]$Role = 'orchestrator',
-    [string]$Name = 'workstate',
+    [string]$Name = 'workman',
     [string]$Agent,
     [ValidateRange(1, 65535)][int]$Port = 5290,
     [string]$Project = 'workstate',
@@ -281,6 +283,48 @@ $existing = $false
 $scope = 'user'
 if ($Agent) { $scope = 'local' }
 $getOut = ''
+$here = (Get-Location).Path
+
+# the move - a registration from before the rename becomes '$Name' with the same url, scope, headers and
+# headersHelper. The plan's third line is the entry, token included: captured here, never printed.
+$legacyName = 'workstate'
+$nameGiven = $PSBoundParameters.ContainsKey('Name')
+if (-not $nameGiven -and (Get-Command claude -ErrorAction SilentlyContinue)) {
+    if ($node) {
+        $plan = @(& node (Join-Path $scriptDir 'move-registration.mjs') --from $legacyName --to $Name --scope $scope --dir $here 2>$null)
+        $verdict = if ($plan.Count -gt 0) { [string]$plan[0] } else { 'not checked: the move check printed nothing' }
+        if ($verdict -eq 'move' -and $plan.Count -ge 3) {
+            $moveJson = [string]$plan[2]
+            if ($DryRun) { Status 'move' "dry run, would move '$legacyName' to '$Name' ($scope scope; $($plan[1]))" }
+            else {
+                # Windows PowerShell 5.1 strips the JSON's quotes from a native argument unless they are escaped.
+                if ($PSVersionTable.PSVersion.Major -lt 7 -or (Get-Variable PSNativeCommandArgumentPassing -ValueOnly -ErrorAction SilentlyContinue) -eq 'Legacy') {
+                    $moveJson = $moveJson.Replace('"', '\"')
+                }
+                & claude mcp add-json --scope $scope $Name $moveJson *> $null
+                if ($LASTEXITCODE -ne 0) { Die "move      claude mcp add-json --scope $scope $Name failed; '$legacyName' is left as it is" }
+                & claude mcp remove $legacyName --scope $scope *> $null
+                if ($LASTEXITCODE -ne 0) { Die "move      '$Name' added, but claude mcp remove $legacyName --scope $scope failed: run it yourself" }
+                Status 'move' "'$legacyName' -> '$Name' ($scope scope; $($plan[1])); with OAuth sign in again: /mcp, pick '$Name', Authenticate"
+            }
+            $moveJson = $null
+            $plan = $null
+        }
+        elseif ($verdict -eq 'both') {
+            Status 'move' "'$legacyName' and '$Name' are both registered ($scope scope): '$legacyName' left as it is; once '$Name' works, run: claude mcp remove $legacyName -s $scope"
+        }
+        elseif ($verdict -ne 'none') { Status 'move' $verdict }
+    }
+    else {
+        & claude mcp get $Name *> $null
+        $hasNew = $LASTEXITCODE -eq 0
+        & claude mcp get $legacyName *> $null
+        if ($LASTEXITCODE -eq 0 -and -not $hasNew) {
+            Status 'move' "kept '$legacyName': moving it to '$Name' needs node; it keeps working until server 2.0"
+            $Name = $legacyName
+        }
+    }
+}
 if (-not (Get-Command claude -ErrorAction SilentlyContinue)) {
     if (-not $DryRun) { Die 'register  the claude CLI is not on PATH: install Claude Code, or run this where it is' }
 }
@@ -327,7 +371,8 @@ if ($Auth -eq 'token') {
 function Get-Registration([string]$Bearer) {
     $headers = [ordered]@{}
     if ($Auth -eq 'token') { $headers['Authorization'] = "Bearer $Bearer" }
-    if ($Agent) { $headers['X-WorkState-Agent'] = $Agent }
+    # Both names: the server reads X-Workman-* first, and one from before the rename reads only X-WorkState-*.
+    if ($Agent) { $headers['X-Workman-Agent'] = $Agent; $headers['X-WorkState-Agent'] = $Agent }
     $entry = [ordered]@{ type = 'http'; url = $mcpUrl }
     if ($headers.Count -gt 0) { $entry['headers'] = $headers }
     if ($node) { $entry['headersHelper'] = "node `"$($helperFile.Replace('\', '/'))`"" }
@@ -363,18 +408,19 @@ else {
 
 # the shadow check - a local or project entry of the same name wins over the user one; removing it is the user's call
 if ($node) {
-    $here = (Get-Location).Path
     $finderArgs = @((Join-Path $scriptDir 'find-shadows.mjs'), '--name', $Name, '--dir', $here)
+    $names = "'$Name'"
+    if (-not $nameGiven -and $Name -ne $legacyName) { $finderArgs += @('--name', $legacyName); $names = "'$Name' or '$legacyName'" }
     if ($scope -eq 'local') { $finderArgs += @('--own', $here) }
     $shadows = @(& node @finderArgs 2>$null | Where-Object { $_ })
     $unchecked = @($shadows | Where-Object { $_.StartsWith('not checked') })
     $found = @($shadows | Where-Object { -not $_.StartsWith('not checked') })
     foreach ($line in $unchecked) { Status 'shadows' $line }
     if ($found.Count -gt 0) {
-        Status 'shadows' "$($found.Count) '$Name' entry(s) win over the user registration (local > project > user), so sessions there miss it and its session helper; this script removes nothing - run the command shown yourself:"
+        Status 'shadows' "$($found.Count) $names entry(s) win over the user registration (local > project > user), so sessions there miss it and its session helper; this script removes nothing - run the command shown yourself:"
         foreach ($line in $found) { Write-Output "          $line" }
     }
-    elseif ($unchecked.Count -eq 0) { Status 'shadows' "none: no local or project '$Name' entry overrides it" }
+    elseif ($unchecked.Count -eq 0) { Status 'shadows' "none: no local or project $names entry overrides it" }
 }
 else { Status 'shadows' 'not checked (needs node)' }
 

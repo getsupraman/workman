@@ -1,0 +1,29 @@
+{
+    "mcpServers": {
+        "workstate": {
+            "type": "http",
+            "url": "http://127.0.0.1:5290/mcp",
+            "headers": { "Authorization": "Bearer SENTINEL-TOKEN-move-user-3e1f" },
+            "headersHelper": "node \"C:/Users/u/.workstate/session-header.mjs\""
+        },
+        "github": { "type": "http", "url": "https://api.example.com/mcp" }
+    },
+    "projects": {
+        "P:/Projects/Acme/Skills": {
+            "mcpServers": {
+                "workstate": {
+                    "type": "http",
+                    "url": "http://127.0.0.1:5290/mcp",
+                    "headers": { "X-WorkState-Agent": "aw-skills" },
+                    "headersHelper": "node \"C:/Users/u/.workstate/session-header.mjs\""
+                }
+            }
+        },
+        "P:/Projects/Both": {
+            "mcpServers": {
+                "workstate": { "type": "http", "url": "http://127.0.0.1:5290/mcp" },
+                "workman": { "type": "http", "url": "http://127.0.0.1:5290/mcp" }
+            }
+        }
+    }
+}

@@ -21,9 +21,11 @@ usage: setup.sh [options]
                           oauth when the server offers it (its OAuth metadata answers 200), else token
   --role <role>           orchestrator (default) | controller | worker - whose token to register
                           (token only: an OAuth sign-in always gets the controller toolset)
-  --name <name>           registration name (default workstate)
+  --name <name>           registration name (default workman). Without --name, a registration named
+                          workstate (the name before the rename) in the same scope is moved to workman:
+                          same url, headers and headersHelper; nothing is printed of its token
   --agent <session>       register at LOCAL scope (this directory's project only) with the header
-                          X-WorkState-Agent: <session>, so sessions here are recorded by that name
+                          X-Workman-Agent: <session>, so sessions here are recorded by that name
   --port <port>           host port, written only into a NEW .env (default 5290)
   --project <name>        compose project (default workstate)
   --image-version <tag>   image tag for the pull-only compose (default latest)
@@ -41,7 +43,8 @@ die() { printf '%s\n' "$1" >&2; exit 1; }
 status() { printf '%-10s%s\n' "$1" "$2"; }
 
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-clone=""; home_dir=""; role="orchestrator"; name="workstate"; agent=""; port="5290"; project="workstate"
+clone=""; home_dir=""; role="orchestrator"; name="workman"; agent=""; port="5290"; project="workstate"
+name_given=0
 image_version=""; update=0; force=0; session_names=0; role_given=0; dry_run=0; backup=""; restore=""
 auth=""
 
@@ -51,7 +54,7 @@ while [ $# -gt 0 ]; do
         --home-dir) home_dir="${2:?--home-dir needs a directory}"; shift 2 ;;
         --auth) auth="${2:?--auth needs oauth or token}"; shift 2 ;;
         --role) role="${2:?--role needs a value}"; role_given=1; shift 2 ;;
-        --name) name="${2:?--name needs a value}"; shift 2 ;;
+        --name) name="${2:?--name needs a value}"; name_given=1; shift 2 ;;
         --agent) agent="${2:?--agent needs a session name}"; shift 2 ;;
         --port) port="${2:?--port needs a value}"; shift 2 ;;
         --project) project="${2:?--project needs a value}"; shift 2 ;;
@@ -234,6 +237,41 @@ existing=0
 scope="user"
 [ -n "$agent" ] && scope="local"
 get_out=""
+here="$PWD"
+command -v cygpath >/dev/null 2>&1 && here="$(cygpath -m "$PWD")"
+
+# the move - a registration from before the rename becomes '$name' with the same url, scope, headers and
+# headersHelper. The plan's third line is the entry, token included: captured here, never printed.
+legacy_name="workstate"
+if [ "$name_given" -eq 0 ] && command -v claude >/dev/null 2>&1; then
+    if [ "$has_node" -eq 1 ]; then
+        plan="$(node "$script_dir/move-registration.mjs" --from "$legacy_name" --to "$name" --scope "$scope" --dir "$here" 2>/dev/null || true)"
+        verdict="$(printf '%s\n' "$plan" | sed -n 1p)"
+        move_summary="$(printf '%s\n' "$plan" | sed -n 2p)"
+        if [ "$verdict" = "move" ]; then
+            move_json="$(printf '%s\n' "$plan" | sed -n 3p)"
+            if [ "$dry_run" -eq 1 ]; then
+                status "move" "dry run, would move '$legacy_name' to '$name' ($scope scope; $move_summary)"
+            else
+                claude mcp add-json --scope "$scope" "$name" "$move_json" >/dev/null 2>&1 \
+                    || die "move      claude mcp add-json --scope $scope $name failed; '$legacy_name' is left as it is"
+                claude mcp remove "$legacy_name" --scope "$scope" >/dev/null 2>&1 \
+                    || die "move      '$name' added, but claude mcp remove $legacy_name --scope $scope failed: run it yourself"
+                status "move" "'$legacy_name' -> '$name' ($scope scope; $move_summary); with OAuth sign in again: /mcp, pick '$name', Authenticate"
+            fi
+            move_json=""
+        elif [ "$verdict" = "both" ]; then
+            status "move" "'$legacy_name' and '$name' are both registered ($scope scope): '$legacy_name' left as it is; once '$name' works, run: claude mcp remove $legacy_name -s $scope"
+        elif [ "$verdict" != "none" ]; then
+            status "move" "${verdict:-not checked: the move check printed nothing}"
+        fi
+        plan=""
+    elif ! claude mcp get "$name" >/dev/null 2>&1 && claude mcp get "$legacy_name" >/dev/null 2>&1; then
+        status "move" "kept '$legacy_name': moving it to '$name' needs node; it keeps working until server 2.0"
+        name="$legacy_name"
+    fi
+fi
+
 if ! command -v claude >/dev/null 2>&1; then
     [ "$dry_run" -eq 1 ] || die "register  the claude CLI is not on PATH: install Claude Code, or run this where it is"
 # Read here and never printed: SKILL.md forbids the model this command because it shows the header.
@@ -283,7 +321,8 @@ command -v cygpath >/dev/null 2>&1 && helper_path="$(cygpath -m "$helper_file")"
 registration() { # $1 = the bearer token, or *** for display; oauth stores none and ignores it
     local headers=""
     [ "$auth" = "token" ] && headers="\"Authorization\":$(json_str "Bearer $1")"
-    [ -n "$agent" ] && headers="$headers${headers:+,}\"X-WorkState-Agent\":$(json_str "$agent")"
+    # Both names: the server reads X-Workman-* first, and one from before the rename reads only X-WorkState-*.
+    [ -n "$agent" ] && headers="$headers${headers:+,}\"X-Workman-Agent\":$(json_str "$agent"),\"X-WorkState-Agent\":$(json_str "$agent")"
     local entry="{\"type\":\"http\",\"url\":$(json_str "$mcp_url")"
     [ -n "$headers" ] && entry="$entry,\"headers\":{$headers}"
     [ "$has_node" -eq 1 ] && entry="$entry,\"headersHelper\":$(json_str "node \"$helper_path\"")"
@@ -311,9 +350,9 @@ fi
 
 # the shadow check - a local or project entry of the same name wins over the user one; removing it is the user's call
 if [ "$has_node" -eq 1 ]; then
-    here="$PWD"
-    command -v cygpath >/dev/null 2>&1 && here="$(cygpath -m "$PWD")"
     finder_args=("$script_dir/find-shadows.mjs" --name "$name" --dir "$here")
+    names="'$name'"
+    if [ "$name_given" -eq 0 ] && [ "$name" != "$legacy_name" ]; then finder_args+=(--name "$legacy_name"); names="'$name' or '$legacy_name'"; fi
     [ "$scope" = "local" ] && finder_args+=(--own "$here")
     shadows="$(node "${finder_args[@]}" 2>/dev/null || true)"
     found=(); unchecked=0
@@ -325,10 +364,10 @@ if [ "$has_node" -eq 1 ]; then
         esac
     done <<<"$shadows"
     if [ "${#found[@]}" -gt 0 ]; then
-        status "shadows" "${#found[@]} '$name' entry(s) win over the user registration (local > project > user), so sessions there miss it and its session helper; this script removes nothing - run the command shown yourself:"
+        status "shadows" "${#found[@]} $names entry(s) win over the user registration (local > project > user), so sessions there miss it and its session helper; this script removes nothing - run the command shown yourself:"
         for line in "${found[@]}"; do printf '          %s\n' "$line"; done
     elif [ "$unchecked" -eq 0 ]; then
-        status "shadows" "none: no local or project '$name' entry overrides it"
+        status "shadows" "none: no local or project $names entry overrides it"
     fi
 else
     status "shadows" "not checked (needs node)"

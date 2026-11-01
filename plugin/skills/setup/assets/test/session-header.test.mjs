@@ -38,17 +38,23 @@ function helper(table, agents, extra = {}) {
 
 test('the nearest claude ancestor keys the session, and claude agents names it', () => {
     const headers = helper(CHAIN, [{ pid: 70, name: 'supervisor' }, { pid: 80, name: 'm27-probe' }])
-    assert.deepEqual(headers, { 'X-WorkState-Client': `${os.hostname()}/80/1100`, 'X-WorkState-Agent': 'm27-probe' })
+    const key = `${os.hostname()}/80/1100`
+    assert.deepEqual(headers, {
+        'X-Workman-Client': key, 'X-Workman-Agent': 'm27-probe',
+        'X-WorkState-Client': key, 'X-WorkState-Agent': 'm27-probe',
+    })
 })
 
 test('a session claude agents does not list (a fresh interactive one) sends the key alone', () => {
-    assert.deepEqual(helper(CHAIN, { agents: [{ pid: 999, name: 'other' }] }), { 'X-WorkState-Client': `${os.hostname()}/80/1100` })
-    assert.deepEqual(helper(CHAIN, [{ pid: 80, name: '' }]), { 'X-WorkState-Client': `${os.hostname()}/80/1100` })
+    const keyOnly = { 'X-Workman-Client': `${os.hostname()}/80/1100`, 'X-WorkState-Client': `${os.hostname()}/80/1100` }
+    assert.deepEqual(helper(CHAIN, { agents: [{ pid: 999, name: 'other' }] }), keyOnly)
+    assert.deepEqual(helper(CHAIN, [{ pid: 80, name: '' }]), keyOnly)
 })
 
 test('CLAUDE_PID and CLAUDE_JOB_DIR are inherited from another session and never name this one', () => {
     const headers = helper(CHAIN, [{ pid: 70, name: 'someone-else' }], { CLAUDE_PID: '70', CLAUDE_JOB_DIR: 'x/jobs/someone-else' })
-    assert.equal(headers['X-WorkState-Client'], `${os.hostname()}/80/1100`)
+    assert.equal(headers['X-Workman-Client'], `${os.hostname()}/80/1100`)
+    assert.equal(headers['X-Workman-Agent'], undefined)
     assert.equal(headers['X-WorkState-Agent'], undefined)
 })
 
