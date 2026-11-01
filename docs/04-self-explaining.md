@@ -116,7 +116,7 @@ An agent that hits this once has learned the closure rule permanently, at the co
 — which is a better teacher than any paragraph, because it arrives exactly when it is relevant.
 
 **Design rule:** no error may say only what is wrong. Every one names the call that fixes it. This is
-`nested-claude`'s hardest-won lesson — *"a rule that demands a capability the agent does not have is a
+`/workman:agents`'s hardest-won lesson — *"a rule that demands a capability the agent does not have is a
 trap you set yourself"*; every prohibition ships with its route.
 
 ---

@@ -37,7 +37,7 @@ export const TOOLS = [
                 repo_root: { type: 'string', description: 'Absolute path of the git working tree the agent runs in' },
                 controller: { type: 'string', description: "Your address from ListAgents, ref included: 'name [6-hex]'" },
                 permission_mode: { type: 'string', enum: PERMISSION_MODES, default: 'auto', description: '--permission-mode' },
-                toolset: { type: 'string', enum: TOOLSETS, default: 'fix', description: 'Allow-list profile (nested-claude §3)' },
+                toolset: { type: 'string', enum: TOOLSETS, default: 'fix', description: 'Allow-list profile (agents §3)' },
                 allowed_tools: { ...pathArray, description: 'Merged into --allowedTools' },
                 disallowed_tools: { ...pathArray, description: '--disallowedTools' },
                 add_dirs: { ...pathArray, description: '--add-dir' },

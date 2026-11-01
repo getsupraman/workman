@@ -150,7 +150,7 @@ export function validateLaunch(input) {
         throw new Refusal(`repo_root does not exist: ${a.repo_root}. Did git worktree add fail?`)
     }
     if (!fs.existsSync(path.join(a.repo_root, '.git'))) {
-        throw new Refusal(`repo_root is not a git working tree: ${a.repo_root}. A --bg agent must be launched inside one - see nested-claude SKILL.md section 7.`)
+        throw new Refusal(`repo_root is not a git working tree: ${a.repo_root}. A --bg agent must be launched inside one - see agents SKILL.md section 7.`)
     }
     const repoRoot = path.resolve(a.repo_root)
 

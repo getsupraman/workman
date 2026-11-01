@@ -1,12 +1,12 @@
 ---
-name: nested-claude
-description: "Run Claude Code inside Claude Code — spawn nested `claude` sessions as background agents, each with a fresh context window, address them by name, drive them over a READY/BLOCKED/DONE protocol with the spawning session as their controller, arm a watchdog that wakes you when one is blocked or stalled instead of polling it, and attach a terminal window to watch or unblock one. Covers launch, the permission profiles an unattended agent needs, addressing, steering, watching, wrap-up, stopping, crash recovery and cleanup. USE FOR: work too large for one context window where each unit needs its own; any job whose worker must itself spawn subagents (an Agent-tool subagent cannot, so it cannot run /rlarch:orchestrate); a supervised fix or refactor loop a human wants to watch; agents that must outlive the controller. DO NOT USE FOR: work that fits in one Agent-tool subagent (cheaper, and needs none of this), or anything you would run once and never steer."
+name: agents
+description: "Run Claude Code inside Claude Code — spawn nested `claude` sessions as background agents, each with a fresh context window, address them by name, drive them over a READY/BLOCKED/DONE protocol with the spawning session as their controller, arm a watchdog that wakes you when one is blocked or stalled instead of polling it, and attach a terminal window to watch or unblock one. Covers launch, the permission profiles an unattended agent needs, addressing, steering, watching, wrap-up, stopping, crash recovery and cleanup. USE FOR: work too large for one context window where each unit needs its own; any job whose worker must itself spawn subagents (an Agent-tool subagent cannot, so it cannot run /workman:orchestrate); a supervised fix or refactor loop a human wants to watch; agents that must outlive the controller. DO NOT USE FOR: work that fits in one Agent-tool subagent (cheaper, and needs none of this), or anything you would run once and never steer."
 ---
 
 # Nested Claude
 
 The scripts referenced below live with this skill. Installed as a plugin they are at
-`"$CLAUDE_PLUGIN_ROOT/skills/nested-claude/assets/"` — run `echo "$CLAUDE_PLUGIN_ROOT"` to confirm.
+`"$CLAUDE_PLUGIN_ROOT/skills/agents/assets/"` — run `echo "$CLAUDE_PLUGIN_ROOT"` to confirm.
 A project may vendor a copy, but then the copy is the one that drifts; prefer calling these.
 
 **The primary path is the `agent_launch` / `agent_stop` / `agent_list` tools** of the plugin's
@@ -24,7 +24,7 @@ sessions, addresses them, answers them, and stops them.
 This is not the `Agent` tool. Reach for it only when one of these holds:
 
 - **The worker must spawn subagents.** An `Agent`-tool subagent cannot, so it cannot run a skill like
-  `/rlarch:orchestrate`. A nested `claude` session can.
+  `/workman:orchestrate`. A nested `claude` session can.
 - **Each unit needs its own full context window.** Yours holds the plan; theirs holds the work.
 - **The work must outlive your session.** A background agent does; an in-process subagent does not.
 - **A human may need to watch it, or answer a prompt it cannot.**
@@ -37,7 +37,7 @@ Otherwise use the `Agent` tool.
 
 ## 1. Launch — always `--bg`
 
-**Use the `agent_launch` tool** (`mcp__plugin_rlarch_agents__agent_launch`). It is the plugin's
+**Use the `agent_launch` tool** (`mcp__plugin_workman_agents__agent_launch`). It is the plugin's
 `agents` MCP server — Node 18+, no dependencies — and it does what the scripts below do, plus the one
 thing they cannot: it mints the agent **its own WorkState token**, so the child's writes are recorded
 under its name and role instead of yours. It builds the argv in code (no shell, so no quoting traps),
@@ -55,7 +55,7 @@ prepends the same protocol header, grants the same `toolset` profiles, and retur
 | `allowed_tools` / `disallowed_tools` | `[]` | merged into `--allowedTools` / `--disallowedTools` |
 | `add_dirs` | `[]` | `--add-dir` |
 | `model`, `effort`, `settings`, `append_system_prompt` | — | `--model`, `--effort` (`low`…`max`), `--settings` (path or JSON), `--append-system-prompt` |
-| `workstate` | `{role: "worker"}` | `role` (`worker` `orchestrator` `controller` `none`), `env_file` (optional, for headless use: the PATH of the WorkState `.env` that `/rlarch:workstate-setup` names: `<home>/.env`, by default `~/.workstate/.env`, or `<clone>/server/.env`; never its contents. Without it the `agent_signin` grant mints — below), `url` (default `http://127.0.0.1:5290`), `ttl_hours` (idle window, default 72: the token lapses after that long unused; every use renews it, no hard cap), `grants` (`["import"]` shows `work_import` to the session — orchestrator or controller role only; see `/rlarch:workstate-import`) |
+| `workstate` | `{role: "worker"}` | `role` (`worker` `orchestrator` `controller` `none`), `env_file` (optional, for headless use: the PATH of the WorkState `.env` that `/workman:setup` names: `<home>/.env`, by default `~/.workstate/.env`, or `<clone>/server/.env`; never its contents. Without it the `agent_signin` grant mints — below), `url` (default `http://127.0.0.1:5290`), `ttl_hours` (idle window, default 72: the token lapses after that long unused; every use renews it, no hard cap), `grants` (`["import"]` shows `work_import` to the session — orchestrator or controller role only; see `/workman:import`) |
 | `dry_run` | `false` | validate and return the argv; mints and spawns nothing (the token shows as `<minted>`) |
 
 An auto-mode worker — the usual case:
@@ -123,7 +123,7 @@ When the agents server is not available — no Node, or no plugin — the launch
 without the WorkState token (the agent inherits your registration):
 
 ```powershell
-$a = & "$env:CLAUDE_PLUGIN_ROOT/skills/nested-claude/assets/Start-NestedAgent.ps1" `
+$a = & "$env:CLAUDE_PLUGIN_ROOT/skills/agents/assets/Start-NestedAgent.ps1" `
         -Name       fix-B-07 `
         -PromptFile .\brief-B-07.txt `
         -Controller 'prod-log-triage [9825b9]' `   # your address, from ListAgents, ref included
@@ -133,7 +133,7 @@ $a = & "$env:CLAUDE_PLUGIN_ROOT/skills/nested-claude/assets/Start-NestedAgent.ps
 ```
 
 ```bash
-bash "$CLAUDE_PLUGIN_ROOT/skills/nested-claude/assets/start-nested-agent.sh" \
+bash "$CLAUDE_PLUGIN_ROOT/skills/agents/assets/start-nested-agent.sh" \
         --name        fix-B-07 \
         --prompt-file ./brief-B-07.txt \
         --controller  'prod-log-triage [9825b9]' \
@@ -216,7 +216,7 @@ finished, send DONE saying where you stopped.* The brief already defines it.
 
 ### Permissions — the most common way a launch quietly fails
 
-The launcher's `-PermissionMode` defaults to `auto` (see `/rlarch:controller` §2). The rest of this
+The launcher's `-PermissionMode` defaults to `auto` (see `/workman:controller` §2). The rest of this
 section is what happens under any other mode. A `--bg` agent has **no human at its keyboard**, and
 `--permission-mode acceptEdits` only covers *edits*. The first shell command it has not been granted parks it, and from the outside a parked
 agent is indistinguishable from a busy one. On 2026-09-10 an agent stopped nine minutes in on
@@ -471,11 +471,11 @@ Arm a watchdog instead. It runs in the background and speaks only when something
 
 ```
 # macOS / Linux
-Monitor(command: 'python3 -u "$CLAUDE_PLUGIN_ROOT/skills/nested-claude/assets/watch-nested-agent.py" cffcbd64 --beat 12 --stall 8',
+Monitor(command: 'python3 -u "$CLAUDE_PLUGIN_ROOT/skills/agents/assets/watch-nested-agent.py" cffcbd64 --beat 12 --stall 8',
         persistent: true, description: 'fix-B-02 watchdog')
 
 # Windows — `py` (the Python launcher), or `python` if that is what is on PATH
-Monitor(command: 'py -u "$CLAUDE_PLUGIN_ROOT/skills/nested-claude/assets/watch-nested-agent.py" cffcbd64 --beat 12 --stall 8',
+Monitor(command: 'py -u "$CLAUDE_PLUGIN_ROOT/skills/agents/assets/watch-nested-agent.py" cffcbd64 --beat 12 --stall 8',
         persistent: true, description: 'fix-B-02 watchdog')
 ```
 
@@ -517,13 +517,13 @@ hang — all three look exactly like "still working". Cover the failures first a
 For an agent started by the scripts:
 
 ```powershell
-& "$env:CLAUDE_PLUGIN_ROOT/skills/nested-claude/assets/Stop-NestedAgent.ps1" -Id $a.Id -Name $a.Name
-& "$env:CLAUDE_PLUGIN_ROOT/skills/nested-claude/assets/Stop-NestedAgent.ps1" -Id $a.Id -Name $a.Name -Remove   # and delete the session
+& "$env:CLAUDE_PLUGIN_ROOT/skills/agents/assets/Stop-NestedAgent.ps1" -Id $a.Id -Name $a.Name
+& "$env:CLAUDE_PLUGIN_ROOT/skills/agents/assets/Stop-NestedAgent.ps1" -Id $a.Id -Name $a.Name -Remove   # and delete the session
 ```
 
 ```bash
-bash "$CLAUDE_PLUGIN_ROOT/skills/nested-claude/assets/stop-nested-agent.sh" --id c88dd0c8 --name fix-B-07
-bash "$CLAUDE_PLUGIN_ROOT/skills/nested-claude/assets/stop-nested-agent.sh" --id c88dd0c8 --name fix-B-07 --remove
+bash "$CLAUDE_PLUGIN_ROOT/skills/agents/assets/stop-nested-agent.sh" --id c88dd0c8 --name fix-B-07
+bash "$CLAUDE_PLUGIN_ROOT/skills/agents/assets/stop-nested-agent.sh" --id c88dd0c8 --name fix-B-07 --remove
 ```
 
 `claude stop` **keeps the conversation** — `claude attach <id>` reopens it and `claude --resume` works

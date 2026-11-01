@@ -20,7 +20,7 @@ obj/
 # Filled-in secrets for server/compose.yml. server/.env.example is the committed template.
 .env
 
-# The setup script's copy of workstate-setup/assets/session-header.mjs in a clone install.
+# The setup script's copy of setup/assets/session-header.mjs in a clone install.
 server/session-header.mjs
 
 # Frontend. The SPA is built by an opt-in MSBuild target and by the Dockerfile's Node stage,
@@ -30,12 +30,12 @@ server/frontend/node_modules/
 server/frontend/dist/
 server/WorkState.Api/wwwroot/
 
-# Python bytecode. The nested-claude watchdog is a .py script the plugin ships; running it
+# Python bytecode. The agents watchdog is a .py script the plugin ships; running it
 # leaves a __pycache__ beside it, and a committed .pyc is both junk and interpreter-specific.
 __pycache__/
 *.pyc
 
-# Scratch written by /rlarch:workstate-setup when it asks the server what tools a token grants.
+# Scratch written by /workman:setup when it asks the server what tools a token grants.
 # It runs from this repo root, so the file lands here; it is evidence for one command, not an artifact.
 tools.json
 

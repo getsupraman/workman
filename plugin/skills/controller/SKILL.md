@@ -1,6 +1,6 @@
 ---
 name: controller
-description: "Drive a QUEUE of large, mostly independent undertakings to completion — a backlog of bugs, issues, TODOs, migrations or features — by sequencing them, briefing a nested Claude for each, steering it, independently verifying what it produced, landing it, and recording the decisions in the WorkState store (the `work_*` MCP tools), which this skill requires. One level above /rlarch:orchestrate: orchestrate executes ONE plan inside a session, a controller runs many plans across sessions and owns the integration, the verification and the record. USE FOR - a backlog too large for one session; several medium-to-large units that are unrelated to each other; work where each unit needs its own full context window; anything where you must be able to say afterwards what was done, what was deferred and why. DO NOT USE FOR - a single plan (use /rlarch:orchestrate), a task that fits one subagent (use the Agent tool), or a queue you intend to do yourself."
+description: "Drive a QUEUE of large, mostly independent undertakings to completion — a backlog of bugs, issues, TODOs, migrations or features — by sequencing them, briefing a nested Claude for each, steering it, independently verifying what it produced, landing it, and recording the decisions in the WorkState store (the `work_*` MCP tools), which this skill requires. One level above /workman:orchestrate: orchestrate executes ONE plan inside a session, a controller runs many plans across sessions and owns the integration, the verification and the record. USE FOR - a backlog too large for one session; several medium-to-large units that are unrelated to each other; work where each unit needs its own full context window; anything where you must be able to say afterwards what was done, what was deferred and why. DO NOT USE FOR - a single plan (use /workman:orchestrate), a task that fits one subagent (use the Agent tool), or a queue you intend to do yourself."
 ---
 
 # Controller
@@ -15,10 +15,10 @@ check what comes back, land it, and leave a record that outlives the session.
 | | Scope | Runs in | You own |
 |---|---|---|---|
 | `Agent` tool | one task | your session | the result |
-| `/rlarch:orchestrate` | **one plan**, too large for one window | your session, delegating to subagents | the plan and its verification |
+| `/workman:orchestrate` | **one plan**, too large for one window | your session, delegating to subagents | the plan and its verification |
 | **controller** (this) | **many plans**, mostly independent | separate nested `claude` sessions, each free to orchestrate | sequencing, briefing, verification, integration, the record |
 
-`/rlarch:nested-claude` is the **mechanics** of running those sessions — launching, addressing, the
+`/workman:agents` is the **mechanics** of running those sessions — launching, addressing, the
 READY/BLOCKED/DONE protocol, permissions, worktrees, watchdogs, recovery. Read it before your first
 launch. This skill is the **discipline** of running the queue on top of it, and does not repeat it.
 
@@ -36,14 +36,14 @@ worktree. A session `agent_launch` started already carries both; a bare `work_br
 project.
 
 - **No `work_*` tools in your list** → tell the human in one line: *"controller needs the WorkState
-  MCP server and this session cannot see it — run `/rlarch:workstate-setup`."* Then stop. There is no
+  MCP server and this session cannot see it — run `/workman:setup`."* Then stop. There is no
   markdown fallback.
 - **`work_brief` exists but `work_constrain` does not** → the server is older than this skill. Say so
-  in one line, point at `/rlarch:workstate-setup`, and stop.
+  in one line, point at `/workman:setup`, and stop.
 - **It says `session  unnamed — work_session(…)`** → sign your work first: `work_session(name:)` with
   the name `ListAgents` gives in its first line, *"This session is <name> [ref]"* (the name, not the ref).
 - **It answers** → read it. If a queue is already in flight, its NEXT line is where you resume — with
-  `/rlarch:nested-claude` §8 for the sessions that were running when yours stopped.
+  `/workman:agents` §8 for the sessions that were running when yours stopped.
 
 **Refs come from the server** — `work_brief`, `work_next`, `work_tree`, `work_search`, or the result of
 the `work_create` that made them. Never invent one, in a call or in a brief.
@@ -58,7 +58,7 @@ repo is unbound — passing that same `repo:` (or `work_update(ref, repo:)` to b
 exists; never a second project for one repo) — the queue as a `run`
 (`parent:` the project ref, `ref:` a short kebab name — under a project the server refuses an unnamed
 item), then each unit as a `task` (`parent:` the queue ref) — its outcome as `criteria`, the gate you will run yourself as `verify_cmd`, and
-where it is specified in `intent`. A unit's nested session may run `/rlarch:orchestrate` and keep its
+where it is specified in `intent`. A unit's nested session may run `/workman:orchestrate` and keep its
 own run for the inside of the unit; the unit item is yours, and only you close it.
 
 The queue's standing rules — what no unit may touch, the verification commands, the stack facts —
@@ -92,8 +92,8 @@ eligible units, the blocked ones with what each needs, and your proposed order. 
 again unless an escalation trigger fires (§8). Asking per unit burns the human's attention on
 decisions they already delegated.
 
-**A queue planned by `/rlarch:workstate` arrives already approved** when the human's message says so
-(*"approved, execute as /rlarch:controller"*). Take that run as your queue, record the approval with
+**A queue planned by `/workman:plan` arrives already approved** when the human's message says so
+(*"approved, execute as /workman:controller"*). Take that run as your queue, record the approval with
 `work_note(kind: "decision", from: "<queue ref>", body: "plan approved by <human>: execute as
 controller")`, and do not re-plan it or ask again. Classification and ordering still apply. Raise
 anything you would change as a `work_finding` against the unit, then ask only if an escalation
@@ -128,13 +128,13 @@ second unit of the queue is refused while the first is in progress.
 **Integration strategy, decided before the first launch:**
 
 - Each unit gets its own branch **and its own worktree** (a background agent cannot edit your
-  checkout — see `/rlarch:nested-claude` §7).
+  checkout — see `/workman:agents` §7).
 - Branch each unit off the *previous* result, not off the base, so conflicts are resolved once by the
   agent that caused them instead of piling up at the end.
 - Collect on an integration branch and land once, or land each as it passes — either is fine, but
   decide up front and tell the human which.
 
-**Launch with the `agent_launch` tool** (`/rlarch:nested-claude` §1; the scripts are its fallback when
+**Launch with the `agent_launch` tool** (`/workman:agents` §1; the scripts are its fallback when
 the agents server is unavailable). Per unit:
 
 - `permission_mode` — `auto` by default; `acceptEdits` for a unit where the classifier keeps refusing
@@ -142,7 +142,7 @@ the agents server is unavailable). Per unit:
 - `workstate.role: "worker"` for every unit. The agent then writes under its own minted token, its
   evidence is a **worker's**, and it can never close the unit — the close stays yours.
 - No credential to pass once the human has run `agent_signin` for that WorkState server
-  (`/rlarch:nested-claude` §1): the launch mints with that grant, and a missing or expired one is
+  (`/workman:agents` §1): the launch mints with that grant, and a missing or expired one is
   refused with the sign-in call to make. Headless, pass `workstate.env_file` — the PATH of the
   WorkState `.env` (`~/.workstate/.env`, or `<clone>/server/.env`), never a value; it wins over the
   grant. Either way no token reaches your transcript.
@@ -180,7 +180,7 @@ killing background tasks mid-verification.
 
 ## 3. The brief is the whole job
 
-The agent knows nothing you do not tell it. Everything in `/rlarch:nested-claude` §9 applies; these
+The agent knows nothing you do not tell it. Everything in `/workman:agents` §9 applies; these
 are the controller-level additions.
 
 **The store supplies the unit, not the brief.** `work_brief(scope: "<unit ref>", for: "worker")`
@@ -367,7 +367,7 @@ one someone will distrust as soon as they catch it being incomplete.
 
 The run log writes itself: every transition, verification and closure is in the journal, and
 `work_history(scope: "<queue ref>")` reads it back. If your session restarts, `work_brief` plus the
-session registry (`/rlarch:nested-claude` §8) is the whole recovery path. Before you report the queue
+session registry (`/workman:agents` §8) is the whole recovery path. Before you report the queue
 done, `work_threads(scope: "<queue ref>")` — every open assumption, finding and follow-up, each with
 the call that closes it — and decide each one.
 
@@ -421,7 +421,7 @@ If you find yourself doing this for every unit, the brief is wrong, not the agen
 
 | Symptom | Cause |
 |---|---|
-| Agent reports READY and has no instructions | a variadic flag ate the prompt — see `/rlarch:nested-claude` |
+| Agent reports READY and has no instructions | a variadic flag ate the prompt — see `/workman:agents` |
 | Agent reports READY from an empty folder | your setup step failed and the launch did not check |
 | Agent silent, then nothing for an hour | parked on a permission prompt; a parked agent never goes idle, so an idle subscription never fires — launch in auto mode (§2) |
 | Steer ignored | it is parked; your message is queued behind the prompt |

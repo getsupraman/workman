@@ -110,7 +110,7 @@ public static class PromptCatalogue
             $"Call work_brief(scope:\"{f.Ref}\") first, then {tree}work_threads(scope:\"{f.Ref}\", include:\"followups\") for the follow-ups, and work_get(refs:[\"…\"]) on each item.",
             "Classify each item as do-now, later, drop or needs-a-decision.",
             "Check each against the CURRENT code before you classify it: read the files it names. What is already done or no longer applies is a drop, with the evidence (a file and line, or a commit sha).",
-            "Propose an ordered queue of the do-now items in dependency order - what others wait on first - as /rlarch:controller §1 orders a queue.",
+            "Propose an ordered queue of the do-now items in dependency order - what others wait on first - as /workman:controller §1 orders a queue.",
             ProposeAndWait,
             "Create no runs and cancel nothing before that yes.");
     }

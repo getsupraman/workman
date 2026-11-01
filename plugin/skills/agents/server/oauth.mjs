@@ -214,7 +214,7 @@ async function clientId(meta, origin) {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
         body: JSON.stringify({
-            client_name: 'rlarch agents (agent_launch)',
+            client_name: 'workman agents (agent_launch)',
             redirect_uris: ['http://127.0.0.1/callback'],
             grant_types: ['authorization_code', 'refresh_token'],
             response_types: ['code'],

@@ -1,5 +1,5 @@
 ---
-name: workstate-setup
+name: setup
 description: "Get the WorkState MCP server running and registered, so the `work_*` tools are callable. WorkState is a self-hosted HTTP MCP server (a .NET service plus a Postgres, in Docker, on your own machine) that holds what coding agents are doing - projects, runs, phases, tasks, claims, evidence and an append-only journal - with an operator dashboard on the same port. This skill detects which of four states the machine is in and runs one shipped script that does only the part that is missing: writes the local-only `.env` with random tokens, pulls the published image (no clone needed) or builds from a clone, starts it, registers it with `claude mcp add` - with OAuth sign-in by default, so no token is stored, or with a role's token - and proves that the server answers the way that registration needs - without the model ever reading, pasting or curling a token. Also backs up and restores the database. USE FOR: `work_brief` or any other `work_*` tool is missing and a skill told you it needs the store; a first install of WorkState; \"the workstate tools are gone\"; the server is up but this session cannot see it; backing up or restoring WorkState. DO NOT USE FOR: using the tools once they work (call `work_brief`), or deploying WorkState anywhere but localhost."
 ---
 
@@ -10,10 +10,10 @@ resolved at session start; nothing you do here can add a tool to the session you
 Say that up front, or your own success reads as a failure.
 
 WorkState is a server **you** run. Claude Code only ever connects to it. Everything below is one
-script, shipped next to this file — `assets/workstate-setup.sh` (bash: macOS, Linux, WSL, Git Bash)
-and `assets/workstate-setup.ps1` (PowerShell) — and your job is to pick its flags and read its status
+script, shipped next to this file — `assets/setup.sh` (bash: macOS, Linux, WSL, Git Bash)
+and `assets/setup.ps1` (PowerShell) — and your job is to pick its flags and read its status
 lines. Find it with `echo "$CLAUDE_PLUGIN_ROOT"`: the scripts are at
-`$CLAUDE_PLUGIN_ROOT/skills/workstate-setup/assets/`.
+`$CLAUDE_PLUGIN_ROOT/skills/setup/assets/`.
 
 ## What the model never does
 
@@ -36,7 +36,7 @@ the `.env` appears in its output.
 
 **First question: can you call `work_brief` right now?** If `work_brief` **and** `work_constrain` are
 in your tool list, this is the **already working** state. Say so, change nothing, and stop — unless
-`work_brief` says *"session unnamed — /rlarch:workstate-setup installs the session helper"*: then
+`work_brief` says *"session unnamed — /workman:setup installs the session helper"*: then
 run the script with `--session-names` (§3) and nothing else.
 
 `work_brief` there but **no `work_constrain`** is a fifth state: **registered and running, but older
@@ -93,13 +93,13 @@ someone else's machine that they choose.
 From the project directory, in the Bash tool:
 
 ```
-bash "$CLAUDE_PLUGIN_ROOT/skills/workstate-setup/assets/workstate-setup.sh"
+bash "$CLAUDE_PLUGIN_ROOT/skills/setup/assets/setup.sh"
 ```
 
 or in PowerShell:
 
 ```
-& "$env:CLAUDE_PLUGIN_ROOT/skills/workstate-setup/assets/workstate-setup.ps1"
+& "$env:CLAUDE_PLUGIN_ROOT/skills/setup/assets/setup.ps1"
 ```
 
 | bash | PowerShell | Does |
@@ -146,7 +146,7 @@ hand-started session that shares this registration. A new install gets it; an ex
 
 The roles nest — a controller token also satisfies orchestrator and worker. Register a worker token
 (`--role worker`) only for a session that just executes tasks handed to it. Sessions launched by
-`nested-claude`'s `agent_launch` get their own minted token and name instead; sign it in once with
+`/workman:agents`'s `agent_launch` get their own minted token and name instead; sign it in once with
 `agent_signin`, or, headless, give it `workstate.env_file` = the `.env` this script names
 (`<home>/.env` or `<clone>/server/.env`) — a path, which is all it needs.
 
@@ -220,7 +220,7 @@ The Postgres volume is the only copy of every plan, claim and verification. Back
 anything risky (an upgrade, a restore, moving machines):
 
 ```
-bash "$CLAUDE_PLUGIN_ROOT/skills/workstate-setup/assets/workstate-setup.sh" --backup ~/workstate-2026-10-26.dump
+bash "$CLAUDE_PLUGIN_ROOT/skills/setup/assets/setup.sh" --backup ~/workstate-2026-10-26.dump
 ```
 
 It runs `pg_dump -Fc` inside the running `db` container (found by compose project, `--project` if not

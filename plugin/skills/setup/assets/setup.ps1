@@ -2,7 +2,7 @@
 .SYNOPSIS
   Install, start, register and prove a local WorkState server.
 .DESCRIPTION
-  Twin of workstate-setup.sh: same steps, same flags, same status lines. Change both together.
+  Twin of setup.sh: same steps, same flags, same status lines. Change both together.
 
   Every line this prints is safe to show a model: tokens and passwords stay in the .env file and in
   the harness's own config, and nothing here echoes them (SKILL.md "What the model never sees").
@@ -169,7 +169,7 @@ elseif (& docker volume ls -q --filter "name=^$($Project)_workstate-db-data`$") 
 }
 else {
     $content = @(
-        '# Written by workstate-setup. Local-only throwaway credentials for a loopback service; never commit.'
+        '# Written by /workman:setup. Local-only throwaway credentials for a loopback service; never commit.'
         "WORKSTATE_WORKER_TOKEN=local-worker-$(New-RandomHex)"
         "WORKSTATE_ORCHESTRATOR_TOKEN=local-orchestrator-$(New-RandomHex)"
         "WORKSTATE_CONTROLLER_TOKEN=local-controller-$(New-RandomHex)"

@@ -179,7 +179,7 @@ public sealed partial class SessionStore
         => Refusal.Blocked(
             "this session sends no X-WorkState-Client header.",
             "work_session binds the key the session helper sends; without it there is nothing to name",
-            "/rlarch:workstate-setup (it installs the session helper), then start a new session");
+            "/workman:setup (it installs the session helper), then start a new session");
 
     private static string Taken(string name, string why)
         => Refusal.Blocked(

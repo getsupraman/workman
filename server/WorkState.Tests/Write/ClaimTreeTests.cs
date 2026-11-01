@@ -8,7 +8,7 @@ using static WorkState.Tests.Store.Tokens;
 namespace WorkState.Tests.Write;
 
 /// <summary>
-/// The 2026-10-22 decision: one writer per worktree, many per run. <c>/rlarch:controller</c> runs
+/// The 2026-10-22 decision: one writer per worktree, many per run. <c>/workman:controller</c> runs
 /// parallel units of one run, each in a git worktree of its own — a lock on the run refused the
 /// second one, so the tree the caller works in has to be what the claim locks.
 /// </summary>

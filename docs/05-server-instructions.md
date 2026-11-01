@@ -14,7 +14,7 @@ carries those, and a duplicated schema is the thing that rots first.
 Two rules, both learned the hard way in this repo:
 
 - **Every prohibition ships with its route.** A rule demanding a capability the agent lacks is a trap
-  the author set for themselves (`nested-claude`). "Don't close without evidence" is useless; "closing
+  the author set for themselves (`/workman:agents`). "Don't close without evidence" is useless; "closing
   needs `work_verify` first" is a route.
 - **State the role.** Because `[Authorize]` *hides* a tool rather than refusing it (measured), a
   worker gets no error explaining what it may not do — the tool simply is not there. Without a line

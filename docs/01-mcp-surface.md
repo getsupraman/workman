@@ -188,7 +188,7 @@ suggested; the refusal routes to `work_tree` or `work_threads` instead.
 | Tool | Notes |
 |---|---|
 | **`work_init`** | Create/configure a workspace: repo root, default branch, item-kind ladder, verification command catalogue. |
-| **`work_import`** | `{project, items[], dry_run?}`. One transactional batch of what an **agent** read in a repo's planning material and judged still true of the current code — the server parses nothing (the `/rlarch:workstate-import` skill is the procedure). Each record: `source:{path, anchor?}` (repo-relative), `kind` (`run\|phase\|task\|followup\|note\|assumption\|rule`), `why` (one line: why it is still true), `title` (items) or `body` (note/assumption/rule), optional `ref`, `parent` (an existing ref in the project, or one created by an earlier row of the same batch), `intent`, `status` (`open\|ready\|blocked` only — there is no imported `done` and no imported verification, so nothing it writes can satisfy a done guard), `criteria[]`, `verify_cmd`, `route` (a rule with one is a `red_line`, without a `domain_rule`). Writes go through `work_create`'s guards (a task without `verify_cmd` or criteria is **refused**, routed to `kind:"followup"`), the note, assumption (`asserted`, reversal `medium`) and constraint inserts. `project` must exist **and be bound to a repo**, else refused with the call that creates or binds it. **Idempotent by source:** a second import of the same `project + path + anchor` updates title, intent, criteria and body; an item whose status is not the one the import left, or that was started, checked or verified since, is reported `skipped: moved since import` and left alone (a consumed note, a resolved assumption, a retired rule likewise). Provenance: `item.source = "import:<path>#<anchor>"` and an `import_record` row (doc 02 §9a); journal kind `import` under the importing session. `dry_run` runs the batch and rolls it back. **Visible only to a session minted with `grants:["import"]`** (§6). |
+| **`work_import`** | `{project, items[], dry_run?}`. One transactional batch of what an **agent** read in a repo's planning material and judged still true of the current code — the server parses nothing (the `/workman:import` skill is the procedure). Each record: `source:{path, anchor?}` (repo-relative), `kind` (`run\|phase\|task\|followup\|note\|assumption\|rule`), `why` (one line: why it is still true), `title` (items) or `body` (note/assumption/rule), optional `ref`, `parent` (an existing ref in the project, or one created by an earlier row of the same batch), `intent`, `status` (`open\|ready\|blocked` only — there is no imported `done` and no imported verification, so nothing it writes can satisfy a done guard), `criteria[]`, `verify_cmd`, `route` (a rule with one is a `red_line`, without a `domain_rule`). Writes go through `work_create`'s guards (a task without `verify_cmd` or criteria is **refused**, routed to `kind:"followup"`), the note, assumption (`asserted`, reversal `medium`) and constraint inserts. `project` must exist **and be bound to a repo**, else refused with the call that creates or binds it. **Idempotent by source:** a second import of the same `project + path + anchor` updates title, intent, criteria and body; an item whose status is not the one the import left, or that was started, checked or verified since, is reported `skipped: moved since import` and left alone (a consumed note, a resolved assumption, a retired rule likewise). Provenance: `item.source = "import:<path>#<anchor>"` and an `import_record` row (doc 02 §9a); journal kind `import` under the importing session. `dry_run` runs the batch and rolls it back. **Visible only to a session minted with `grants:["import"]`** (§6). |
 
 > **Changed 2026-10-26 (agent-import).** The row above used to describe a parser of
 > `.claude/orchestration/`. Owner decision: no parser — an agent discovers planning material anywhere
@@ -347,7 +347,7 @@ byte-for-byte what it was before the tool existed (pinned by `ImportVisibilityTe
 `self-namer` policy needs any agent role **and** a `workstate:client-key` claim, which the bearer
 handler adds only for a **static** token on a request carrying `X-WorkState-Client` (the session
 helper's key). A minted session never lists it — its name is its credential's — and neither does a
-session without the helper, whose `work_brief` names `/rlarch:workstate-setup` instead. Every other
+session without the helper, whose `work_brief` names `/workman:setup` instead. Every other
 `tools/list` is unchanged bytes. Measured 2026-10-26 (chars/4): the tool costs 147–148 tokens; to keep
 a keyed orchestrator inside the 6,400 budget, seven orchestrator-only descriptions were trimmed, so the
 lists are worker 1,943 → 2,091 keyed, orchestrator/controller 6,212 → 6,359 keyed.
@@ -382,7 +382,7 @@ error explaining what it may not do.** The role boundary must therefore be state
 `ServerInstructions` — *"you are a worker; closing a task is the orchestrator's call"* — or the agent
 will hunt for a tool that, from where it stands, simply does not exist.
 
-> `nested-claude` §"every prohibition needs a route" applies directly: a scoped tool list is a
+> `/workman:agents` §"every prohibition needs a route" applies directly: a scoped tool list is a
 > prohibition, so each profile's tool set must include the **route** for everything the brief asks
 > for. A worker that must report an assumption needs `work_note`; take it away and it parks.
 
@@ -564,7 +564,7 @@ attention; the templates never were.
 
 ## 11. Verified SDK surface — probed 2026-09-18
 
-Read from the actual assemblies (`/rlarch:dotnet-reflect` over `ModelContextProtocol` /
+Read from the actual assemblies (a reflection pass over `ModelContextProtocol` /
 `.Core` / `.AspNetCore` **2.2.0**). Everything below is metadata, not documentation. This section
 supersedes every "to verify" note earlier in this document.
 

@@ -33,7 +33,7 @@
              CopyToOutputDirectory="PreserveNewest"
              CopyToPublishDirectory="Never" />
 
-    <!-- The repo identity table; RepoKeyTests and the nested-claude server's repo.test.mjs both run it. -->
+    <!-- The repo identity table; RepoKeyTests and the agents server's repo.test.mjs both run it. -->
     <Content Include="..\..\docs\repo-keys.json"
              Link="Fixtures\repo-keys.json"
              CopyToOutputDirectory="PreserveNewest"

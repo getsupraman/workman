@@ -31,7 +31,7 @@ public class ProjectRepo
 
 /// <summary>
 /// The identity rule. The server cannot run git, so the client computes both keys and the server
-/// normalises whatever it receives. <c>plugin/skills/nested-claude/server/repo.mjs</c> holds
+/// normalises whatever it receives. <c>plugin/skills/agents/server/repo.mjs</c> holds
 /// the same rule, and both test suites run the same table of inputs.
 /// </summary>
 public static partial class RepoKeys

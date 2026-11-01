@@ -1,7 +1,7 @@
 # WorkState — a ticketing system for coding agents
 
 Design for an MCP server + Postgres store that replaces the markdown bookkeeping in
-`orchestrate`, `controller` and `nested-claude` with a queryable work-state store: projects →
+`orchestrate`, `controller` and `/workman:agents` with a queryable work-state store: projects →
 features → plans → phases → tasks → sub-tasks, with hierarchy, dependencies, evidence and forced
 closure.
 
@@ -90,5 +90,5 @@ what it was supposed to say.*
 
 `work_patch` (needs its read half — block ids rendered inline — as one slice) · the SolidJS operator
 dashboard (stack fixed in doc 03 §1) · OpenTelemetry, Sentry, Scalar · rewriting the
-`orchestrate` / `controller` / `nested-claude` skills against the store.
+`orchestrate` / `controller` / `/workman:agents` skills against the store.
 

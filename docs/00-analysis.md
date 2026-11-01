@@ -1,6 +1,6 @@
 # 00 — What the skills actually persist, and why files are the wrong store
 
-> Evidence base: `orchestrate`, `nested-claude` and `controller` SKILL.md + references, and the run
+> Evidence base: `orchestrate`, `/workman:agents` and `controller` SKILL.md + references, and the run
 > artifacts those skills wrote.
 
 ---
@@ -180,7 +180,7 @@ cannot do this because nothing rejects a lie. Six mechanisms, in descending stre
    protocol rather than a sentence in a brief that gets forgotten.
 5. **Claim leases.** `in_progress` requires a claim with a TTL and a heartbeat. An expired claim
    auto-releases with an event and surfaces in `attention` — which is the machine answer to
-   `nested-claude`'s "a parked agent is indistinguishable from a busy one".
+   `/workman:agents`'s "a parked agent is indistinguishable from a busy one".
 6. **Evidence is required, not narrated.** `verify_cmd` is `NOT NULL` on a task. A verification row
    stores the **actual result line**, not an exit code — the skill's own rule (*"an `exit 0` at the
    end of a pipe belongs to the `tail`"*), enforced by a required field.

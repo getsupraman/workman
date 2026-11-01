@@ -1,0 +1,17 @@
+{
+  "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
+  "name": "supraman",
+  "owner": {
+    "name": "Supraman"
+  },
+  "metadata": {
+    "description": "The Supraman suite for Claude Code."
+  },
+  "plugins": [
+    {
+      "name": "workman",
+      "source": "./plugin",
+      "description": "Plan, orchestrate and control coding agents against WorkState, the self-hosted work tracker: six skills and the agents MCP server."
+    }
+  ]
+}

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# workstate-setup.sh - install, start, register and prove a local WorkState server.
-# Twin of workstate-setup.ps1: same steps, same flags, same status lines. Change both together.
+# setup.sh - install, start, register and prove a local WorkState server.
+# Twin of setup.ps1: same steps, same flags, same status lines. Change both together.
 #
 # Every line this prints is safe to show a model: tokens and passwords stay in the .env file and in
 # the harness's own config, and nothing here echoes them (SKILL.md "What the model never sees").
@@ -8,9 +8,9 @@ set -euo pipefail
 
 usage() {
     cat <<'EOF'
-usage: workstate-setup.sh [options]
-       workstate-setup.sh --backup <file>  [--home-dir <dir> | --clone <path>] [--project <name>]
-       workstate-setup.sh --restore <file> [--home-dir <dir> | --clone <path>] [--project <name>]
+usage: setup.sh [options]
+       setup.sh --backup <file>  [--home-dir <dir> | --clone <path>] [--project <name>]
+       setup.sh --restore <file> [--home-dir <dir> | --clone <path>] [--project <name>]
 
   --clone <path>          use a clone of github.com/getsupraman/workman: <path>/server/compose.yml (builds
                           the image) and <path>/server/.env. Without it: the WorkState home.
@@ -162,7 +162,7 @@ else
     (
         umask 077
         cat >"$env_file" <<EOF
-# Written by workstate-setup. Local-only throwaway credentials for a loopback service; never commit.
+# Written by /workman:setup. Local-only throwaway credentials for a loopback service; never commit.
 WORKSTATE_WORKER_TOKEN=local-worker-$(random_hex)
 WORKSTATE_ORCHESTRATOR_TOKEN=local-orchestrator-$(random_hex)
 WORKSTATE_CONTROLLER_TOKEN=local-controller-$(random_hex)
