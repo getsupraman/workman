@@ -1,0 +1,80 @@
+# Build and test on every push to main and every pull request. Read-only, no secrets.
+# The three jobs are independent on purpose: the .NET job must not see a built SPA, because
+# AppReadTests asserts the host's own "not built yet" page when wwwroot/index.html is absent.
+
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  dotnet:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # Directory.Build.props targets net10.0; there is no global.json, so the latest 10.0 SDK.
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Build
+        run: dotnet build server/WorkState.slnx
+
+      # Testcontainers starts postgres:17 through the runner's Docker.
+      - name: Test
+        run: dotnet test server/WorkState.Tests/WorkState.Tests.csproj --no-build
+
+  frontend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: server/frontend
+    steps:
+      - uses: actions/checkout@v4
+
+      # The Dockerfile's SPA stage pins the same pnpm.
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+          cache-dependency-path: server/frontend/pnpm-lock.yaml
+
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm ts
+      - run: pnpm build
+      # verify:board and verify:links read a running, populated server (see server/frontend/README.md),
+      # so they are not run here; verify needs no server.
+      - run: pnpm verify
+
+  node:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      # Only the *.test.mjs files: test/ also holds helpers (fake-claude.mjs, …) that a bare
+      # `node --test` would run as tests.
+      - name: nested-claude server
+        working-directory: plugin/skills/nested-claude/server
+        run: node --test test/*.test.mjs
+
+      - name: workstate-setup assets
+        working-directory: plugin/skills/workstate-setup/assets
+        run: node --test test/*.test.mjs
