@@ -30,7 +30,7 @@ public static class WorkStatePolicies
     public const string Importer = "importer";
 
     /// <summary>
-    /// <c>work_session</c>. A static agent token on a request carrying <c>X-WorkState-Client</c>; a
+    /// <c>work_session</c>. A static agent token on a request carrying <c>X-Workman-Client</c>; a
     /// minted token never gets the claim, so neither it nor a session without the helper lists the tool.
     /// </summary>
     public const string SelfNamer = "self-namer";

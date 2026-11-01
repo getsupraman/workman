@@ -81,15 +81,18 @@ public sealed class ReadToolTests(PostgresFixture fixture)
         Assert.True(lines <= WorkStateServerInstructions.LineBudget, $"ServerInstructions is {lines} lines");
     }
 
-    /// <summary>The title is what a person reads; the name is what installed plugins address (C96).</summary>
+    /// <summary>
+    /// The title is what a person reads; the name is the server's own. A client still registers it under any
+    /// name it likes, <c>workstate</c> included: nothing here reads the name a client gave it.
+    /// </summary>
     [Fact]
-    public async Task ServerInfo_shows_Workman_to_a_person_and_keeps_the_workstate_name()
+    public async Task ServerInfo_shows_Workman_to_a_person_and_names_itself_workman()
     {
         await using var server = await StartAsync();
         await using var client = await server.ConnectAsync(ReadServer.WorkerToken, Ct);
 
         Assert.Equal("Workman", client.ServerInfo.Title);
-        Assert.Equal("workstate", client.ServerInfo.Name);
+        Assert.Equal("workman", client.ServerInfo.Name);
     }
 
     [Fact]

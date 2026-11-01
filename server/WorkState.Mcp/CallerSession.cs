@@ -21,15 +21,16 @@ public static class CallerSession
 {
     internal const string ItemKey = "workstate.session";
 
-    public const string AgentHeader = "X-WorkState-Agent";
-    public const string SessionHeader = "X-WorkState-Session";
-    public const string LaunchedByHeader = "X-WorkState-Launched-By";
-    public const string OriginHeader = "X-WorkState-Origin";
-    public const string CwdHeader = "X-WorkState-Cwd";
-    public const string ForemanRoleHeader = "X-WorkState-Foreman-Role";
+    // Each read through WorkmanHeaders, which also accepts the old X-WorkState-* name.
+    public const string AgentHeader = WorkmanHeaders.Agent;
+    public const string SessionHeader = WorkmanHeaders.Session;
+    public const string LaunchedByHeader = WorkmanHeaders.LaunchedBy;
+    public const string OriginHeader = WorkmanHeaders.Origin;
+    public const string CwdHeader = WorkmanHeaders.Cwd;
+    public const string ForemanRoleHeader = WorkmanHeaders.ForemanRole;
 
     /// <summary>The session helper's key for the Claude Code process: host/pid/start time.</summary>
-    public const string ClientHeader = "X-WorkState-Client";
+    public const string ClientHeader = WorkmanHeaders.Client;
 
     /// <summary>
     /// <see cref="ClientHeader"/>, on the principal of a static agent token only — a minted token's
@@ -83,7 +84,7 @@ public static class CallerSession
         }
 
         var headers = http.Request.Headers;
-        string? name = headers[AgentHeader];
+        string? name = WorkmanHeaders.Read(headers, AgentHeader);
         var role = caller.Actor.Role;
 
         if (role == ActorRole.System)
@@ -91,14 +92,14 @@ public static class CallerSession
             return null;
         }
 
-        // A minted token names its own session; X-WorkState-Agent and the launcher rule do not apply.
+        // A minted token names its own session; the Agent header and the launcher rule do not apply.
         if (Guid.TryParse(http.User.FindFirst(SessionIdClaim)?.Value, out var bound))
         {
             var facts = new SessionFacts(
-                ClaudeSessionId: headers[SessionHeader],
-                Origin: headers[OriginHeader],
-                Cwd: headers[CwdHeader],
-                ExternalRole: headers[ForemanRoleHeader],
+                ClaudeSessionId: WorkmanHeaders.Read(headers, SessionHeader),
+                Origin: WorkmanHeaders.Read(headers, OriginHeader),
+                Cwd: WorkmanHeaders.Read(headers, CwdHeader),
+                ExternalRole: WorkmanHeaders.Read(headers, ForemanRoleHeader),
                 ClientName: context.Server.ClientInfo?.Name,
                 ClientVersion: context.Server.ClientInfo?.Version);
 
@@ -124,10 +125,10 @@ public static class CallerSession
         if (string.IsNullOrWhiteSpace(name))
         {
             var keyed = new SessionFacts(
-                ClaudeSessionId: headers[SessionHeader],
-                Origin: headers[OriginHeader],
-                Cwd: headers[CwdHeader],
-                ExternalRole: headers[ForemanRoleHeader],
+                ClaudeSessionId: WorkmanHeaders.Read(headers, SessionHeader),
+                Origin: WorkmanHeaders.Read(headers, OriginHeader),
+                Cwd: WorkmanHeaders.Read(headers, CwdHeader),
+                ExternalRole: WorkmanHeaders.Read(headers, ForemanRoleHeader),
                 ClientName: context.Server.ClientInfo?.Name,
                 ClientVersion: context.Server.ClientInfo?.Version,
                 ClientKey: key);
@@ -142,11 +143,11 @@ public static class CallerSession
 
         var named = new SessionFacts(
             Name: name,
-            ClaudeSessionId: headers[SessionHeader],
-            LaunchedBy: headers[LaunchedByHeader],
-            Origin: headers[OriginHeader],
-            Cwd: headers[CwdHeader],
-            ExternalRole: headers[ForemanRoleHeader],
+            ClaudeSessionId: WorkmanHeaders.Read(headers, SessionHeader),
+            LaunchedBy: WorkmanHeaders.Read(headers, LaunchedByHeader),
+            Origin: WorkmanHeaders.Read(headers, OriginHeader),
+            Cwd: WorkmanHeaders.Read(headers, CwdHeader),
+            ExternalRole: WorkmanHeaders.Read(headers, ForemanRoleHeader),
             ClientName: context.Server.ClientInfo?.Name,
             ClientVersion: context.Server.ClientInfo?.Version,
             ClientKey: key);

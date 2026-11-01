@@ -74,7 +74,7 @@ public sealed class OAuthTokenHandler(
             identity.AddClaim(new Claim(AuthorizationClaim, authorization));
         }
 
-        if (Request.Headers[CallerSession.ClientHeader].ToString().Trim() is { Length: > 0 } key)
+        if (WorkmanHeaders.Text(Request.Headers, CallerSession.ClientHeader) is { } key)
         {
             identity.AddClaim(new Claim(CallerSession.ClientKeyClaim, key));
         }

@@ -207,7 +207,7 @@ public sealed class AdminTests(PostgresFixture fixture)
 
         var unguarded = await SendAsync(system, HttpMethod.Post, $"/api/admin/tenants/{world.B.WorkspaceId}/invites", new { role = "member" }, header: false);
         Assert.Equal(HttpStatusCode.Forbidden, unguarded.StatusCode);
-        Assert.Contains("X-WorkState-Write", await ErrorAsync(unguarded), StringComparison.Ordinal);
+        Assert.Contains("X-Workman-Write", await ErrorAsync(unguarded), StringComparison.Ordinal);
         Assert.Equal(0, await PendingAsync(world, world.B.WorkspaceId));
     }
 

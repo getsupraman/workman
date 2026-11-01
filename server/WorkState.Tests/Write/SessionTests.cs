@@ -102,7 +102,7 @@ public sealed class SessionTests(PostgresFixture fixture)
 
         // A write answers an unnamed caller without comment.
         var (wrote, _) = await StatusAsync(unnamed, "1.1", Tree());
-        Assert.DoesNotContain("X-WorkState-Agent", wrote, StringComparison.Ordinal);
+        Assert.DoesNotContain("X-Workman-Agent", wrote, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -257,11 +257,11 @@ public sealed class SessionTests(PostgresFixture fixture)
         await using var server = await ReadServer.StartAsync(fixture.ConnectionString, world.Slug, Ct);
 
         await using var first = await ConnectAsync(
-            server, ReadServer.WorkerToken, Agent("aw-dup", ("X-WorkState-Launched-By", "foreman-a")));
+            server, ReadServer.WorkerToken, Agent("aw-dup", ("X-Workman-Launched-By", "foreman-a")));
         await ReadServer.CallAsync(first, "work_brief", null, Ct);
 
         await using var second = await ConnectAsync(
-            server, ReadServer.WorkerToken, Agent("aw-dup", ("X-WorkState-Launched-By", "foreman-b")));
+            server, ReadServer.WorkerToken, Agent("aw-dup", ("X-Workman-Launched-By", "foreman-b")));
         var (text, refused) = await ReadServer.CallEitherAsync(second, "work_brief", null, Ct);
 
         Assert.True(refused, text);
@@ -290,7 +290,7 @@ public sealed class SessionTests(PostgresFixture fixture)
         await using var worker = await ConnectAsync(
             server,
             ReadServer.WorkerToken,
-            Agent("skills-5d", ("X-WorkState-Foreman-Role", "platform"), ("X-WorkState-Origin", "foreman/x")));
+            Agent("skills-5d", ("X-Workman-Foreman-Role", "platform"), ("X-Workman-Origin", "foreman/x")));
 
         await ReadServer.CallEitherAsync(worker, "work_brief", null, Ct);
 

@@ -27,6 +27,11 @@ namespace WorkState.Api.Auth.OAuth;
 /// name the same origin.
 /// </para>
 /// <para>
+/// With public URLs configured (<see cref="PublicUrls"/>) each is an issuer of its own: the request is answered
+/// as the one whose host it names, else as the first (<see cref="AnswerAsConfiguredOrigin"/>), and a token is
+/// accepted when any of them issued it — its audience still binds it to the origin it was issued for.
+/// </para>
+/// <para>
 /// The two resources are two audiences (RFC 8707): a token is for one surface, and the other refuses it.
 /// </para>
 /// </summary>
@@ -66,7 +71,7 @@ public static class OAuthServer
     public static string ResourceFor(HttpContext context)
         => context.Request.Path.StartsWithSegments(ApiPath) ? ApiResource(Origin(context)) : Resource(Origin(context));
 
-    public static void Add(IServiceCollection services, string connectionString, string? publicUrl)
+    public static void Add(IServiceCollection services, string connectionString, PublicUrls publicUrls)
     {
         services.AddDbContext<WorkStateDbContext>(options => options.UseWorkState(connectionString));
         services.AddSingleton<OAuthKeyRing>();
@@ -79,9 +84,11 @@ public static class OAuthServer
             })
             .AddServer(server =>
             {
-                if (Uri.TryCreate(publicUrl?.Trim(), UriKind.Absolute, out var issuer))
+                // No SetIssuer: OpenIddict takes the issuer from the request's base URI, which
+                // AnswerAsConfiguredOrigin sets to the configured origin the request names.
+                if (publicUrls.Any)
                 {
-                    server.SetIssuer(issuer);
+                    server.AddEventHandler(AnswerAsConfiguredOrigin);
                 }
 
                 server.SetAuthorizationEndpointUris(AuthorizePath)
@@ -134,6 +141,13 @@ public static class OAuthServer
                 validation.EnableAuthorizationEntryValidation();
 
                 validation.AddEventHandler(RequireSurfaceAudience);
+
+                // Left empty, the valid issuer is the request's own base URI, which is right only when no
+                // public URL is configured: then issuer and request always agree.
+                if (publicUrls.Any)
+                {
+                    validation.Configure(options => options.TokenValidationParameters.ValidIssuers = publicUrls.Issuers().ToArray());
+                }
             });
 
         // Here rather than through AddSigningKey, which wants the key at registration time; the ring
@@ -202,6 +216,27 @@ public static class OAuthServer
                 return default;
             })
             .SetOrder(OpenIddictServerAspNetCoreHandlers.ValidateTransportSecurityRequirement.Descriptor.Order)
+            .SetType(OpenIddictServerHandlerType.Custom)
+            .Build();
+
+    /// <summary>
+    /// The base and request URIs OpenIddict resolved from the request, re-rooted at the configured origin that
+    /// request names (<see cref="WebBase"/>): the issuer is the base URI, so each origin issues as itself, and the
+    /// endpoints still match because both URIs move together.
+    /// </summary>
+    private static readonly OpenIddictServerHandlerDescriptor AnswerAsConfiguredOrigin =
+        OpenIddictServerHandlerDescriptor.CreateBuilder<OpenIddictServerEvents.ProcessRequestContext>()
+            .UseInlineHandler(context =>
+            {
+                var request = context.Transaction.GetHttpRequest()
+                              ?? throw new InvalidOperationException("No HTTP request on the OpenIddict transaction.");
+
+                var origin = Origin(request.HttpContext);
+                context.BaseUri = new Uri(origin + "/", UriKind.Absolute);
+                context.RequestUri = new Uri(origin + request.Path + request.QueryString, UriKind.Absolute);
+                return default;
+            })
+            .SetOrder(OpenIddictServerAspNetCoreHandlers.ResolveRequestUri.Descriptor.Order + 1)
             .SetType(OpenIddictServerHandlerType.Custom)
             .Build();
 

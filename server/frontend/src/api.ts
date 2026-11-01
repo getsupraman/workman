@@ -325,7 +325,7 @@ async function write(path: string): Promise<Response> {
   const response = await fetch(path, {
     method: 'POST',
     credentials: 'same-origin',
-    headers: { 'X-WorkState-Write': '1' },
+    headers: { 'X-Workman-Write': '1' },
   })
 
   if (response.status === 401) {
@@ -346,7 +346,7 @@ async function send(method: 'POST' | 'PUT' | 'DELETE', path: string, body?: unkn
   const response = await fetch(path, {
     method,
     credentials: 'same-origin',
-    headers: { 'X-WorkState-Write': '1', ...(body === undefined ? {} : { 'Content-Type': 'application/json' }) },
+    headers: { 'X-Workman-Write': '1', ...(body === undefined ? {} : { 'Content-Type': 'application/json' }) },
     body: body === undefined ? undefined : JSON.stringify(body),
   })
 
@@ -456,7 +456,7 @@ export const acceptInvite = (token: string, body: { name: string; password: stri
     fetch(`/api/invite/${id(token)}/accept`, {
       method: 'POST',
       credentials: 'same-origin',
-      headers: { 'Content-Type': 'application/json', 'X-WorkState-Write': '1' },
+      headers: { 'Content-Type': 'application/json', 'X-Workman-Write': '1' },
       body: JSON.stringify(body ?? {}),
     }),
   )
@@ -481,7 +481,7 @@ export async function changePassword(current: string, next: string): Promise<Pas
   const response = await fetch('/api/session/password', {
     method: 'POST',
     credentials: 'same-origin',
-    headers: { 'Content-Type': 'application/json', 'X-WorkState-Write': '1' },
+    headers: { 'Content-Type': 'application/json', 'X-Workman-Write': '1' },
     body: JSON.stringify({ current, next }),
   })
 
@@ -507,7 +507,7 @@ export const useReset = (token: string, password: string) =>
     fetch(`/api/reset/${id(token)}`, {
       method: 'POST',
       credentials: 'same-origin',
-      headers: { 'Content-Type': 'application/json', 'X-WorkState-Write': '1' },
+      headers: { 'Content-Type': 'application/json', 'X-Workman-Write': '1' },
       body: JSON.stringify({ password }),
     }),
   )
@@ -595,7 +595,7 @@ export async function switchTenant(id: string): Promise<string | null> {
     const response = await fetch('/api/session/tenant', {
       method: 'POST',
       credentials: 'same-origin',
-      headers: { 'Content-Type': 'application/json', 'X-WorkState-Write': '1' },
+      headers: { 'Content-Type': 'application/json', 'X-Workman-Write': '1' },
       body: JSON.stringify({ id }),
     })
     if (response.status === 204) return null

@@ -28,7 +28,7 @@ public sealed class ImportVisibilityTests(PostgresFixture fixture)
     /// SHA-256 of the serialized tools/list per profile without work_import: dc388f4's list, with
     /// work_search no longer promising doc hits and work_note's <c>to</c> no longer offering a selector;
     /// the orchestrator list re-pinned when seven orchestrator-only descriptions were trimmed to make
-    /// room for work_session (hidden here, listed only with X-WorkState-Client); both re-pinned when
+    /// room for work_session (hidden here, listed only with X-Workman-Client); both re-pinned when
     /// work_brief's scope stopped promising the busiest run, which several projects now answer with a
     /// list (bare-brief); both re-pinned when work_brief's for: named gate and stopped falling back
     /// to resume for anything else (brief-variants); both re-pinned when work_search gained scope and
