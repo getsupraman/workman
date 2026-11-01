@@ -68,6 +68,11 @@ public sealed class ImportVisibilityTests(PostgresFixture fixture)
             if (hash != pinned)
             {
                 seen.Add($"{label} {hash}");
+                if (label.StartsWith("static", StringComparison.Ordinal))
+                {
+                    var tools = await client.ListToolsAsync(cancellationToken: Ct);
+                    seen.AddRange(tools.Select(t => $"  {t.Name} {Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(JsonSerializer.Serialize(t.ProtocolTool))))[..12]} {JsonSerializer.Serialize(t.ProtocolTool).Length}"));
+                }
             }
         }
 
