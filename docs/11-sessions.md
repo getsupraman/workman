@@ -13,12 +13,12 @@ an orchestrator's evidence). The **session** is a second, independent fact: *wha
 is called*. Identity never grants a role; it labels, and it is the unit the tree rule counts in.
 
 ## Where the identity comes from: the registration headers, and nothing else
-- `X-WorkState-Agent: <name>` — the session's name; with the workspace and the credential's user, the
+- `X-Workman-Agent: <name>` — the session's name; with the workspace and the credential's user, the
   row key.
-- `X-WorkState-Session: <claude session id>` — kept on the row; a change is history (below).
-- `X-WorkState-Launched-By: <name>` — the collision rule (below).
-- `X-WorkState-Origin` (free text, e.g. "foreman/orion/Orion"), `X-WorkState-Cwd`,
-  `X-WorkState-Foreman-Role` (platform|repo|worker, kept when it differs from the token role).
+- `X-Workman-Session: <claude session id>` — kept on the row; a change is history (below).
+- `X-Workman-Launched-By: <name>` — the collision rule (below).
+- `X-Workman-Origin` (free text, e.g. "foreman/orion/Orion"), `X-Workman-Cwd`,
+  `X-Workman-Foreman-Role` (platform|repo|worker, kept when it differs from the token role).
 
 Foreman launches each session with `--mcp-config` carrying its role token, so it adds these per
 launch; a user can put them on `claude mcp add --header`. They ride on every request, so they survive
@@ -31,9 +31,9 @@ tenant — never a workspace the request names (doc 08 §4) — and returns a `w
 act in that workspace;
 `repo` is the session's repository, which its bare `work_brief()` resolves to a project (doc 02);
 `ttlHours` (default 72) is an idle window that every use renews, with no hard cap. A call
-with that token *is* that session: the name comes from the credential, `X-WorkState-Agent` is ignored,
+with that token *is* that session: the name comes from the credential, `X-Workman-Agent` is ignored,
 and the other headers still fill the row as above. `externalRole` fills `external_role` exactly as
-`X-WorkState-Foreman-Role` does. The collision rule below holds for a mint too: a name held under a
+`X-Workman-Foreman-Role` does. The collision rule below holds for a mint too: a name held under a
 different `launched_by` is refused (409), and `replace` does not override it — with one exception, the
 **takeover** (2026-10-28, unit `shared-v1/name-takeover`): a mint with `replace: true` and a non-null
 `launchedBy` may take a row whose `launched_by` is NULL when that row's `claude_session_id` is
@@ -65,21 +65,21 @@ claims are released and journalled, with the user as the actor and `human` as th
 `/connect/revoke` ends the authorization the same way, and its sessions stop authenticating.
 
 **Or by naming itself (2026-10-26, unit `mature/session-names`).** A hand-started session shares the
-user-scope static registration, so it has no header of its own — and a fixed `X-WorkState-Agent` in
+user-scope static registration, so it has no header of its own — and a fixed `X-Workman-Agent` in
 `~/.claude.json` would give every session the same name. The registration's `headersHelper`,
-`session-header.mjs` (installed by `/workman:setup`), sends `X-WorkState-Client:
+`session-header.mjs` (installed by `/workman:setup`), sends `X-Workman-Client:
 <host>/<pid>/<start epoch s>` of the nearest Claude Code ancestor process — found in the process table,
 never from `CLAUDE_PID`/`CLAUDE_JOB_DIR`, which are inherited from whoever started the process — and
-`X-WorkState-Agent` too when `claude agents --json` lists that pid with a name (background sessions;
+`X-Workman-Agent` too when `claude agents --json` lists that pid with a name (background sessions;
 a fresh interactive one may not be listed yet). `work_session(name, claude_session_id?)` binds the
 request's key to the row for `name` (created as a header would create it), moving the key off any
 other row. It is refused for a name another key used within the lease window (the claim TTL), for a
 minted session's name, and under the launcher rule below. `agent_session.client_key` is unique per
 workspace (migration `SessionClientKey`).
 
-**Resolution order, per request.** (a) a minted `wss_` token → its session; both `X-WorkState-Agent`
-and `X-WorkState-Client` are ignored. (b) `X-WorkState-Agent` → the session by name; with
-`X-WorkState-Client` also present, that key is bound to it. (c) only `X-WorkState-Client` → the
+**Resolution order, per request.** (a) a minted `wss_` token → its session; both `X-Workman-Agent`
+and `X-Workman-Client` are ignored. (b) `X-Workman-Agent` → the session by name; with
+`X-Workman-Client` also present, that key is bound to it. (c) only `X-Workman-Client` → the
 session the key is bound to, if any. (d) otherwise no session.
 
 A call that resolves to no session has **no session**: it writes `session_id` NULL, renders as its role

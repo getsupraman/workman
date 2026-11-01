@@ -2,9 +2,13 @@
 
 Four questions from the owner, answered against what is verified rather than assumed.
 
-> The product's display name is **Workman** (dashboard, consent pages, MCP `serverInfo.title`). The MCP
-> server name `workstate`, its `mcp__workstate__` tools, the `X-WorkState-*` headers, the host and the
-> OAuth issuer stay `workstate` for compatibility with installed plugins and live tokens.
+> The product is **Workman** (dashboard, consent pages, MCP `serverInfo.title`). Its machine-facing names
+> are `workman` too: `serverInfo.name`, the registration `/workman:setup` writes (so `mcp__workman__*`
+> tools) and the `X-Workman-*` headers. The old names keep working until server 2.0 / plugin 2.0: every
+> `X-WorkState-*` request header is still read (the new name wins when both arrive), the headers the
+> server sends go out under both names, and a client may register the server under any name,
+> `workstate` included. `CHANGELOG.md` holds the migration note. A public URL is still one OAuth issuer,
+> and `WORKMAN_PUBLIC_URLS` adds more (§4).
 
 ---
 
@@ -41,7 +45,7 @@ Two consequences that were not obvious when the transport was chosen:
 in exactly this shape — read back from the live config after `claude mcp add`:
 
 ```json
-{ "workstate": { "type": "http",
+{ "workman": { "type": "http",
                  "url": "http://localhost:5290/mcp",
                  "headers": { "Authorization": "Bearer …" } } }
 ```
@@ -59,7 +63,7 @@ So `plugin/.mcp.json` becomes:
 
 ```json
 { "mcpServers": {
-    "workstate": { "type": "http", "url": "http://127.0.0.1:5290/mcp",
+    "workman": { "type": "http", "url": "http://127.0.0.1:5290/mcp",
                    "headers": { "Authorization": "Bearer ${WORKSTATE_TOKEN}" } } } }
 ```
 
@@ -171,7 +175,7 @@ path tree locks are per user. Its four migrations (ProjectMembers, ProjectAccess
 MachineKeys) add `project_member` and make every workspace member a member of each existing project.
 They also add the project policies, the access seq with its triggers, and per-user `project_repo`
 rows and claim keys. Each existing root binding is copied to every user who can see its project.
-`/api/stream` also carries the `X-WorkState-Api` header now.
+`/api/stream` also carries the `X-Workman-Api` header now.
 
 `1.1.1` (no plugin change) fixes three gaps 1.1.0 left open. A claim records its holder's user, so a
 claim made without a session is retaken or extended only by the same user. `work_move` enforces
@@ -267,7 +271,7 @@ never reach `/mcp`.
 read-only, so they take either audience: the dashboard cookie, any agent token, or a **reader token**.
 The pre-v1 cookie-only `/api/*` routes are removed; `/api/session`, `/api/agent-sessions` (doc 14
 §2, bearer only), the dashboard's writes (`POST /api/projects/{id}/archive|unarchive` and the rest in
-doc 10 "Outside v1", cookie only, with the `X-WorkState-Write` header), the admin API `/api/admin/*`
+doc 10 "Outside v1", cookie only, with the `X-Workman-Write` header), the admin API `/api/admin/*`
 (cookie only) and the invite link `/api/invite/{token}` (anonymous, below) are the only other `/api`
 routes.
 
@@ -275,7 +279,7 @@ routes.
 |---|---|---|
 | worker · orchestrator · controller | `WorkState:Auth:{Worker,Orchestrator,Controller}Token` · `WORKSTATE_{WORKER,ORCHESTRATOR,CONTROLLER}_TOKEN` — **local install only** (required in `server/compose.yml`; the server deploy `deploy/multi-deploy` sets none, so a server accepts none) | `/mcp` by role, and `GET /api/v1/*` + `/api/stream`; orchestrator and controller also `/api/agent-sessions` |
 | reader | `WorkState:Auth:ReaderToken` · `WORKSTATE_READER_TOKEN` (**optional**: compose passes `${WORKSTATE_READER_TOKEN:-}`, and empty means no reader token exists) | `GET /api/v1/*` and `/api/stream` only — `/mcp` refuses it (403), and so does `/api/session` |
-| minted `wss_…` (per session) | none — `POST /api/agent-sessions` with an orchestrator or controller bearer returns it once; the store keeps only its SHA-256. Expires after `ttlHours` (default 72, max 720) **unused** — an idle window each use renews, no hard cap — revoked by `DELETE` | exactly what a static token of its granted role reaches (never above its minter's role), and its calls are that session's: `X-WorkState-Agent` is ignored |
+| minted `wss_…` (per session) | none — `POST /api/agent-sessions` with an orchestrator or controller bearer returns it once; the store keeps only its SHA-256. Expires after `ttlHours` (default 72, max 720) **unused** — an idle window each use renews, no hard cap — revoked by `DELETE` | exactly what a static token of its granted role reaches (never above its minter's role), and its calls are that session's: `X-Workman-Agent` is ignored |
 
 Foreman signs in with OAuth only (autowork m5/43): it registers by DCR, signs in with PKCE for the
 scopes `workstate.read workstate.sessions offline_access`, and mints a `wss_` session per agent it
@@ -391,11 +395,11 @@ there). Either way the browser is then signed in to the invite's workspace. A na
 refused (409) and leaves the link unused. `GET /api/invite/{token}` and `POST
 /api/invite/{token}/accept` take no session and are rate-limited per client address (10 a minute,
 sign-in's window doubled because the page reads the link before it uses it); the accept also needs
-the `X-WorkState-Write` header. A used, revoked, expired or unknown token is one answer, 404.
+the `X-Workman-Write` header. A used, revoked, expired or unknown token is one answer, 404.
 
 **Passwords (m52).** A password is at least **12 characters** (and at most 1024) wherever one is
 set: accepting an invite, changing one's own, using a reset link. `POST /api/session/password
-{current, next}` (the cookie and the `X-WorkState-Write` header) changes the signed-in user's
+{current, next}` (the cookie and the `X-Workman-Write` header) changes the signed-in user's
 password; a wrong current password is sign-in's bare 401, and it is rate-limited like sign-in, in a
 window of its own. Success rehashes and draws a new security stamp, which **ends every other cookie
 of that user** at its next request, and re-issues the requesting cookie with the new stamp, so it

@@ -125,7 +125,7 @@ archived, **Unarchive** and *Archived &lt;date&gt;*). Archive first asks, inline
 project leaves the active lists and the overview for *Archived*; nothing is deleted; agents still
 open it by ref and repo; new work for it unarchives it; it can be unarchived here at any time.
 Unarchive does not ask. The write is `POST /api/projects/{id}/archive|unarchive` with the
-`X-WorkState-Write` header; a failure is shown under the header band. The honesty counts and the
+`X-Workman-Write` header; a failure is shown under the header band. The honesty counts and the
 open-task total still include archived projects — they are the server's sums, and archiving hides a
 project, it does not settle it.
 

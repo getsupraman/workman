@@ -46,7 +46,7 @@ Every statement is tagged with how it is known:
 | **WorkState binaries** | the published image `ghcr.io/getsupraman/workman:<version>` (amd64 + arm64), or one built **from a clone**, plus `postgres:17` | Docker's image store | `setup.sh` / `.ps1`: pulled by `~/.workstate/compose.yml`, or built by `<clone>/server/compose.yml` (multi-stage: `node:24-slim` builds the SPA, `dotnet/sdk:10.0` publishes, `aspnet:10.0` runs) **[code: server/Dockerfile]** |
 | **WorkState data** | the Postgres database: every plan, claim, verification, journal | Docker volume `workstate_workstate-db-data` — the same for both composes | created on first `up`; schema applied by the API at startup **[code: SchemaOwner]**; `--backup` / `--restore` |
 | **Server configuration** | tokens, dashboard login, Postgres password, port, bind | `~/.workstate/.env`, or `<clone>/server/.env` (gitignored; template `server/.env.example`) | the setup script, once, with random values; never overwritten |
-| **Client registration** | the `workstate` MCP server entry | `~/.claude.json` → `mcpServers.workstate` (user scope) or `projects["<path>"].mcpServers` (local scope) **[measured]** | `claude mcp add`, run by the setup script (`/workman:setup` §3) |
+| **Client registration** | the `workman` MCP server entry (`workstate` before the rename) | `~/.claude.json` → `mcpServers.workman` (user scope) or `projects["<path>"].mcpServers` (local scope) **[measured]** | `claude mcp add`, run by the setup script (`/workman:setup` §3) |
 | **Running service** | `http://127.0.0.1:5290` — `/mcp`, `/api/v1/*`, dashboard, `/health` | containers `workstate-api-1`, `workstate-db-1`, `restart: unless-stopped` | Docker |
 
 Nothing of WorkState runs inside Claude Code. It is a service **you** run; Claude Code only connects
@@ -129,7 +129,7 @@ approval, and starts launching nested agents (§6).
    session on the machine — including every nested agent — inherits it **[measured]**. A nested
    worker therefore writes with the controller's authority, and the done-guard (a worker's
    verification cannot close a task) is silently off for exactly the agents it exists for.
-3. **No session names** unless each registration carries `X-WorkState-Agent` (doc 11), which a
+3. **No session names** unless each registration carries `X-Workman-Agent` (doc 11), which a
    user-scope registration cannot do per session.
 4. The registration URL is `http://localhost:5290/mcp` **[measured]** while the server binds
    `127.0.0.1` only; a client that tries `::1` first fails (§9 open question 4).
@@ -163,7 +163,7 @@ Every call passes through two request filters before the tool runs:
 
 1. `ToolArguments` — undeclared or wrong-shaped arguments are refused with the nearest real
    parameter and a call that binds (2026-10-23, `67171db`).
-2. `CallerSession` — reads the `X-WorkState-*` headers and attaches a session (doc 11, `04015e2`).
+2. `CallerSession` — reads the `X-Workman-*` headers and attaches a session (doc 11, `04015e2`).
 
 ### 4.3 Resources
 
@@ -175,7 +175,7 @@ Every call passes through two request filters before the tool runs:
 | Source | What it establishes | Trust |
 |---|---|---|
 | `Authorization: Bearer <token>` (3 static tokens + optional reader token, from `server/.env`) | the **role** → tool visibility, `run_by` on evidence, who may close | the only authority |
-| `X-WorkState-Agent` (+ `-Session`, `-Launched-By`, `-Origin`, `-Cwd`, `-Foreman-Role`) | the **session** row: name, labels, lease renewal, one-session-per-tree | a label; never grants anything |
+| `X-Workman-Agent` (+ `-Session`, `-Launched-By`, `-Origin`, `-Cwd`, `-Foreman-Role`) | the **session** row: name, labels, lease renewal, one-session-per-tree | a label; never grants anything |
 | dashboard cookie | a signed-in user (`app_user`) in one tenant, for `/api/*` and the UI | re-read from the table on every request |
 | OAuth access token (`/connect/authorize`, doc 08 §4) | the **user** — `sub` is their `app_user` id — and the **one tenant** they approved the client in (`workstate:tenant`); role controller | re-checked on every call and every refresh: the user exists, is not disabled, may still enter the tenant. Its refresh token is an opaque 43-character handle to a row of `openiddict_token` (m57), short enough for Windows Credential Manager's 2560-byte blob, where Foreman stores it |
 | `_meta.clientInfo` | not used (it would say `claude-code` for every session) | spec: self-reported |
@@ -277,9 +277,9 @@ So today a nested agent is **anonymous and holds the controller role** — the g
 > **Changed 2026-10-26 — a headers helper names sessions; the token stays a static header.**
 > `/workman:setup` copies `assets/session-header.mjs` next to the `.env` and registers with
 > `claude mcp add-json` (`headers.Authorization` from the `.env`, `headersHelper: node <home>/session-header.mjs`).
-> The helper carries no credential: it prints `X-WorkState-Client` (host/pid/start time of the nearest
+> The helper carries no credential: it prints `X-Workman-Client` (host/pid/start time of the nearest
 > `claude` ancestor in the process table — measured: the harness runs it as node ← cmd ← the session's
-> claude.exe) and, when `claude agents --json` lists that pid with a name, `X-WorkState-Agent`. A
+> claude.exe) and, when `claude agents --json` lists that pid with a name, `X-Workman-Agent`. A
 > hand-started session then names itself with `work_session(name)` (doc 11). `CLAUDE_PID` and
 > `CLAUDE_JOB_DIR` were measured to be inherited from other sessions and are never read. The
 > credential-helper design below (token out of `~/.claude.json`) remains open.
@@ -294,7 +294,7 @@ workstate-headers --env <path to server/.env> --role worker|orchestrator|control
 It reads `WORKSTATE_<ROLE>_TOKEN` from the env file and prints one JSON object:
 
 ```json
-{"Authorization":"Bearer <token>","X-WorkState-Agent":"aw-m1","X-WorkState-Launched-By":"skills-5d","X-WorkState-Cwd":"P:/…/m1"}
+{"Authorization":"Bearer <token>","X-Workman-Agent":"aw-m1","X-Workman-Launched-By":"skills-5d","X-Workman-Cwd":"P:/…/m1"}
 ```
 
 Two places use it:
@@ -386,7 +386,7 @@ names would keep coming from the helper. Not worth building while the server is 
 | `setup/SKILL.md` | §3 runs `init-env`; §5 registers with `headersHelper` via `claude mcp add-json`, `127.0.0.1`; §6 checks via the helper, no token on a command line; a migration note for existing literal-token registrations | medium |
 | `/workman:agents` launchers (`.ps1` + `.sh`) | per-launch config with the helper, `--role` default `worker`; nothing secret in the file (rework of the deferred `ws/m6-launcher` branch) | medium |
 | `controller` SKILL.md | one sentence: nested agents now write as workers under their own name | tiny |
-| WorkState server | **none** — `X-WorkState-*` headers and per-role tokens already exist | — |
+| WorkState server | **none** — `X-Workman-*` headers and per-role tokens already exist | — |
 | Measurements before merging | (1) `${CLAUDE_PLUGIN_ROOT}` in a user-scope `headersHelper`; (2) `claude mcp add-json` with `headersHelper` round-trips into `~/.claude.json`; (3) a worker-role nested agent's `work_verify` is recorded as `worker` and cannot close its unit; (4) Git Bash absent → `.ps1` helper path | — |
 
 ---

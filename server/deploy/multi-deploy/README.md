@@ -59,6 +59,21 @@ lines; they are unused, and removing them prints nothing:
 sed -i '/^WORKSTATE_\(WORKER\|ORCHESTRATOR\|CONTROLLER\)_TOKEN=/d' .env
 ```
 
+## More than one host
+
+The same server can answer on several names, each its own OAuth issuer: a client signed in at one name
+keeps its token there, and a sign-in at another name works at that name. Point DNS for each host at the
+server, then add to `.env` (placeholders shown):
+
+```bash
+WORKMAN_PUBLIC_URLS=https://workman.example.org
+WORKMAN_HOSTS=Host(`workman.example.com`) || Host(`workman.example.org`)
+```
+
+`WORKSTATE_PUBLIC_URL` stays the first origin, and the one a request naming no configured host is
+answered as. `WORKMAN_HOSTS` is the Traefik rule for both routers (unset: `Host(WORKSTATE_HOST)`), so
+Let's Encrypt issues a certificate for every host it names. Then `app deploy workstate`.
+
 ## Restore
 
 ```bash
