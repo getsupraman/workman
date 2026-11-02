@@ -4,7 +4,7 @@ import type { ConnectedApps, RevokedApp } from './apps.ts'
 import type { AppInfo, SessionTenant } from './connect.ts'
 import type { Sharing } from './sharing.ts'
 
-/** doc 10 — the frozen v1 shapes, as `WorkState.Api/App/V1/V1Contract.cs` serialises them. */
+/** doc 10 — the frozen v1 shapes, as `Workman.Api/App/V1/V1Contract.cs` serialises them. */
 export type ItemRef = {
   id: string
   ref: string

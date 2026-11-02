@@ -10,7 +10,7 @@ import { fileURLToPath } from 'node:url'
  * `appsettings.Development.json`, for `dotnet run`.
  */
 const ENV = fileURLToPath(new URL('../../.env', import.meta.url))
-const SETTINGS = fileURLToPath(new URL('../../WorkState.Api/appsettings.Development.json', import.meta.url))
+const SETTINGS = fileURLToPath(new URL('../../Workman.Api/appsettings.Development.json', import.meta.url))
 
 function fromEnvFile() {
   const values = {}

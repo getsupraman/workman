@@ -154,7 +154,7 @@ test('role none: no mint, no --mcp-config, no config file', async () => {
     }
 })
 
-test('a minted session may call its WorkState tools without a prompt; without WorkState it may not', async () => {
+test('a minted session may call its Workman tools without a prompt; without Workman it may not', async () => {
     const repo = makeRepo()
     const ws = await fakeWorkstate()
     const s = startServer()

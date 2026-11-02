@@ -157,4 +157,4 @@ The dashboard's journal `actor` and lease holder already show the session name w
 ## Not in this unit (decision)
 - Authenticating the name: a header-named session can claim any name; it is a label, like a git
   author. A minted token (doc 14 §2, Foreman need #4) binds the name to the credential instead.
-- Killing/attaching sessions from WorkState: Foreman's job, using `claudeSessionId`.
+- Killing/attaching sessions from Workman: Foreman's job, using `claudeSessionId`.

@@ -1,6 +1,6 @@
 ---
 name: orchestrate
-description: Execute a large plan, spec, or multi-phase undertaking by becoming an orchestrator that delegates every task to subagents (strictly sequential for anything that writes; parallel only for read-only recon), verifies each result against the high-level goal, and re-plans when reality diverges — keeping the main context clean. The plan, the rules, the evidence and the record live in the WorkState store (the `work_*` MCP tools), which this skill requires. Use when asked to "execute this plan", "implement this spec/RFC end-to-end", "do this big refactor/migration/rebuild", or for any job too large to finish well in one context window.
+description: Execute a large plan, spec, or multi-phase undertaking by becoming an orchestrator that delegates every task to subagents (strictly sequential for anything that writes; parallel only for read-only recon), verifies each result against the high-level goal, and re-plans when reality diverges — keeping the main context clean. The plan, the rules, the evidence and the record live in Workman (the `work_*` MCP tools), which this skill requires. Use when asked to "execute this plan", "implement this spec/RFC end-to-end", "do this big refactor/migration/rebuild", or for any job too large to finish well in one context window.
 ---
 
 # Orchestrate
@@ -13,9 +13,9 @@ Invoking this skill is the user's explicit authorization to spawn subagents. You
 
 ## Preflight — before anything else
 
-**Call `work_brief(repo: {remote, root})`.** This skill keeps its plan, rules, evidence and record in WorkState and has no other place to keep them. A project is bound to its repository, and the repo is how you find yours: `remote` is `git remote get-url origin` (omit it when there is no origin), `root` is the parent directory of `git rev-parse --path-format=absolute --git-common-dir` — the main checkout, the same from every worktree. A session launched by `agent_launch` already carries both, so a bare `work_brief()` finds the project too.
+**Call `work_brief(repo: {remote, root})`.** This skill keeps its plan, rules, evidence and record in Workman and has no other place to keep them. A project is bound to its repository, and the repo is how you find yours: `remote` is `git remote get-url origin` (omit it when there is no origin), `root` is the parent directory of `git rev-parse --path-format=absolute --git-common-dir` — the main checkout, the same from every worktree. A session launched by `agent_launch` already carries both, so a bare `work_brief()` finds the project too.
 
-- **No `work_*` tools in your list** → tell the user in one line: *"orchestrate needs the WorkState MCP server and this session cannot see it — run `/workman:setup`."* Then stop. Do not fall back to markdown files; there is no second mode.
+- **No `work_*` tools in your list** → tell the user in one line: *"orchestrate needs the Workman MCP server and this session cannot see it — run `/workman:setup`."* Then stop. Do not fall back to markdown files; there is no second mode.
 - **`work_brief` exists but `work_constrain` does not** → the server is older than this skill. Say so in one line, point at `/workman:setup`, and stop.
 - **It says `session  unnamed — work_session(…)`** → sign your work first: `work_session(name:)` with the name `ListAgents` gives in its first line, *"This session is <name> [ref]"* (the name, not the ref).
 - **It answers** → read it. It is the goal, where the run stands, the literal next action, the rules that bind, and the open assumptions. If it names a run in flight that is this undertaking ("continue orchestrating phase 4"), **resume the loop from its NEXT line**: Phase 0 and its approval gate do not re-fire, and the per-phase gate is the discipline from then on. On an empty server it answers with onboarding; that is Phase 0.
@@ -42,7 +42,7 @@ Invoking this skill is the user's explicit authorization to spawn subagents. You
 
 If you want to know something about the code, that is a question for a subagent, not a `Read` call.
 
-**The store is your memory, not context.** Every decision, assumption, deviation and result goes into WorkState the moment it happens — a verification the moment you run it, an assumption the moment you take it, a finding the moment a review returns. Nothing that matters lives only in this conversation. If this session were compacted or killed right now, a fresh orchestrator calling **`work_brief`** and nothing else must be able to continue. That is the test: if it could not, something you know is still only in your head — write it down now.
+**The store is your memory, not context.** Every decision, assumption, deviation and result goes into Workman the moment it happens — a verification the moment you run it, an assumption the moment you take it, a finding the moment a review returns. Nothing that matters lives only in this conversation. If this session were compacted or killed right now, a fresh orchestrator calling **`work_brief`** and nothing else must be able to continue. That is the test: if it could not, something you know is still only in your head — write it down now.
 
 ### Full mode and light mode
 

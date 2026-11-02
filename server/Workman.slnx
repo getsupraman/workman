@@ -1,0 +1,7 @@
+<Solution>
+  <Project Path="Workman.Core/Workman.Core.csproj" />
+  <Project Path="Workman.Mcp/Workman.Mcp.csproj" />
+  <Project Path="Workman.Api/Workman.Api.csproj" />
+  <Project Path="tools/Workman.Import/Workman.Import.csproj" />
+  <Project Path="Workman.Tests/Workman.Tests.csproj" />
+</Solution>

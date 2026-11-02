@@ -1,5 +1,5 @@
 {
-  "name": "workstate-frontend",
+  "name": "workman-frontend",
   "private": true,
   "type": "module",
   "scripts": {

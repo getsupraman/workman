@@ -1,4 +1,4 @@
-# WorkState on a multi-deploy server
+# Workman on a multi-deploy server
 
 Runs the published image `ghcr.io/getsupraman/workman` behind
 [multi-deploy](https://github.com/r-Larch/multi-deploy)'s Traefik, with HTTPS from Let's Encrypt.

@@ -1,7 +1,7 @@
 /**
  * The two pages inside `/connect/authorize` — sign-in and consent — as plain functions, so
  * `verify/state-cases.mjs` can walk every state without a browser. `Connect.tsx` only renders these.
- * The server judges the same things first (`WorkState.Api/Auth/OAuth/ConnectPages.cs`); these are the
+ * The server judges the same things first (`Workman.Api/Auth/OAuth/ConnectPages.cs`); these are the
  * page's own copy of the rules, not a substitute for them.
  */
 
@@ -53,7 +53,7 @@ export type SessionTenant = { id: string; slug: string; role: string; current: b
 
 /**
  * `GET /connect/app-icon`: the client's own icon, resolved and served by this server
- * (`WorkState.Api/Auth/OAuth/ClientIcons.cs`), so the page asks no third party about the client and its
+ * (`Workman.Api/Auth/OAuth/ClientIcons.cs`), so the page asks no third party about the client and its
  * CSP allows images from this origin only. Null without a client id.
  */
 export function appIconHref(search: string): string | null {

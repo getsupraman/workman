@@ -6,7 +6,7 @@ export default defineConfig({
   plugins: [tailwindVite(), solidPlugin()],
   build: {
     target: 'esnext',
-    outDir: '../WorkState.Api/wwwroot',
+    outDir: '../Workman.Api/wwwroot',
     emptyOutDir: true,
   },
   server: {

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Nightly pg_dump of the WorkState database (custom format, restorable with pg_restore). Keeps the
+# Nightly pg_dump of the Workman database (custom format, restorable with pg_restore). Keeps the
 # newest $KEEP dumps in $DIR. Run by workstate-backup.timer; run it by hand before any upgrade.
 set -euo pipefail
 

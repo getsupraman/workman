@@ -28,7 +28,7 @@ const pathArray = { type: 'array', items: { type: 'string' } }
 export const TOOLS = [
     {
         name: 'agent_launch',
-        description: 'Launch a nested Claude Code session in the background (claude --bg) with the protocol header prepended to its brief and, unless workstate.role is "none", its own minted WorkState token. The token is minted with the agent_signin grant for workstate.url, or with workstate.env_file when given (headless; it wins over the grant). Returns name, id, sessionId and brief; never a token.',
+        description: 'Launch a nested Claude Code session in the background (claude --bg) with the protocol header prepended to its brief and, unless workstate.role is "none", its own minted Workman token. The token is minted with the agent_signin grant for workstate.url, or with workstate.env_file when given (headless; it wins over the grant). Returns name, id, sessionId and brief; never a token.',
         inputSchema: {
             type: 'object',
             properties: {
@@ -47,10 +47,10 @@ export const TOOLS = [
                 append_system_prompt: { type: 'string', description: '--append-system-prompt' },
                 workstate: {
                     type: 'object',
-                    description: 'Per-session WorkState credentials. Default {role: "worker"}',
+                    description: 'Per-session Workman credentials. Default {role: "worker"}',
                     properties: {
                         role: { type: 'string', enum: ROLES, default: 'worker', description: '"none" mints nothing and passes no --mcp-config' },
-                        env_file: { type: 'string', description: "Optional, for headless use: PATH of WorkState's .env, ~/.workstate/.env or <clone>/server/.env (never its contents). Without it the agent_signin grant mints" },
+                        env_file: { type: 'string', description: "Optional, for headless use: PATH of Workman's .env, ~/.workstate/.env or <clone>/server/.env (never its contents). Without it the agent_signin grant mints" },
                         url: { type: 'string', default: DEFAULT_WORKSTATE_URL },
                         ttl_hours: { type: 'integer', minimum: 1, maximum: 720, description: 'Idle window in hours (server default 72): the token lapses after this long unused; every use renews it, no hard cap' },
                         grants: { type: 'array', items: { type: 'string', enum: GRANTS }, description: 'Capabilities on the minted token. "import" shows work_import; the server allows it only on role orchestrator or controller' },
@@ -65,7 +65,7 @@ export const TOOLS = [
     },
     {
         name: 'agent_stop',
-        description: 'Stop a launched agent (claude stop, and claude rm with remove), revoke its WorkState token and delete its mcp config; the brief too unless keep_brief.',
+        description: 'Stop a launched agent (claude stop, and claude rm with remove), revoke its Workman token and delete its mcp config; the brief too unless keep_brief.',
         inputSchema: {
             type: 'object',
             properties: {
@@ -79,24 +79,24 @@ export const TOOLS = [
     },
     {
         name: 'agent_list',
-        description: 'claude agents --json joined with what agent_launch recorded: name, id, status, waitingFor, repo_root, WorkState session and role.',
+        description: 'claude agents --json joined with what agent_launch recorded: name, id, status, waitingFor, repo_root, Workman session and role.',
         inputSchema: { type: 'object', properties: {}, additionalProperties: false },
     },
     {
         name: 'agent_signin',
-        description: 'Sign in to a WorkState server once, in the browser (OAuth with PKCE), so agent_launch and agent_stop mint and revoke without workstate.env_file. Opens the system browser and waits up to 5 minutes for the sign-in; the result also carries the URL to open by hand. The grant is stored in ~/.workstate/grants.json; no token is ever returned.',
+        description: 'Sign in to a Workman server once, in the browser (OAuth with PKCE), so agent_launch and agent_stop mint and revoke without workstate.env_file. Opens the system browser and waits up to 5 minutes for the sign-in; the result also carries the URL to open by hand. The grant is stored in ~/.workstate/grants.json; no token is ever returned.',
         inputSchema: {
             type: 'object',
-            properties: { url: { type: 'string', default: DEFAULT_WORKSTATE_URL, description: 'The WorkState server, as in workstate.url' } },
+            properties: { url: { type: 'string', default: DEFAULT_WORKSTATE_URL, description: 'The Workman server, as in workstate.url' } },
             additionalProperties: false,
         },
     },
     {
         name: 'agent_signout',
-        description: 'Revoke the agent_signin grant for a WorkState server and delete it. Every agent session minted with it is refused on its next request; env_file launches are not affected.',
+        description: 'Revoke the agent_signin grant for a Workman server and delete it. Every agent session minted with it is refused on its next request; env_file launches are not affected.',
         inputSchema: {
             type: 'object',
-            properties: { url: { type: 'string', default: DEFAULT_WORKSTATE_URL, description: 'The WorkState server, as in workstate.url' } },
+            properties: { url: { type: 'string', default: DEFAULT_WORKSTATE_URL, description: 'The Workman server, as in workstate.url' } },
             additionalProperties: false,
         },
     },
@@ -148,9 +148,9 @@ function ensureIgnored(repoRoot, file) {
     const r = spawnSync('git', ['check-ignore', '-q', rel], { cwd: repoRoot, windowsHide: true })
     if (r.status === 0) return
     if (r.status === 1) {
-        throw new Refusal(`${rel} is not gitignored in ${repoRoot}, and it would hold a WorkState token. Add .claude/briefs/ to that repo's .gitignore.`)
+        throw new Refusal(`${rel} is not gitignored in ${repoRoot}, and it would hold a Workman token. Add .claude/briefs/ to that repo's .gitignore.`)
     }
-    throw new Refusal(`could not confirm with git check-ignore that ${rel} is gitignored (${r.error?.message ?? `exit ${r.status}`}); it would hold a WorkState token`)
+    throw new Refusal(`could not confirm with git check-ignore that ${rel} is gitignored (${r.error?.message ?? `exit ${r.status}`}); it would hold a Workman token`)
 }
 
 /** @param {string} file @param {string} content */
@@ -283,7 +283,7 @@ async function agentLaunch(input) {
         saveRecord(rec)
         if (minted) {
             const err = await bindClaudeSession({ url: p.workstate.url, controllerToken: /** @type {string} */ (controllerToken), sessionId: minted.sessionId, claudeSessionId: found.sessionId })
-            if (err) warnings.push(`could not record the Claude session id on WorkState session ${minted.sessionId}: ${err}`)
+            if (err) warnings.push(`could not record the Claude session id on Workman session ${minted.sessionId}: ${err}`)
         }
     } else {
         warnings.push(`no sessionId yet: ${found.error}. The agent is running; agent_list shows it once claude lists it.`)
@@ -347,9 +347,9 @@ async function agentStop(input) {
             const err = await revokeSession({ url: rec.url, controllerToken: token, sessionId: rec.workstate.sessionId })
             if (err) throw new Error(err)
             revoked = true
-            done.push(`revoked WorkState session ${rec.workstate.sessionId}`)
+            done.push(`revoked Workman session ${rec.workstate.sessionId}`)
         } catch (e) {
-            problems.push(`could not revoke WorkState session ${rec.workstate.sessionId}: ${/** @type {Error} */ (e).message}; the token stays valid until unused past its idle window (expiry ${rec.workstate.expiresAt ?? 'unknown'} when minted, renewed on each use). Retry agent_stop.`)
+            problems.push(`could not revoke Workman session ${rec.workstate.sessionId}: ${/** @type {Error} */ (e).message}; the token stays valid until unused past its idle window (expiry ${rec.workstate.expiresAt ?? 'unknown'} when minted, renewed on each use). Retry agent_stop.`)
         }
     } else if (!rec) {
         notes.push('no launch record for this agent, so no token was revoked and no files were deleted')

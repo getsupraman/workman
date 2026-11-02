@@ -30,13 +30,13 @@ jobs:
       - name: Read ServerInfo.Version
         id: version
         run: |
-          version="$(sed -n 's/^[[:space:]]*Version = "\([0-9][^"]*\)",.*$/\1/p' server/WorkState.Api/ApiHost.cs | head -n 1)"
+          version="$(sed -n 's/^[[:space:]]*Version = "\([0-9][^"]*\)",.*$/\1/p' server/Workman.Api/ApiHost.cs | head -n 1)"
           if [ -z "$version" ]; then
-            echo "::error file=server/WorkState.Api/ApiHost.cs::no ServerInfo Version = \"x.y.z\" line found"
+            echo "::error file=server/Workman.Api/ApiHost.cs::no ServerInfo Version = \"x.y.z\" line found"
             exit 1
           fi
           if [ "v$version" != "$GITHUB_REF_NAME" ]; then
-            echo "::error file=server/WorkState.Api/ApiHost.cs::tag $GITHUB_REF_NAME does not match ServerInfo.Version $version"
+            echo "::error file=server/Workman.Api/ApiHost.cs::tag $GITHUB_REF_NAME does not match ServerInfo.Version $version"
             exit 1
           fi
           echo "version=$version" >> "$GITHUB_OUTPUT"

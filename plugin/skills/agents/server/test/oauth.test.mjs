@@ -1,5 +1,5 @@
 // agent_signin / agent_signout and agent_launch / agent_stop with the stored grant, against a fake
-// WorkState that is its own OAuth server. The browser is test/fake-browser.mjs (AGENTS_BROWSER).
+// Workman that is its own OAuth server. The browser is test/fake-browser.mjs (AGENTS_BROWSER).
 // @ts-check
 import { test } from 'node:test'
 import assert from 'node:assert/strict'

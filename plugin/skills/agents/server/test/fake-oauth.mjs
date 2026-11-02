@@ -1,4 +1,4 @@
-// fake-oauth.mjs — a fake WorkState that is also its own OAuth server, as WorkState 0.9.0 is:
+// fake-oauth.mjs — a fake Workman that is also its own OAuth server, as Workman server 0.9.0 is:
 // discovery, DCR, an authorize endpoint that approves at once, token with refresh rotation, revoke,
 // and /api/agent-sessions that checks the Bearer. Every secret it issues is random per run and
 // listed in `secrets`, so a leak check needs no fixture.

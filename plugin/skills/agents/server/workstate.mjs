@@ -1,4 +1,4 @@
-// workstate.mjs — mint, bind and revoke per-session WorkState tokens (docs/14 §2).
+// workstate.mjs — mint, bind and revoke per-session Workman tokens (docs/14 §2).
 //
 // The controller token (read from the env FILE) or the OAuth access token (oauth.mjs) goes nowhere
 // but an Authorization header. A minted token goes nowhere but the mcp-<name>.json it is written to.
@@ -74,7 +74,7 @@ export async function call(url, init) {
         return await fetch(url, { ...init, signal: AbortSignal.timeout(15000) })
     } catch (e) {
         const err = /** @type {Error & {cause?: {code?: string}}} */ (e)
-        throw new Error(`WorkState at ${new URL(url).origin} is unreachable (${err.cause?.code ?? err.name})`)
+        throw new Error(`Workman at ${new URL(url).origin} is unreachable (${err.cause?.code ?? err.name})`)
     }
 }
 
@@ -101,7 +101,7 @@ export async function mintSession(a) {
             body: JSON.stringify(body),
         })
     } catch (e) {
-        throw new Refusal(`minting a WorkState token failed: ${/** @type {Error} */ (e).message}. Nothing was launched.`)
+        throw new Refusal(`minting a Workman token failed: ${/** @type {Error} */ (e).message}. Nothing was launched.`)
     }
     if (!res.ok) {
         const hint = res.status === 409
@@ -111,22 +111,22 @@ export async function mintSession(a) {
                     ? ` The sign-in was refused, or it may not mint this role (a role is never raised); if it was signed out, run agent_signin {"url": "${a.url}"}.`
                     : ' The env file token was refused, or it may not mint this role (a role is never raised).'
                 : ''
-        throw new Refusal(`minting a WorkState token failed: ${await serverReason(res)}.${hint} Nothing was launched.`)
+        throw new Refusal(`minting a Workman token failed: ${await serverReason(res)}.${hint} Nothing was launched.`)
     }
     let j
     try {
         j = await res.json()
     } catch {
-        throw new Refusal('minting a WorkState token failed: the response was not JSON. Nothing was launched.')
+        throw new Refusal('minting a Workman token failed: the response was not JSON. Nothing was launched.')
     }
     if (!j || typeof j.token !== 'string' || !j.token || j.sessionId === undefined || j.sessionId === null) {
-        throw new Refusal('minting a WorkState token failed: the response had no token or sessionId. Nothing was launched.')
+        throw new Refusal('minting a Workman token failed: the response had no token or sessionId. Nothing was launched.')
     }
     return { sessionId: String(j.sessionId), role: String(j.role ?? a.role), token: j.token, expiresAt: j.expiresAt }
 }
 
 /**
- * PATCH the Claude session uuid onto the WorkState session. Best effort: returns an error string.
+ * PATCH the Claude session uuid onto the Workman session. Best effort: returns an error string.
  * @param {{url: string, controllerToken: string, sessionId: string, claudeSessionId: string}} a
  * @returns {Promise<string|undefined>}
  */

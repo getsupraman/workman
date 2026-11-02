@@ -1,6 +1,6 @@
 /**
  * The admin pages, the account page and the invite and reset pages as plain functions, so `verify/state-cases.mjs` can walk them without a
- * browser. The server judges every one of these first (`WorkState.Api/Auth/AccountRules.cs`,
+ * browser. The server judges every one of these first (`Workman.Api/Auth/AccountRules.cs`,
  * `App/AdminEndpoints.cs`); these are the pages' own copy of the rules, for hints before a round trip.
  */
 

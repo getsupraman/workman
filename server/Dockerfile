@@ -3,7 +3,7 @@
 
 # The SPA is built here rather than by the API project's `-p:BuildSpa=true` target, because that
 # target would put Node inside the SDK image and make every C# layer depend on the frontend's
-# lockfile. Vite's outDir is ../WorkState.Api/wwwroot, so the assets land beside this stage's
+# lockfile. Vite's outDir is ../Workman.Api/wwwroot, so the assets land beside this stage's
 # frontend/ directory and the build stage copies them in.
 # The build stages run on the builder's own platform and cross-target, because dotnet under QEMU
 # aborts (exit 134 on restore, measured) when CI builds linux/arm64 on an amd64 runner.
@@ -23,14 +23,14 @@ ARG TARGETARCH
 WORKDIR /src
 
 COPY Directory.Build.props ./
-COPY WorkState.Core/WorkState.Core.csproj WorkState.Core/
-COPY WorkState.Mcp/WorkState.Mcp.csproj WorkState.Mcp/
-COPY WorkState.Api/WorkState.Api.csproj WorkState.Api/
-RUN dotnet restore WorkState.Api/WorkState.Api.csproj -a $TARGETARCH
+COPY Workman.Core/Workman.Core.csproj Workman.Core/
+COPY Workman.Mcp/Workman.Mcp.csproj Workman.Mcp/
+COPY Workman.Api/Workman.Api.csproj Workman.Api/
+RUN dotnet restore Workman.Api/Workman.Api.csproj -a $TARGETARCH
 
 COPY . .
-COPY --from=spa /src/WorkState.Api/wwwroot WorkState.Api/wwwroot
-RUN dotnet publish WorkState.Api/WorkState.Api.csproj -c Release -a $TARGETARCH --self-contained false -o /app --no-restore
+COPY --from=spa /src/Workman.Api/wwwroot Workman.Api/wwwroot
+RUN dotnet publish Workman.Api/Workman.Api.csproj -c Release -a $TARGETARCH --self-contained false -o /app --no-restore
 
 FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS runtime
 WORKDIR /app
@@ -42,7 +42,7 @@ EXPOSE 8080
 
 # The app probes itself, so the runtime image needs no curl and the build needs no apt.
 HEALTHCHECK --interval=15s --timeout=10s --start-period=20s --retries=3 \
-    CMD ["dotnet", "/app/WorkState.Api.dll", "--health-check"]
+    CMD ["dotnet", "/app/Workman.Api.dll", "--health-check"]
 
 USER $APP_UID
-ENTRYPOINT ["dotnet", "WorkState.Api.dll"]
+ENTRYPOINT ["dotnet", "Workman.Api.dll"]

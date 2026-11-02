@@ -28,7 +28,7 @@ server/session-header.mjs
 # built-in placeholder when index.html is absent, so a clone without Node still runs.
 server/frontend/node_modules/
 server/frontend/dist/
-server/WorkState.Api/wwwroot/
+server/Workman.Api/wwwroot/
 
 # Python bytecode. The agents watchdog is a .py script the plugin ships; running it
 # leaves a __pycache__ beside it, and a committed .pyc is both junk and interpreter-specific.

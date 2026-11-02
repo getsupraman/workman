@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# setup.sh - install, start, register and prove a local WorkState server.
+# setup.sh - install, start, register and prove a local Workman server.
 # Twin of setup.ps1: same steps, same flags, same status lines. Change both together.
 #
 # Every line this prints is safe to show a model: tokens and passwords stay in the .env file and in
@@ -13,8 +13,8 @@ usage: setup.sh [options]
        setup.sh --restore <file> [--home-dir <dir> | --clone <path>] [--project <name>]
 
   --clone <path>          use a clone of github.com/getsupraman/workman: <path>/server/compose.yml (builds
-                          the image) and <path>/server/.env. Without it: the WorkState home.
-  --home-dir <dir>        the WorkState home (default ~/.workstate): compose.yml (pulls the
+                          the image) and <path>/server/.env. Without it: the Workman home.
+  --home-dir <dir>        the Workman home (default ~/.workstate): compose.yml (pulls the
                           published image) and .env
   --auth <oauth|token>    how the registration authenticates. oauth: no token stored, the user signs
                           in on first use (/mcp -> Authenticate). token: a role's bearer token. Default:

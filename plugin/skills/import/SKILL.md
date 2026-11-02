@@ -1,11 +1,11 @@
 ---
 name: import
-description: "Import a repo's existing planning material into WorkState: find plan files, TODO lists, roadmaps, specs, ADRs, docs and agent rules anywhere in the repo, judge each against the CURRENT code, keep only what is still true (open work, binding decisions and rules, open assumptions), propose a per-file plan, ask the human, then write it with work_import into the repo's project — with source and reason on every record, idempotent by source. Needs a session launched with the WorkState import grant. USE FOR - bringing a repo that predates WorkState under it; re-running an import after the plans changed; turning PLAN.md / TODO.md / ADR folders into runs, tasks, followups, rules and assumptions. DO NOT USE FOR - recording history or finished work (it is not imported), editing or moving the source files (never), or work you are planning now (use work_create via /workman:orchestrate)."
+description: "Import a repo's existing planning material into Workman: find plan files, TODO lists, roadmaps, specs, ADRs, docs and agent rules anywhere in the repo, judge each against the CURRENT code, keep only what is still true (open work, binding decisions and rules, open assumptions), propose a per-file plan, ask the human, then write it with work_import into the repo's project — with source and reason on every record, idempotent by source. Needs a session launched with the Workman import grant. USE FOR - bringing a repo that predates Workman under it; re-running an import after the plans changed; turning PLAN.md / TODO.md / ADR folders into runs, tasks, followups, rules and assumptions. DO NOT USE FOR - recording history or finished work (it is not imported), editing or moving the source files (never), or work you are planning now (use work_create via /workman:orchestrate)."
 ---
 
-# WorkState import
+# Workman import
 
-You are turning a repo's planning material into WorkState records. There is no parser: **you** read
+You are turning a repo's planning material into Workman records. There is no parser: **you** read
 the material, **you** check it against the code, and **you** decide what is worth keeping. The tool
 only writes what you hand it.
 
@@ -20,7 +20,7 @@ describes the past, or a future the code has already reached, it is dropped.
 
 ## 1. Preconditions — stop at the first that fails
 
-1. **`work_*` tools present.** None → *"/workman:import needs the WorkState MCP server — run
+1. **`work_*` tools present.** None → *"/workman:import needs the Workman MCP server — run
    `/workman:setup`."* Stop.
 2. **`work_import` present.** It is shown only to a session minted with the `import` grant. Absent →
    say so in one line and stop: *"this session cannot import; the controller launches one with
@@ -63,7 +63,7 @@ For every claim a file makes, **read the code it talks about** and assign one ve
 
 **A living contract is referenced, never copied.** `AGENTS.md`, `CLAUDE.md`, `CONTRIBUTING.md`, agent
 rule files and a spec the team keeps current are already loaded or read by every agent; a copy of their
-rules in WorkState goes stale the first time the file changes, and every brief pays for it. Do not turn
+rules in Workman goes stale the first time the file changes, and every brief pays for it. Do not turn
 them into `rule` records. What they *lack* is still yours: a gap between the contract and the code (a
 stale count, a promise the code does not keep) is a **followup** with the contract as its `source`.
 
