@@ -8,8 +8,7 @@ Four questions from the owner, answered against what is verified rather than ass
 > environment and `Workman:*` settings, the compose project and volume, the home `~/.workman`. The 1.x
 > `workstate` names are no longer read, with one exception: the OAuth scopes `workstate.read` and
 > `workstate.sessions` stay accepted as aliases of `workman.read` and `workman.sessions` until Supraman
-> has switched. `CHANGELOG.md` holds the upgrade guide; `/workman:setup --migrate` moves a 1.x home
-> install. A public URL is still one OAuth issuer, and `WORKMAN_PUBLIC_URLS` adds more (§4).
+> has switched. `CHANGELOG.md` holds the upgrade guide. A public URL is still one OAuth issuer, and `WORKMAN_PUBLIC_URLS` adds more (§4).
 
 ---
 

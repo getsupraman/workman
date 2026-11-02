@@ -11,7 +11,6 @@ usage() {
 usage: setup.sh [options]
        setup.sh --backup <file>  [--home-dir <dir> | --clone <path>] [--project <name>]
        setup.sh --restore <file> [--home-dir <dir> | --clone <path>] [--project <name>]
-       setup.sh --migrate [--from-home <dir>] [--from-project <name>] [options]
 
   --clone <path>          use a clone of github.com/getsupraman/workman: <path>/server/compose.yml (builds
                           the image) and <path>/server/.env. Without it: the Workman home.
@@ -37,14 +36,6 @@ usage: setup.sh [options]
   --dry-run              do everything except write the registration; show it (a token masked)
   --backup <file>         pg_dump -Fc the database to <file>, and stop
   --restore <file>        restore <file> over the database (after a safety backup), and stop
-  --migrate               move a 1.x install (project workstate, home ~/.workstate) into this one: dump its
-                          database, copy its .env with the keys renamed WORKSTATE_ -> WORKMAN_ (values
-                          never read), restore into the new project, stop the old one (its volume stays),
-                          then start, register and prove as usual. Safe to run again
-  --from-home <dir>       the 1.x home to migrate from (default ~/.workstate; with --clone the clone's
-                          server/.env is renamed in place instead)
-  --from-project <name>   the 1.x compose project to migrate from (default workstate)
-  --fresh                 install beside a 1.x install that was found, instead of migrating it
 EOF
 }
 
@@ -53,7 +44,6 @@ status() { printf '%-10s%s\n' "$1" "$2"; }
 
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 clone=""; home_dir=""; role="orchestrator"; name="workman"; agent=""; port="5290"; project="workman"
-migrate=0; fresh=0; from_home=""; from_project="workstate"
 name_given=0
 image_version=""; update=0; force=0; session_names=0; role_given=0; dry_run=0; backup=""; restore=""
 auth=""
@@ -75,10 +65,6 @@ while [ $# -gt 0 ]; do
         --dry-run) dry_run=1; shift ;;
         --backup) backup="${2:?--backup needs a file}"; shift 2 ;;
         --restore) restore="${2:?--restore needs a file}"; shift 2 ;;
-        --migrate) migrate=1; shift ;;
-        --fresh) fresh=1; shift ;;
-        --from-home) from_home="${2:?--from-home needs a directory}"; shift 2 ;;
-        --from-project) from_project="${2:?--from-project needs a name}"; shift 2 ;;
         -h|--help) usage; exit 0 ;;
         *) usage >&2; die "unknown argument: $1" ;;
     esac
@@ -89,15 +75,13 @@ case "$auth" in ''|oauth|token) ;; *) die "--auth must be oauth or token" ;; esa
 [ "$auth" = "oauth" ] && [ "$role_given" -eq 1 ] && die "--role with --auth oauth: an OAuth sign-in is the dashboard user with the controller toolset; --role needs --auth token"
 case "$port" in ''|*[!0-9]*) die "--port must be a number" ;; esac
 [ -n "$clone" ] && [ -n "$home_dir" ] && die "--clone and --home-dir are two different installs; pass one"
-[ "$migrate" -eq 1 ] && [ "$fresh" -eq 1 ] && die "--migrate and --fresh: pass one"
-[ "$migrate" -eq 1 ] && [ "$from_project" = "$project" ] && die "--from-project and --project are both '$project': the migration needs a new project"
 
 env_value() { # the value of key $1 in the env file, without printing it anywhere
     sed -n "s/^$1=//p" "$env_file" | tail -n 1 | tr -d '\r'
 }
 
-find_container() { # $1 = compose service, $2 = project (default the new one)
-    docker ps -q --filter "label=com.docker.compose.project=${2:-$project}" --filter "label=com.docker.compose.service=$1" | head -n 1
+find_container() { # $1 = compose service
+    docker ps -q --filter "label=com.docker.compose.project=$project" --filter "label=com.docker.compose.service=$1" | head -n 1
 }
 
 command -v docker >/dev/null 2>&1 || die "docker    not found: install Docker Desktop (or Docker Engine) first"
@@ -171,89 +155,9 @@ else
     status "home" "$clone (clone: builds server/Dockerfile)"
 fi
 
-# b. the .env - written once, never overwritten; with --migrate, the 1.x install's with its keys renamed
+# b. the .env - written once, never overwritten
 random_hex() { od -An -N32 -tx1 /dev/urandom | tr -d ' \n'; }
-[ -n "$from_home" ] || from_home="$HOME/.workstate"
-from_env="$from_home/.env"
-[ "$mode" = "clone" ] && from_env="$env_file"
-old_containers="$(docker ps -aq --filter "label=com.docker.compose.project=$from_project" | head -n 1)"
-# The key names change and nothing else: sed rewrites the start of each line and never prints a value.
-renamed_keys='s/^WORKSTATE_/WORKMAN_/'
-if [ "$migrate" -eq 0 ] && [ "$fresh" -eq 0 ]; then
-    # the offer - a 1.x install found where this one would go is migrated only when asked to
-    if [ "$mode" = "clone" ] && [ -f "$env_file" ] && grep -q '^WORKSTATE_' "$env_file"; then
-        die "migrate   $env_file has 1.x WORKSTATE_* keys: run this again with --migrate to rename them and move project '$from_project' into '$project'"
-    elif [ "$mode" = "home" ] && [ ! -f "$env_file" ] && { [ -f "$from_env" ] || [ -n "$old_containers" ]; }; then
-        die "migrate   found a 1.x install (home $from_home, project '$from_project'): run this again with --migrate to move it into $home_dir, or with --fresh to install beside it"
-    fi
-fi
-
-wait_db() { # $1 = db container; succeeds once Postgres answers
-    local _
-    for _ in $(seq 1 60); do
-        docker exec "$1" sh -c 'pg_isready -U "$POSTGRES_USER" -d "$POSTGRES_DB"' >/dev/null 2>&1 && return 0
-        sleep 1
-    done
-    return 1
-}
-
-if [ "$migrate" -eq 1 ]; then
-    # m1. the .env
-    if [ "$mode" = "clone" ] && grep -q '^WORKSTATE_' "$env_file" 2>/dev/null; then
-        cp -p "$env_file" "$env_file.1x"
-        sed -i.tmp -e '/^WORKSTATE_VERSION=/d' -e "$renamed_keys" "$env_file" && rm -f "$env_file.tmp"
-        status "env" "renamed the WORKSTATE_* keys in $env_file to WORKMAN_* (values not read; the 1.x copy is $env_file.1x)"
-    elif [ -f "$env_file" ]; then
-        status "env" "kept $env_file (exists; never overwritten)"
-    else
-        [ -f "$from_env" ] || die "migrate   $from_env not found: pass --from-home <the 1.x home>"
-        (umask 077; sed -e '/^WORKSTATE_VERSION=/d' -e "$renamed_keys" "$from_env" >"$env_file")
-        chmod 600 "$env_file" 2>/dev/null || true
-        status "env" "wrote $env_file from $from_env, keys renamed WORKSTATE_ -> WORKMAN_ (values not read; POSTGRES_* kept as they were, so the restored database keeps its owner)"
-    fi
-    # m2. the data: dump the 1.x database, restore it into the new project's empty volume
-    marker="$base_dir/.migrated-from-$from_project"
-    if [ -f "$marker" ]; then
-        status "migrate" "project '$from_project' was already restored into '$project' ($marker)"
-    else
-        old_db="$(docker ps -aq --filter "label=com.docker.compose.project=$from_project" --filter "label=com.docker.compose.service=db" | head -n 1)"
-        [ -n "$old_db" ] || die "migrate   no db container in compose project '$from_project': pass --from-project <the 1.x project>"
-        old_api="$(find_container api "$from_project")"
-        [ -n "$old_api" ] && docker stop "$old_api" >/dev/null
-        docker start "$old_db" >/dev/null
-        wait_db "$old_db" || die "migrate   the db of project '$from_project' never became ready"
-        mkdir -p "$base_dir/backups"
-        dump="$base_dir/backups/migrate-from-$from_project-$(date +%Y%m%d-%H%M%S).dump"
-        docker exec "$old_db" sh -c 'pg_dump -U "$POSTGRES_USER" -d "$POSTGRES_DB" -Fc -f /tmp/workman-migrate.dump' >/dev/null \
-            || die "migrate   pg_dump in project '$from_project' failed; nothing was changed${old_api:+, but its api is stopped: docker start $old_api}"
-        docker cp "$old_db:/tmp/workman-migrate.dump" "$dump" >/dev/null
-        docker exec "$old_db" rm -f /tmp/workman-migrate.dump
-        status "migrate" "dumped project '$from_project' to $dump ($(wc -c <"$dump" | tr -d ' ') bytes, pg_dump -Fc)"
-        [ -n "$image_version" ] && export WORKMAN_VERSION="$image_version"
-        dc up -d db >/dev/null 2>&1 || die "migrate   docker compose up db failed in project '$project'"
-        new_db="$(find_container db)"
-        [ -n "$new_db" ] && wait_db "$new_db" || die "migrate   the db of project '$project' never became ready"
-        tables="$(docker exec "$new_db" sh -c 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -tAc "SELECT count(*) FROM pg_tables WHERE schemaname = '"'"'public'"'"'"' | tr -d '\r ')"
-        [ "$tables" = "0" ] || die "migrate   project '$project' already holds a database with ${tables:-unknown} tables: refusing to restore over a non-empty volume (${project}_workman-db-data)"
-        # 1.x policies and grants name the role workstate_app, and pg_dump leaves roles out: they are the cluster's.
-        # The 2.0 api's own migration takes it from there.
-        docker exec "$new_db" sh -c 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -v ON_ERROR_STOP=1 -qc "DO \$\$ BEGIN CREATE ROLE workstate_app NOLOGIN; EXCEPTION WHEN duplicate_object THEN NULL; END \$\$;"' >/dev/null \
-            || die "migrate   could not create the 1.x role workstate_app in project '$project'"
-        docker cp "$dump" "$new_db:/tmp/workman-migrate.dump" >/dev/null
-        rc=0
-        docker exec "$new_db" sh -c 'pg_restore -U "$POSTGRES_USER" -d "$POSTGRES_DB" --single-transaction --exit-on-error --no-owner /tmp/workman-migrate.dump' >/dev/null 2>"$base_dir/backups/migrate.log" || rc=$?
-        docker exec "$new_db" rm -f /tmp/workman-migrate.dump
-        [ "$rc" -eq 0 ] || die "migrate   pg_restore exited $rc - see $base_dir/backups/migrate.log; nothing was restored (one transaction) and project '$from_project' is untouched: docker start $old_db${old_api:+ $old_api} brings it back"
-        printf 'migrated from compose project %s on %s\n' "$from_project" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" >"$marker"
-        status "migrate" "restored into project '$project'; its api migrates the schema to 2.0 when it starts"
-    fi
-    # m3. the old project stops; its volume stays until the user removes it
-    running="$(docker ps -q --filter "label=com.docker.compose.project=$from_project")"
-    # shellcheck disable=SC2086
-    [ -z "$running" ] || docker stop $running >/dev/null
-    old_volume="$(docker volume ls -q --filter "label=com.docker.compose.project=$from_project" | head -n 1)"
-    status "migrate" "project '$from_project' stopped, its volume ${old_volume:-(none found)} kept. Once '$project' works, remove them: docker rm \$(docker ps -aq --filter label=com.docker.compose.project=$from_project)${old_volume:+ && docker volume rm $old_volume}"
-elif [ -f "$env_file" ]; then
+if [ -f "$env_file" ]; then
     status "env" "kept $env_file (exists; never overwritten)"
 elif [ -n "$(docker volume ls -q --filter "name=^${project}_workman-db-data\$")" ]; then
     die "env       $env_file is missing but project '$project' already has a database volume, created with another .env: pass --clone <path> for that install, or copy its .env here, and run again"

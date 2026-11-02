@@ -2,7 +2,6 @@
 # Keep the services in step with server/compose.yml; only `image:` differs. The project name is the same
 # (`workman`), so a machine that used the clone-based compose keeps its volume and its data.
 # /workman:setup copies this file to ~/.workman/compose.yml and runs it with that directory's .env.
-# A 1.x install (project `workstate`, ~/.workstate) moves here with /workman:setup --migrate.
 
 name: workman
 

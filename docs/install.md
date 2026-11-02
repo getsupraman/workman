@@ -55,7 +55,6 @@ The same skill keeps the install running:
 | *"Back up my Workman database"* (`--backup <file>`) | dumps the database to a file |
 | *"Restore Workman from &lt;file&gt;"* (`--restore <file>`) | writes a safety dump first, then replaces the data |
 | a clone of this repository (`--clone <path>`) | builds the image from your clone instead of pulling it |
-| *"Move my Workman 1.x install to 2.0"* (`--migrate`) | moves a 1.x `workstate` install (`~/.workstate`, project `workstate`) into `~/.workman`: dump, `.env` keys renamed, restore, old project stopped with its volume kept |
 
 Every flag and status line is in [plugin/skills/setup/SKILL.md](../plugin/skills/setup/SKILL.md).
 

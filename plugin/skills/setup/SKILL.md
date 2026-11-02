@@ -1,6 +1,6 @@
 ---
 name: setup
-description: "Get the Workman MCP server running and registered, so the `work_*` tools are callable. Workman is a self-hosted HTTP MCP server (a .NET service plus a Postgres, in Docker, on your own machine) that holds what coding agents are doing - projects, runs, phases, tasks, claims, evidence and an append-only journal - with an operator dashboard on the same port. This skill detects which of four states the machine is in and runs one shipped script that does only the part that is missing: writes the local-only `.env` with random tokens, pulls the published image (no clone needed) or builds from a clone, starts it, registers it with `claude mcp add` - with OAuth sign-in by default, so no token is stored, or with a role's token - and proves that the server answers the way that registration needs - without the model ever reading, pasting or curling a token. Also backs up and restores the database. USE FOR: `work_brief` or any other `work_*` tool is missing and a skill told you it needs the store; a first install of Workman; \"the workman tools are gone\"; moving a 1.x workstate install to 2.0; the server is up but this session cannot see it; backing up or restoring Workman. DO NOT USE FOR: using the tools once they work (call `work_brief`), or deploying Workman anywhere but localhost."
+description: "Get the Workman MCP server running and registered, so the `work_*` tools are callable. Workman is a self-hosted HTTP MCP server (a .NET service plus a Postgres, in Docker, on your own machine) that holds what coding agents are doing - projects, runs, phases, tasks, claims, evidence and an append-only journal - with an operator dashboard on the same port. This skill detects which of four states the machine is in and runs one shipped script that does only the part that is missing: writes the local-only `.env` with random tokens, pulls the published image (no clone needed) or builds from a clone, starts it, registers it with `claude mcp add` - with OAuth sign-in by default, so no token is stored, or with a role's token - and proves that the server answers the way that registration needs - without the model ever reading, pasting or curling a token. Also backs up and restores the database. USE FOR: `work_brief` or any other `work_*` tool is missing and a skill told you it needs the store; a first install of Workman; \"the workman tools are gone\"; the server is up but this session cannot see it; backing up or restoring Workman. DO NOT USE FOR: using the tools once they work (call `work_brief`), or deploying Workman anywhere but localhost."
 ---
 
 # Workman setup
@@ -65,10 +65,7 @@ is not broken, it is a session that began before the registration did. The same 
 `workman` line that says it needs authentication: that is an OAuth registration nobody has signed
 in to yet. Change nothing; the user signs in (§5).
 
-**A 1.x install is a sixth state.** A `workstate` line in `claude mcp list`, a `~/.workstate/` directory
-or a compose project named `workstate` (`docker ps -a --filter label=com.docker.compose.project=workstate`)
-is Workman 1.x, from before the rename. A 2.0 server reads none of its names, so it is **migrated**, not
-upgraded in place: §2a.
+A `workstate` line is a 1.x registration. Running §3 moves it to `workman` (below).
 
 ---
 
@@ -91,45 +88,6 @@ refuses to write a new `.env` next to an existing database volume, so a wrong gu
 
 Never clone anything yourself: the home install does not need it, and a clone is a directory on
 someone else's machine that they choose.
-
-### 2a. Migrating a 1.x `workstate` install
-
-Workman 2.0 renamed everything machine-facing: the home `~/.workstate` is now `~/.workman`, the compose
-project and volume `workstate` are `workman`, the `.env` keys `WORKSTATE_*` are `WORKMAN_*`, and the
-registration is `workman`. When the script finds a 1.x install where the new one would go (a
-`~/.workstate/.env` or a `workstate` compose project, and no `~/.workman/.env` yet; with `--clone`, a
-`server/.env` that still has `WORKSTATE_*` keys), it **stops and offers the move** instead of installing
-a second, empty server beside it:
-
-```
-migrate   found a 1.x install (home /home/u/.workstate, project 'workstate'): run this again with --migrate to move it into /home/u/.workman, or with --fresh to install beside it
-```
-
-**Tell the user what `--migrate` does and get their go** — it stops their running 1.x server — then run
-the script again with `--migrate` (`-Migrate`). It:
-
-1. stops the 1.x `api`, and dumps the 1.x database with `pg_dump -Fc` inside its `db` container, to
-   `<new home>/backups/migrate-from-workstate-<time>.dump`;
-2. writes the new `.env` from the old one with **only the key names rewritten** (`sed 's/^WORKSTATE_/WORKMAN_/'`;
-   with `--clone`, in place, keeping the 1.x copy as `server/.env.1x`). No value is read or printed.
-   `POSTGRES_DB`, `POSTGRES_USER` and `POSTGRES_PASSWORD` are copied as they are (`workstate`, usually),
-   so the restored database keeps its owner; only a new install gets `workman` there. A pinned
-   `WORKSTATE_VERSION` line is dropped, because a 1.x image cannot read the 2.0 names;
-3. starts the new project's `db`, **refuses if its volume already holds tables**, recreates the 1.x
-   NOLOGIN role the dump's policies name (roles are not in a dump), and restores the dump in one
-   transaction — a failure restores nothing and leaves the 1.x install as it was;
-4. stops every 1.x container and **keeps its volume**, printing the command that removes both;
-5. starts the 2.0 `api` (its own EF migration takes the restored database to 2.0), then registers
-   and proves as usual — a `workstate` registration is **moved** to `workman` (below), same url, same
-   token.
-
-It is safe to run again: a marker file `<new home>/.migrated-from-workstate` skips the dump and restore
-the second time. `--from-home <dir>` and `--from-project <name>` (`-FromHome`, `-FromProject`) name a
-1.x install somewhere else. Every OAuth client signs in again after the move (the 2.0 server's key ring
-is new): the user does §5 step 2 once more, and `agent_signin` again for agents.
-
-Once the user has checked that the 2.0 server shows their work, they remove the 1.x container and
-volume with the command the `migrate` line printed. Do not run it for them.
 
 ---
 
@@ -162,9 +120,6 @@ or in PowerShell:
 | `--session-names` | `-SessionNames` | re-register an existing install with the session helper, keeping its token's role |
 | `--dry-run` | `-DryRun` | do everything but write the registration; show it (a token masked as `***`) |
 | `--backup <file>` / `--restore <file>` | `-Backup` / `-Restore` | §4, and nothing else |
-| `--migrate` | `-Migrate` | move a 1.x `workstate` install into this one (§2a) |
-| `--from-home <dir>` / `--from-project <name>` | `-FromHome` / `-FromProject` | where the 1.x install is (default `~/.workstate`, `workstate`) |
-| `--fresh` | `-Fresh` | install beside a 1.x install that was found, instead of migrating it |
 
 **OAuth is the default for a human's own registration.** When the server offers it (its
 `/.well-known/oauth-protected-resource/mcp` document answers), the script registers the URL with

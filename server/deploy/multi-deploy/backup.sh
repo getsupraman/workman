@@ -10,7 +10,7 @@ mkdir -p "$DIR"
 chmod 700 "$DIR"
 file="$DIR/workman-$(date -u +%Y%m%dT%H%M%SZ).dump"
 
-# The container's own POSTGRES_USER / POSTGRES_DB: an app upgraded from 1.x keeps its workstate ones.
+# The container's own POSTGRES_USER / POSTGRES_DB, whatever the .env named them.
 docker exec workman-db-1 sh -c 'pg_dump -U "$POSTGRES_USER" -d "$POSTGRES_DB" -Fc' > "$file.part"
 mv "$file.part" "$file"
 echo "backup $file $(stat -c %s "$file") bytes"

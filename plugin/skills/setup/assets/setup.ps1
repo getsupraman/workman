@@ -31,14 +31,6 @@
   -DryRun               do everything except write the registration; show it (a token masked)
   -Backup <file>         pg_dump -Fc the database to <file>, and stop
   -Restore <file>        restore <file> over the database (after a safety backup), and stop
-  -Migrate               move a 1.x install (project workstate, home %USERPROFILE%\.workstate) into this one:
-                         dump its database, copy its .env with the keys renamed WORKSTATE_ -> WORKMAN_ (values
-                         never read), restore into the new project, stop the old one (its volume stays),
-                         then start, register and prove as usual. Safe to run again
-  -FromHome <dir>        the 1.x home to migrate from (default %USERPROFILE%\.workstate; with -Clone the
-                         clone's server/.env is renamed in place instead)
-  -FromProject <name>    the 1.x compose project to migrate from (default workstate)
-  -Fresh                 install beside a 1.x install that was found, instead of migrating it
 #>
 [CmdletBinding()]
 param(
@@ -56,11 +48,7 @@ param(
     [switch]$SessionNames,
     [switch]$DryRun,
     [string]$Backup,
-    [string]$Restore,
-    [switch]$Migrate,
-    [string]$FromHome,
-    [string]$FromProject = 'workstate',
-    [switch]$Fresh
+    [string]$Restore
 )
 
 $ErrorActionPreference = 'Continue'
@@ -73,8 +61,6 @@ $scriptDir = $PSScriptRoot
 $onWindows = [System.Runtime.InteropServices.RuntimeInformation]::IsOSPlatform([System.Runtime.InteropServices.OSPlatform]::Windows)
 
 if ($Clone -and $HomeDir) { Die '-Clone and -HomeDir are two different installs; pass one' }
-if ($Migrate -and $Fresh) { Die '-Migrate and -Fresh: pass one' }
-if ($Migrate -and $FromProject -eq $Project) { Die "-FromProject and -Project are both '$Project': the migration needs a new project" }
 $roleGiven = $PSBoundParameters.ContainsKey('Role')
 if ($Auth -eq 'oauth' -and $roleGiven) { Die '-Role with -Auth oauth: an OAuth sign-in is the dashboard user with the controller toolset; -Role needs -Auth token' }
 
@@ -86,8 +72,8 @@ function Get-EnvValue([string]$Key) {
     $value
 }
 
-function Find-Container([string]$Service, [string]$InProject = $Project) {
-    $id = & docker ps -q --filter "label=com.docker.compose.project=$InProject" --filter "label=com.docker.compose.service=$Service" 2>$null
+function Find-Container([string]$Service) {
+    $id = & docker ps -q --filter "label=com.docker.compose.project=$Project" --filter "label=com.docker.compose.service=$Service" 2>$null
     if ($id) { @($id)[0] } else { $null }
 }
 
@@ -170,120 +156,14 @@ if ($mode -eq 'home') {
 }
 else { Status 'home' "$Clone (clone: builds server/Dockerfile)" }
 
-# b. the .env - written once, never overwritten; with -Migrate, the 1.x install's with its keys renamed
+# b. the .env - written once, never overwritten
 function New-RandomHex {
     $bytes = New-Object byte[] 32
     $rng = [System.Security.Cryptography.RandomNumberGenerator]::Create()
     try { $rng.GetBytes($bytes) } finally { $rng.Dispose() }
     -join ($bytes | ForEach-Object { $_.ToString('x2') })
 }
-function Protect-EnvFile([string]$File) {
-    if ($onWindows) {
-        & icacls $File /inheritance:r /grant:r "$($env:USERNAME):(F)" *> $null
-        'owner-only ACL'
-    }
-    else {
-        & chmod 600 $File
-        'mode 600'
-    }
-}
-# The key names change and nothing else: a regex rewrites the start of each line, and no value is printed.
-function Convert-EnvKeys([string]$From, [string]$To) {
-    $text = [IO.File]::ReadAllText($From)
-    $text = [regex]::Replace($text, '(?m)^WORKSTATE_VERSION=.*(\r?\n|$)', '')
-    $text = [regex]::Replace($text, '(?m)^WORKSTATE_', 'WORKMAN_')
-    [IO.File]::WriteAllText($To, $text, (New-Object System.Text.UTF8Encoding $false))
-    $text = $null
-}
-function Test-EnvHas1x([string]$File) {
-    (Test-Path -LiteralPath $File) -and [bool](Select-String -LiteralPath $File -Pattern '^WORKSTATE_' -Quiet)
-}
-function Wait-Db([string]$Container) {
-    for ($i = 0; $i -lt 60; $i++) {
-        & docker exec $Container sh -c 'pg_isready -U "$POSTGRES_USER" -d "$POSTGRES_DB"' *> $null
-        if ($LASTEXITCODE -eq 0) { return $true }
-        Start-Sleep -Seconds 1
-    }
-    $false
-}
-
-if (-not $FromHome) { $FromHome = Join-Path $HOME '.workstate' }
-$fromEnv = if ($mode -eq 'clone') { $envFile } else { Join-Path $FromHome '.env' }
-$oldContainers = @(& docker ps -aq --filter "label=com.docker.compose.project=$FromProject" 2>$null | Where-Object { $_ })
-if (-not $Migrate -and -not $Fresh) {
-    # the offer - a 1.x install found where this one would go is migrated only when asked to
-    if ($mode -eq 'clone' -and (Test-EnvHas1x $envFile)) {
-        Die "migrate   $envFile has 1.x WORKSTATE_* keys: run this again with -Migrate to rename them and move project '$FromProject' into '$Project'"
-    }
-    elseif ($mode -eq 'home' -and -not (Test-Path -LiteralPath $envFile) -and ((Test-Path -LiteralPath $fromEnv) -or $oldContainers.Count -gt 0)) {
-        Die "migrate   found a 1.x install (home $FromHome, project '$FromProject'): run this again with -Migrate to move it into $HomeDir, or with -Fresh to install beside it"
-    }
-}
-
-if ($Migrate) {
-    # m1. the .env
-    if ($mode -eq 'clone' -and (Test-EnvHas1x $envFile)) {
-        Copy-Item -LiteralPath $envFile -Destination "$envFile.1x" -Force
-        Convert-EnvKeys $envFile $envFile
-        Status 'env' "renamed the WORKSTATE_* keys in $envFile to WORKMAN_* (values not read; the 1.x copy is $envFile.1x)"
-    }
-    elseif (Test-Path -LiteralPath $envFile) {
-        Status 'env' "kept $envFile (exists; never overwritten)"
-    }
-    else {
-        if (-not (Test-Path -LiteralPath $fromEnv)) { Die "migrate   $fromEnv not found: pass -FromHome <the 1.x home>" }
-        Convert-EnvKeys $fromEnv $envFile
-        $null = Protect-EnvFile $envFile
-        Status 'env' "wrote $envFile from $fromEnv, keys renamed WORKSTATE_ -> WORKMAN_ (values not read; POSTGRES_* kept as they were, so the restored database keeps its owner)"
-    }
-    # m2. the data: dump the 1.x database, restore it into the new project's empty volume
-    $marker = Join-Path $baseDir ".migrated-from-$FromProject"
-    if (Test-Path -LiteralPath $marker) {
-        Status 'migrate' "project '$FromProject' was already restored into '$Project' ($marker)"
-    }
-    else {
-        $oldDb = @(& docker ps -aq --filter "label=com.docker.compose.project=$FromProject" --filter 'label=com.docker.compose.service=db' 2>$null | Where-Object { $_ })
-        if ($oldDb.Count -eq 0) { Die "migrate   no db container in compose project '$FromProject': pass -FromProject <the 1.x project>" }
-        $oldDb = $oldDb[0]
-        $oldApi = Find-Container 'api' $FromProject
-        if ($oldApi) { & docker stop $oldApi | Out-Null }
-        & docker start $oldDb | Out-Null
-        if (-not (Wait-Db $oldDb)) { Die "migrate   the db of project '$FromProject' never became ready" }
-        $backups = Join-Path $baseDir 'backups'
-        New-Item -ItemType Directory -Force -Path $backups | Out-Null
-        $dump = Join-Path $backups ("migrate-from-$FromProject-{0}.dump" -f (Get-Date -Format 'yyyyMMdd-HHmmss'))
-        & docker exec $oldDb sh -c 'pg_dump -U "$POSTGRES_USER" -d "$POSTGRES_DB" -Fc -f /tmp/workman-migrate.dump' | Out-Null
-        if ($LASTEXITCODE -ne 0) { Die "migrate   pg_dump in project '$FromProject' failed; nothing was changed$(if ($oldApi) { ", but its api is stopped: docker start $oldApi" })" }
-        & docker cp "${oldDb}:/tmp/workman-migrate.dump" $dump | Out-Null
-        & docker exec $oldDb rm -f /tmp/workman-migrate.dump | Out-Null
-        Status 'migrate' "dumped project '$FromProject' to $dump ($((Get-Item -LiteralPath $dump).Length) bytes, pg_dump -Fc)"
-        if ($ImageVersion) { $env:WORKMAN_VERSION = $ImageVersion }
-        Invoke-Compose up -d db *> $null
-        if ($LASTEXITCODE -ne 0) { Die "migrate   docker compose up db failed in project '$Project'" }
-        $newDb = Find-Container 'db'
-        if (-not $newDb -or -not (Wait-Db $newDb)) { Die "migrate   the db of project '$Project' never became ready" }
-        $tables = ([string](& docker exec $newDb sh -c 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -tAc "SELECT count(*) FROM pg_tables WHERE schemaname = ''public''"')).Trim()
-        if ($tables -ne '0') { Die "migrate   project '$Project' already holds a database with $(if ($tables) { $tables } else { 'unknown' }) tables: refusing to restore over a non-empty volume ($($Project)_workman-db-data)" }
-        # 1.x policies and grants name the role workstate_app, and pg_dump leaves roles out: they are the cluster's.
-        # The 2.0 api's own migration takes it from there.
-        & docker exec $newDb sh -c 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -v ON_ERROR_STOP=1 -qc "DO \$\$ BEGIN CREATE ROLE workstate_app NOLOGIN; EXCEPTION WHEN duplicate_object THEN NULL; END \$\$;"' | Out-Null
-        if ($LASTEXITCODE -ne 0) { Die "migrate   could not create the 1.x role workstate_app in project '$Project'" }
-        & docker cp $dump "${newDb}:/tmp/workman-migrate.dump" | Out-Null
-        $log = Join-Path $backups 'migrate.log'
-        & docker exec $newDb sh -c 'pg_restore -U "$POSTGRES_USER" -d "$POSTGRES_DB" --single-transaction --exit-on-error --no-owner /tmp/workman-migrate.dump' 2> $log | Out-Null
-        $rc = $LASTEXITCODE
-        & docker exec $newDb rm -f /tmp/workman-migrate.dump | Out-Null
-        if ($rc -ne 0) { Die "migrate   pg_restore exited $rc - see $log; nothing was restored (one transaction) and project '$FromProject' is untouched: docker start $oldDb$(if ($oldApi) { " $oldApi" }) brings it back" }
-        [IO.File]::WriteAllText($marker, ("migrated from compose project {0} on {1}`n" -f $FromProject, (Get-Date).ToUniversalTime().ToString('yyyy-MM-ddTHH:mm:ssZ')))
-        Status 'migrate' "restored into project '$Project'; its api migrates the schema to 2.0 when it starts"
-    }
-    # m3. the old project stops; its volume stays until the user removes it
-    $running = @(& docker ps -q --filter "label=com.docker.compose.project=$FromProject" 2>$null | Where-Object { $_ })
-    if ($running.Count -gt 0) { & docker stop @running | Out-Null }
-    $oldVolume = @(& docker volume ls -q --filter "label=com.docker.compose.project=$FromProject" 2>$null | Where-Object { $_ }) | Select-Object -First 1
-    Status 'migrate' "project '$FromProject' stopped, its volume $(if ($oldVolume) { $oldVolume } else { '(none found)' }) kept. Once '$Project' works, remove them: docker rm `$(docker ps -aq --filter label=com.docker.compose.project=$FromProject)$(if ($oldVolume) { " && docker volume rm $oldVolume" })"
-}
-elseif (Test-Path -LiteralPath $envFile) {
+if (Test-Path -LiteralPath $envFile) {
     Status 'env' "kept $envFile (exists; never overwritten)"
 }
 elseif (& docker volume ls -q --filter "name=^$($Project)_workman-db-data`$") {
@@ -308,7 +188,14 @@ else {
         "POSTGRES_PASSWORD=local-$(New-RandomHex)"
     ) -join "`n"
     [IO.File]::WriteAllText($envFile, $content + "`n", (New-Object System.Text.UTF8Encoding $false))
-    $modeNote = Protect-EnvFile $envFile
+    if ($onWindows) {
+        & icacls $envFile /inheritance:r /grant:r "$($env:USERNAME):(F)" *> $null
+        $modeNote = 'owner-only ACL'
+    }
+    else {
+        & chmod 600 $envFile
+        $modeNote = 'mode 600'
+    }
     Status 'env' "wrote ${envFile}: 3 tokens, dashboard and Postgres passwords (values not shown, $modeNote)"
 }
 
