@@ -57,18 +57,6 @@ export const TOOLS = [
                     },
                     additionalProperties: false,
                 },
-                workstate: {
-                    type: 'object',
-                    description: 'The 1.x name of workman, accepted until Supraman has switched; pass one of the two',
-                    properties: {
-                        role: { type: 'string', enum: ROLES, default: 'worker', description: '"none" mints nothing and passes no --mcp-config' },
-                        env_file: { type: 'string', description: "Optional, for headless use: PATH of Workman's .env, ~/.workman/.env or <clone>/server/.env (never its contents). Without it the agent_signin grant mints" },
-                        url: { type: 'string', default: DEFAULT_WORKMAN_URL },
-                        ttl_hours: { type: 'integer', minimum: 1, maximum: 720, description: 'Idle window in hours (server default 72): the token lapses after this long unused; every use renews it, no hard cap' },
-                        grants: { type: 'array', items: { type: 'string', enum: GRANTS }, description: 'Capabilities on the minted token. "import" shows work_import; the server allows it only on role orchestrator or controller' },
-                    },
-                    additionalProperties: false,
-                },
                 dry_run: { type: 'boolean', default: false, description: 'Validate and return the argv; mint and spawn nothing' },
             },
             required: ['name', 'brief', 'repo_root', 'controller'],
