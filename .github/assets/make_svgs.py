@@ -68,12 +68,12 @@ def hero(t):
             weight = ' font-weight="700"' if kind == "refused" else ""
             rows.append(f'<text x="640" y="{y}" fill="{colours[kind]}"{weight}>{mono(text)}</text>')
         y += 23
-    return f'''<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 440" width="1280" height="440" role="img" aria-label="Workman: run your crew of AI coding agents like a shift. A terminal shows work_status refusing to close a task whose done-criteria are unchecked and that no orchestrator verified.">
+    return f'''<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 440" width="1280" height="440" role="img" aria-label="Workman: your AI agents forget, Workman remembers. Decisions, rules and next steps live outside the context, as named items your team can open. A terminal shows work_status refusing to close a task whose done-criteria are unchecked and that no orchestrator verified.">
 <rect width="1280" height="440" rx="18" fill="{t["bg"]}" stroke="{t["edge"]}"/>
 {lockup(t, 64, 60, 52)}
 <text x="64" y="160" font-family="{MONO}" font-size="13" letter-spacing="2" fill="{t["accent"]}">CLAUDE CODE PLUGIN · MCP SERVER · DASHBOARD</text>
-<text font-family="{FONT}" font-weight="800" font-size="34" fill="{t["ink"]}"><tspan x="64" y="212">Run your crew of AI</tspan><tspan x="64" y="254">coding agents like a shift.</tspan></text>
-<text font-family="{FONT}" font-size="17" fill="{t["muted"]}"><tspan x="64" y="300">Workman keeps the record of what they did,</tspan><tspan x="64" y="326">and a task only closes on proof, not on a claim.</tspan></text>
+<text font-family="{FONT}" font-weight="800" font-size="34" fill="{t["ink"]}"><tspan x="64" y="212">Your AI agents forget.</tspan><tspan x="64" y="254">Workman remembers.</tspan></text>
+<text font-family="{FONT}" font-size="17" fill="{t["muted"]}"><tspan x="64" y="300">Decisions, rules and next steps live outside</tspan><tspan x="64" y="326">the context, as named items your team can open.</tspan></text>
 <text x="64" y="384" font-family="{MONO}" font-size="15" fill="{t["muted"]}"><tspan fill="{t["accent"]}">/plugin</tspan> install workman@supraman</text>
 <rect x="600" y="56" width="640" height="344" rx="12" fill="{tb}" stroke="{t["edge"]}"/>
 <circle cx="624" cy="80" r="6" fill="#f85149"/><circle cx="644" cy="80" r="6" fill="#d29922"/><circle cx="664" cy="80" r="6" fill="#3fb950"/>
