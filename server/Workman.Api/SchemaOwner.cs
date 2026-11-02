@@ -15,7 +15,7 @@ namespace Workman.Api;
 /// </para>
 /// <para>
 /// Single-user, single-writer, one database this service owns: the case where migrating on startup
-/// is the right default rather than a hazard. <c>WorkState:Migrate=false</c> turns it off for a
+/// is the right default rather than a hazard. <c>Workman:Migrate=false</c> turns it off for a
 /// deployment that applies migrations out of band.
 /// </para>
 /// </summary>

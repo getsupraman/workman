@@ -3,18 +3,18 @@ using Microsoft.AspNetCore.Http;
 namespace Workman.Mcp;
 
 /// <summary>
-/// The origins this server is reached on, when the operator names them: <c>WorkState:PublicUrl</c> (one, as
-/// before) and <c>WorkState:PublicUrls</c> (several, comma-separated), in that order and without repeats. Each
+/// The origins this server is reached on, when the operator names them: <c>Workman:PublicUrl</c> (one, as
+/// before) and <c>Workman:PublicUrls</c> (several, comma-separated), in that order and without repeats. Each
 /// is its own OAuth issuer and resource; a request is answered as the one whose host it names, and a request
 /// naming none of them as the first. None configured, the request's own scheme and host are used.
 /// </summary>
 public sealed class PublicUrls
 {
-    public const string Key = "WorkState:PublicUrl";
+    public const string Key = "Workman:PublicUrl";
 
-    public const string EnvironmentKey = "WORKSTATE_PUBLIC_URL";
+    public const string EnvironmentKey = "WORKMAN_PUBLIC_URL";
 
-    public const string ListKey = "WorkState:PublicUrls";
+    public const string ListKey = "Workman:PublicUrls";
 
     public const string ListEnvironmentKey = "WORKMAN_PUBLIC_URLS";
 

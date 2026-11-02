@@ -19,7 +19,7 @@ namespace Workman.Tests.App;
 [Collection(StoreCollection.Name)]
 public sealed class ConnectedAppsTests(PostgresFixture fixture)
 {
-    private const string Scopes = "mcp workstate.read workstate.sessions offline_access";
+    private const string Scopes = "mcp workman.read workman.sessions offline_access";
 
     [Fact]
     public async Task ConnectedApps_lists_the_users_app_with_its_live_session_and_no_secret()

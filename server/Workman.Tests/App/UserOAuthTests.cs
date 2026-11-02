@@ -25,7 +25,7 @@ namespace Workman.Tests.App;
 public sealed class UserOAuthTests(PostgresFixture fixture)
 {
     private const string Mcp = "mcp offline_access";
-    private const string Api = "workstate.read workstate.sessions offline_access";
+    private const string Api = "workman.read workman.sessions offline_access";
 
     [Fact]
     public async Task A_token_names_its_user_by_id_and_acts_in_the_tenant_it_was_approved_in_only()

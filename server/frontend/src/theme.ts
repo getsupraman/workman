@@ -1,7 +1,10 @@
-const KEY = 'workstate.theme'
+import { adoptOldKey } from './storage.ts'
+
+const KEY = 'workman.theme'
 
 /** Storage can throw outright (a private window, blocked site data); a theme is not worth a crash. */
 function stored(): 'dark' | 'light' | null {
+  adoptOldKey(KEY)
   try {
     const value = localStorage.getItem(KEY)
     return value === 'dark' || value === 'light' ? value : null

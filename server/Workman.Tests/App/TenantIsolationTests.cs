@@ -275,7 +275,7 @@ public sealed class TenantIsolationTests(PostgresFixture fixture)
         world.Legacy.On = true;
 
         var browser = await server.SignInAsync(Ct);
-        var api = await world.OAuthAsync(browser, $"{server.BaseAddress}/api", "workstate.read workstate.sessions offline_access");
+        var api = await world.OAuthAsync(browser, $"{server.BaseAddress}/api", "workman.read workman.sessions offline_access");
         var mcp = await world.OAuthAsync(browser, $"{server.BaseAddress}/mcp", "mcp offline_access");
         Assert.Equal(HttpStatusCode.OK, (await world.Bearer(api).GetAsync("/api/v1/overview", Ct)).StatusCode);
 

@@ -13,7 +13,7 @@ namespace Workman.Tests.Store;
 /// <summary>
 /// doc 15 §8: <see cref="RlsPerfTests"/>' hot reads as the owner, as a static token (the tenant role with no user) and
 /// as a member (the tenant role with the user who is a member of the most projects of the largest workspace), against
-/// a database that already holds data. Opt-in: <c>-e WORKSTATE_PROJECT_ACCESS_PERF="Host=…"</c>. pg_stat_statements
+/// a database that already holds data. Opt-in: <c>-e WORKMAN_PROJECT_ACCESS_PERF="Host=…"</c>. pg_stat_statements
 /// keys a statement by its role and the static token and the member share one, so each mode runs as a pass of its
 /// own, its server time read before the next pass resets it.
 /// </summary>
@@ -21,11 +21,11 @@ public sealed class ProjectAccessPerfTests
 {
     private const int Rounds = 60;
 
-    private static string? Target => Environment.GetEnvironmentVariable("WORKSTATE_PROJECT_ACCESS_PERF");
+    private static string? Target => Environment.GetEnvironmentVariable("WORKMAN_PROJECT_ACCESS_PERF");
 
     public static bool Enabled => !string.IsNullOrWhiteSpace(Target);
 
-    [Fact(Skip = "opt-in: set WORKSTATE_PROJECT_ACCESS_PERF to the live-data copy's connection string", SkipUnless = nameof(Enabled))]
+    [Fact(Skip = "opt-in: set WORKMAN_PROJECT_ACCESS_PERF to the live-data copy's connection string", SkipUnless = nameof(Enabled))]
     public async Task ProjectAccess_the_hot_reads_as_a_member_cost_what_they_cost_as_the_tenant()
     {
         CultureInfo.CurrentCulture = CultureInfo.InvariantCulture;

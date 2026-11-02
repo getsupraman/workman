@@ -31,7 +31,7 @@ public static class ConnectPages
     public const string Granted = "granted";
 
     /// <summary>The tenant the consent page showed; an approval posted for another is asked for again.</summary>
-    public const string TenantField = "workstate_tenant";
+    public const string TenantField = "workman_tenant";
 
     public static void MapConnectPages(this WebApplication app)
     {

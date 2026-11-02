@@ -15,7 +15,7 @@ namespace Workman.Tests.App;
 
 /// <summary>
 /// The live board and the cursor that makes it trustworthy. The stream is fed by the
-/// <c>pg_notify('workstate', …)</c> trigger the journal already carries, so what is asserted here is
+/// <c>pg_notify('workman', …)</c> trigger the journal already carries, so what is asserted here is
 /// that a <em>database</em> write reaches a connected dashboard, and that a dashboard which was
 /// disconnected across some writes can ask for exactly the ones it missed.
 /// </summary>

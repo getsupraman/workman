@@ -8,7 +8,7 @@ public static class HealthCheckProbe
 {
     public static async Task<int> RunAsync()
     {
-        var url = Environment.GetEnvironmentVariable("WORKSTATE_HEALTHCHECK_URL")
+        var url = Environment.GetEnvironmentVariable("WORKMAN_HEALTHCHECK_URL")
                   ?? "http://127.0.0.1:8080/health";
 
         using var http = new HttpClient { Timeout = TimeSpan.FromSeconds(5) };

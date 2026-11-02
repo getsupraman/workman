@@ -110,7 +110,7 @@ public sealed partial class BoardQueries(NpgsqlDataSource dataSource)
     /// Resolves a ref. <c>2.3</c> looks anywhere in the workspace; <c>entity-store/2.3</c> looks
     /// inside that run only. A run (or project) numbers its own refs, so it is qualified by its
     /// parent — <c>autowork/backlog</c> — or by itself, <c>backlog/backlog</c>. A project may lead:
-    /// <c>autowork/m5/13</c> is the run form inside that project, and <c>workstate/repo-map-stale</c>
+    /// <c>autowork/m5/13</c> is the run form inside that project, and <c>workman/repo-map-stale</c>
     /// is anything under the project, tried only when no run qualifies the two-part form, so every
     /// form that resolved before still resolves to the same item. More than one row back means the
     /// ref is ambiguous, which the caller reports with <see cref="UniqueRefsAsync"/> rather than

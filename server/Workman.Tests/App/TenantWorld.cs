@@ -162,7 +162,7 @@ internal sealed class TenantWorld
     {
         var browser = await Server.SignInAsync(Ct);
         var mcp = await OAuthAsync(browser, $"{Server.BaseAddress}/mcp", "mcp offline_access");
-        var api = await OAuthAsync(browser, $"{Server.BaseAddress}/api", "workstate.read workstate.sessions offline_access");
+        var api = await OAuthAsync(browser, $"{Server.BaseAddress}/api", "workman.read workman.sessions offline_access");
         var minted = await MintAsync(Bearer(ReadServer.ControllerToken), $"tenant-{Guid.CreateVersion7():n}"[..20], "controller");
 
         return

@@ -37,7 +37,7 @@ public static class PlanSeed
     ];
 
     private static readonly string[] ProjectRefs =
-        ["autowork", "workstate", "orion", "extract", "skills", "vega", "ledger", "portal"];
+        ["autowork", "workman", "orion", "extract", "skills", "vega", "ledger", "portal"];
 
     private static readonly int[] RunsPerProject = [4, 3, 3, 2, 2, 2, 2, 2];
 

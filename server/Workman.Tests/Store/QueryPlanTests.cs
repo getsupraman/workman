@@ -17,7 +17,7 @@ namespace Workman.Tests.Store;
 /// plans come from auto_explain on the real query methods, so what is measured is the statement the
 /// server sends with the values it binds, not a copy of its SQL. Opt-in, because the seed and the
 /// repeated runs cost far more than any other test:
-/// <c>dotnet test server/Workman.slnx --filter FullyQualifiedName~QueryPlanTests -e WORKSTATE_EXPLAIN=1</c>.
+/// <c>dotnet test server/Workman.slnx --filter FullyQualifiedName~QueryPlanTests -e WORKMAN_EXPLAIN=1</c>.
 /// Writes every plan to <c>explain-5k.txt</c> beside the test assembly.
 /// </summary>
 [Collection(StoreCollection.Name)]
@@ -28,12 +28,12 @@ public sealed partial class QueryPlanTests(PostgresFixture fixture)
     /// <summary>The doc 15 budget: a hot read over this seed above it needs an index or a rewrite.</summary>
     private const double BudgetMs = 50;
 
-    public static bool Enabled => Environment.GetEnvironmentVariable("WORKSTATE_EXPLAIN") == "1";
+    public static bool Enabled => Environment.GetEnvironmentVariable("WORKMAN_EXPLAIN") == "1";
 
-    /// <summary>doc 15 §7: <c>-e WORKSTATE_EXPLAIN_RLS=1</c> measures as the tenant role, under its policies.</summary>
-    private static bool Rls => Environment.GetEnvironmentVariable("WORKSTATE_EXPLAIN_RLS") == "1";
+    /// <summary>doc 15 §7: <c>-e WORKMAN_EXPLAIN_RLS=1</c> measures as the tenant role, under its policies.</summary>
+    private static bool Rls => Environment.GetEnvironmentVariable("WORKMAN_EXPLAIN_RLS") == "1";
 
-    [Fact(Skip = "opt-in: set WORKSTATE_EXPLAIN=1", SkipUnless = nameof(Enabled))]
+    [Fact(Skip = "opt-in: set WORKMAN_EXPLAIN=1", SkipUnless = nameof(Enabled))]
     public async Task The_hot_reads_are_explained_against_a_5000_item_workspace()
     {
         CultureInfo.CurrentCulture = CultureInfo.InvariantCulture;

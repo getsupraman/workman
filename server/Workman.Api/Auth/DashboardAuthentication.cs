@@ -15,7 +15,7 @@ namespace Workman.Api.Auth;
 /// </summary>
 public sealed class DashboardOptions
 {
-    public const string Section = "WorkState:Dashboard";
+    public const string Section = "Workman:Dashboard";
 
     public string? Username { get; set; }
 
@@ -53,9 +53,9 @@ public static class DashboardAuth
 {
     /// <summary>The cookie scheme's name. Deliberately not <c>Cookies</c>: the default name is
     /// what an <c>AddAuthentication()</c> elsewhere would silently adopt.</summary>
-    public const string SchemeName = "WorkStateDashboard";
+    public const string SchemeName = "WorkmanDashboard";
 
-    public const string CookieName = "workstate.dashboard";
+    public const string CookieName = "workman.dashboard";
 
     /// <summary>
     /// The policy every pre-v1 <c>/api</c> route carries. It names the cookie scheme and only the
@@ -71,10 +71,10 @@ public static class DashboardAuth
     /// <summary>The <c>app_user</c> id, which is what <see cref="Configure"/> re-checks on every request.</summary>
     public const string UserIdClaim = "sub";
 
-    public const string SystemAdminClaim = "workstate:system_admin";
+    public const string SystemAdminClaim = "workman:system_admin";
 
     /// <summary>The user's <c>security_stamp</c> when the cookie was issued; <see cref="Configure"/> compares it.</summary>
-    public const string StampClaim = "workstate:stamp";
+    public const string StampClaim = "workman:stamp";
 
     /// <summary>The session of <paramref name="user"/> in <paramref name="tenant"/>, the one it switches to.</summary>
     public static ClaimsPrincipal Principal(DashboardUser user, Guid tenant, Guid stamp)
@@ -108,7 +108,7 @@ public static class DashboardAuth
 
         // Local installs are plain HTTP on loopback, so the default follows the request — which, behind
         // a trusted proxy, is the forwarded scheme. Public URLs that are all https force it: a proxy left out of
-        // WORKSTATE_TRUSTED_PROXIES must not quietly downgrade the session cookie on a TLS origin. One plain
+        // WORKMAN_TRUSTED_PROXIES must not quietly downgrade the session cookie on a TLS origin. One plain
         // http origin among them leaves it to the request, since a cookie that is always Secure never
         // reaches that one.
         options.Cookie.SecurePolicy = publicUrls is { Any: true } && publicUrls.All.All(IsHttps)

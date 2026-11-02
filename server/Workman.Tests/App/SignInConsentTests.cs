@@ -287,7 +287,7 @@ public sealed class SignInConsentTests(PostgresFixture fixture)
         Assert.Null(probe.Headers.Location);
 
         var signIn = await AppServer.SignInAsync(client, AppServer.Username, AppServer.Password, Ct);
-        var cookie = Assert.Single(signIn.Headers.GetValues("Set-Cookie"), value => value.StartsWith("workstate.dashboard=", StringComparison.Ordinal));
+        var cookie = Assert.Single(signIn.Headers.GetValues("Set-Cookie"), value => value.StartsWith("workman.dashboard=", StringComparison.Ordinal));
         Assert.Contains("samesite=strict", cookie, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("httponly", cookie, StringComparison.OrdinalIgnoreCase);
 

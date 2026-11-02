@@ -13,9 +13,9 @@ namespace Workman.Tests.Store;
 public sealed class PostgresFixture : IAsyncLifetime
 {
     private readonly PostgreSqlContainer _container = new PostgreSqlBuilder("postgres:17")
-        .WithDatabase("workstate")
-        .WithUsername("workstate")
-        .WithPassword("workstate")
+        .WithDatabase("workman")
+        .WithUsername("workman")
+        .WithPassword("workman")
         .Build();
 
     private NpgsqlDataSource? _dataSource;
@@ -62,5 +62,5 @@ public sealed class PostgresFixture : IAsyncLifetime
 [CollectionDefinition(StoreCollection.Name)]
 public sealed class StoreCollection : ICollectionFixture<PostgresFixture>
 {
-    public const string Name = "workstate-store";
+    public const string Name = "workman-store";
 }

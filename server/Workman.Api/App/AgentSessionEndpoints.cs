@@ -31,7 +31,7 @@ public sealed record ReleaseSessionResponse(Guid SessionId, string Name, string 
 /// <summary>
 /// doc 14 §2 — per-session tokens. A write surface for launchers, so it sits beside the App API and
 /// not under <c>/api/v1</c>, which is read-only by rule. Every call needs an orchestrator or
-/// controller bearer, or an OAuth token for <c>/api</c> with <c>workstate.sessions</c>; a worker is
+/// controller bearer, or an OAuth token for <c>/api</c> with <c>workman.sessions</c>; a worker is
 /// forbidden and the dashboard cookie is not a bearer at all. A session a user's credential mints is
 /// that user's: its name is unique among their sessions, and it ends when they may no longer enter.
 /// </summary>

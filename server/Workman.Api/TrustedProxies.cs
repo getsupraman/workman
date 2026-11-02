@@ -10,9 +10,9 @@ namespace Workman.Api;
 /// </summary>
 public static class TrustedProxies
 {
-    public const string Key = "WorkState:TrustedProxies";
+    public const string Key = "Workman:TrustedProxies";
 
-    public const string EnvironmentKey = "WORKSTATE_TRUSTED_PROXIES";
+    public const string EnvironmentKey = "WORKMAN_TRUSTED_PROXIES";
 
     public static string? Read(IConfiguration configuration)
         => configuration[Key] is { Length: > 0 } value ? value : configuration[EnvironmentKey];

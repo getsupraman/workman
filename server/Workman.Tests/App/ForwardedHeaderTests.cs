@@ -11,7 +11,7 @@ namespace Workman.Tests.App;
 /// <summary>
 /// Unit <c>shared-v1/origin</c>: behind a reverse proxy the web line, the <c>/r</c> redirect and the
 /// dashboard cookie follow the origin the proxy was reached on — but only when the proxy's address is
-/// in <c>WORKSTATE_TRUSTED_PROXIES</c>. The server listens on a real loopback socket, so the proxy the
+/// in <c>WORKMAN_TRUSTED_PROXIES</c>. The server listens on a real loopback socket, so the proxy the
 /// tests stand in for is <c>127.0.0.1</c>, trusted (or not) explicitly by address.
 /// </summary>
 [Collection(StoreCollection.Name)]

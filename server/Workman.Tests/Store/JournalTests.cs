@@ -48,7 +48,7 @@ public sealed class JournalTests(PostgresFixture fixture)
     }
 
     [Fact]
-    public async Task Inserting_an_event_notifies_the_workstate_channel()
+    public async Task Inserting_an_event_notifies_the_workman_channel()
     {
         var world = await Seed.CreateWorldAsync(fixture);
 
@@ -57,7 +57,7 @@ public sealed class JournalTests(PostgresFixture fixture)
         var received = new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously);
         listener.Notification += (_, args) => received.TrySetResult(args.Payload);
 
-        await using (var listen = new NpgsqlCommand("LISTEN workstate", listener))
+        await using (var listen = new NpgsqlCommand("LISTEN workman", listener))
         {
             await listen.ExecuteNonQueryAsync(Ct);
         }

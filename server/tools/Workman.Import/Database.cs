@@ -43,9 +43,9 @@ public sealed class Database : IAsyncDisposable
         }
 
         var container = new PostgreSqlBuilder("postgres:17")
-            .WithDatabase("workstate")
-            .WithUsername("workstate")
-            .WithPassword("workstate")
+            .WithDatabase("workman")
+            .WithUsername("workman")
+            .WithPassword("workman")
             .Build();
 
         await container.StartAsync(cancellationToken);

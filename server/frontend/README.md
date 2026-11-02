@@ -38,8 +38,8 @@ one auth story, not two.
 | `pnpm --dir server/frontend verify:board [base] [runRef]` | live: per-run state counts as the bars draw them, one run leaf by leaf (default `mature`), the honesty strip, the inbox summary, working now |
 | `pnpm --dir server/frontend verify:links [base]` | live: every href the UI can draw, checked against the API reads its page makes — exit 1 on any dead link |
 
-The live scripts sign in with the dashboard credential from `WORKSTATE_USER` /
-`WORKSTATE_PASSWORD`, else `server/.env` (`WORKSTATE_DASHBOARD_USERNAME` / `_PASSWORD`, what
+The live scripts sign in with the dashboard credential from `WORKMAN_USER` /
+`WORKMAN_PASSWORD`, else `server/.env` (`WORKMAN_DASHBOARD_USERNAME` / `_PASSWORD`, what
 `compose.yml` passes the container), else `Workman.Api/appsettings.Development.json`. No
 credential is written into any file here. Base defaults to `http://127.0.0.1:5290`.
 

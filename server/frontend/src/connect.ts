@@ -22,7 +22,7 @@ export function returnTarget(raw: string | null): string | null {
 }
 
 /** The tenant the consent page showed, posted with the answer; the server asks again if the session has moved since. */
-export const TENANT_FIELD = 'workstate_tenant'
+export const TENANT_FIELD = 'workman_tenant'
 
 /** The consent page's query without its own fields: what goes back to authorize as hidden inputs. */
 export function hiddenFields(search: string): [string, string][] {
@@ -120,19 +120,26 @@ export function consentStep(state: ConsentState, event: ConsentEvent): ConsentSt
 
 export type ScopeLine = { scope: string; label: string; detail: string }
 
+const READ = {
+  label: 'Read your board and its live updates',
+  detail: 'Every project, run and task as the dashboard shows them, and the live stream of changes. Nothing is written.',
+}
+
+const SESSIONS = {
+  label: 'Start agent sessions on your behalf',
+  detail: 'Create, rename and end agent session tokens, up to controller. Signing this app out ends the sessions it started.',
+}
+
 const SCOPES: Record<string, Omit<ScopeLine, 'scope'> | null> = {
   mcp: {
     label: 'Full access to your Workman as controller',
     detail: 'Everything a controller token can do: every project, run and task, to read and to write.',
   },
-  'workstate.read': {
-    label: 'Read your board and its live updates',
-    detail: 'Every project, run and task as the dashboard shows them, and the live stream of changes. Nothing is written.',
-  },
-  'workstate.sessions': {
-    label: 'Start agent sessions on your behalf',
-    detail: 'Create, rename and end agent session tokens, up to controller. Signing this app out ends the sessions it started.',
-  },
+  'workman.read': READ,
+  'workman.sessions': SESSIONS,
+  // The 1.x names, which a client may still ask for: the same access, so the same words.
+  'workstate.read': READ,
+  'workstate.sessions': SESSIONS,
   offline_access: {
     label: 'Stay connected',
     detail: 'Keep access without asking again until you revoke it or it goes unused for 30 days.',

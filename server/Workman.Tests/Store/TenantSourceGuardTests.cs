@@ -3,7 +3,7 @@ using Xunit;
 namespace Workman.Tests.Store;
 
 /// <summary>
-/// C62 at the source: <c>WorkspaceOptions</c> — <c>WorkState:Workspace</c> — is the static tokens' own binding,
+/// C62 at the source: <c>WorkspaceOptions</c> — <c>Workman:Workspace</c> — is the static tokens' own binding,
 /// read by their handler and registered by the composition root. Any other production file that names it is a
 /// request path reaching for a configured default instead of its principal's tenant.
 /// </summary>

@@ -18,7 +18,7 @@ namespace Workman.Api.App;
 /// </summary>
 public static class AdminEndpoints
 {
-    private const string RightsKey = "workstate:admin-rights";
+    private const string RightsKey = "workman:admin-rights";
 
     public static void MapAdmin(this RouteGroupBuilder api)
     {

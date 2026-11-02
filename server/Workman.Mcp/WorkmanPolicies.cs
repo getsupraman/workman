@@ -39,5 +39,5 @@ public static class WorkmanPolicies
     /// Any agent token. <c>/mcp</c> requires it, so an unknown token never reaches a tool — and
     /// neither does a reader token, which authenticates but holds no agent role.
     /// </summary>
-    public const string Any = "workstate-any";
+    public const string Any = "workman-any";
 }

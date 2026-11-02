@@ -11,7 +11,7 @@ namespace Workman.Mcp;
 public sealed class RequestTenant(IHttpContextAccessor accessor)
 {
     /// <summary>A workspace id. Set by the cookie, a static or <c>wss_</c> token, or an OAuth token.</summary>
-    public const string Claim = "workstate:tenant";
+    public const string Claim = "workman:tenant";
 
     private Guid? _id;
 

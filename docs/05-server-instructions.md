@@ -23,7 +23,7 @@ Two rules, both learned the hard way in this repo:
 ## The text
 
 ```text
-WorkState is the work tracker for this session. It holds projects, runs, phases, tasks,
+Workman is the work tracker for this session. It holds projects, runs, phases, tasks,
 findings, follow-ups and assumptions, with their dependencies, evidence and history. It
 replaces PLAN.md / LEDGER.md files: do not write those, write here.
 

@@ -5,8 +5,8 @@ import { fileURLToPath } from 'node:url'
  * Where the verify scripts get a credential, and the one place that decides it. Never a literal in
  * a script: a script carrying its own copy is a second credential to rotate.
  *
- * In order: `WORKSTATE_USER` / `WORKSTATE_PASSWORD`; then `server/.env`, which is what `compose.yml`
- * hands the container (`WORKSTATE_DASHBOARD_USERNAME` / `_PASSWORD`); then the API's own
+ * In order: `WORKMAN_USER` / `WORKMAN_PASSWORD`; then `server/.env`, which is what `compose.yml`
+ * hands the container (`WORKMAN_DASHBOARD_USERNAME` / `_PASSWORD`); then the API's own
  * `appsettings.Development.json`, for `dotnet run`.
  */
 const ENV = fileURLToPath(new URL('../../.env', import.meta.url))
@@ -18,11 +18,11 @@ function fromEnvFile() {
     const match = /^\s*([A-Z0-9_]+)\s*=\s*(.*?)\s*$/.exec(line)
     if (match) values[match[1]] = match[2].replace(/^(['"])(.*)\1$/, '$2')
   }
-  return { username: values.WORKSTATE_DASHBOARD_USERNAME, password: values.WORKSTATE_DASHBOARD_PASSWORD }
+  return { username: values.WORKMAN_DASHBOARD_USERNAME, password: values.WORKMAN_DASHBOARD_PASSWORD }
 }
 
 function fromSettings() {
-  const dashboard = JSON.parse(readFileSync(SETTINGS, 'utf8'))?.WorkState?.Dashboard ?? {}
+  const dashboard = JSON.parse(readFileSync(SETTINGS, 'utf8'))?.Workman?.Dashboard ?? {}
   return { username: dashboard.Username, password: dashboard.Password }
 }
 
@@ -38,13 +38,13 @@ export function credential() {
   const file = attempt(fromEnvFile)
   const settings = attempt(fromSettings)
 
-  const username = process.env.WORKSTATE_USER ?? file.username ?? settings.username
-  const password = process.env.WORKSTATE_PASSWORD ?? file.password ?? settings.password
+  const username = process.env.WORKMAN_USER ?? file.username ?? settings.username
+  const password = process.env.WORKMAN_PASSWORD ?? file.password ?? settings.password
 
   if (typeof username !== 'string' || typeof password !== 'string') {
     throw new Error(
-      `no dashboard credential: set WORKSTATE_USER and WORKSTATE_PASSWORD, or WORKSTATE_DASHBOARD_USERNAME/` +
-        `_PASSWORD in ${ENV}, or WorkState:Dashboard in ${SETTINGS}`,
+      `no dashboard credential: set WORKMAN_USER and WORKMAN_PASSWORD, or WORKMAN_DASHBOARD_USERNAME/` +
+        `_PASSWORD in ${ENV}, or Workman:Dashboard in ${SETTINGS}`,
     )
   }
 

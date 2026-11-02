@@ -28,7 +28,7 @@ public sealed class PasswordTests(PostgresFixture fixture)
         await using var server = world.Server;
         var first = await world.CookieAsync(world.UserA);
         var second = await world.CookieAsync(world.UserA);
-        var oauth = world.Bearer(await world.OAuthAsync(first, $"{server.BaseAddress}/api", "workstate.read offline_access"));
+        var oauth = world.Bearer(await world.OAuthAsync(first, $"{server.BaseAddress}/api", "workman.read offline_access"));
 
         // A wrong current password is sign-in's refusal, a bare 401, and changes nothing.
         var wrong = await ChangeAsync(first, "not-the-current-password", NewPassword);
@@ -116,7 +116,7 @@ public sealed class PasswordTests(PostgresFixture fixture)
         var userB = await world.UserIdAsync(world.UserB);
         var one = await world.CookieAsync(world.UserB);
         var two = await world.CookieAsync(world.UserB);
-        var oauth = world.Bearer(await world.OAuthAsync(one, $"{server.BaseAddress}/api", "workstate.read offline_access"));
+        var oauth = world.Bearer(await world.OAuthAsync(one, $"{server.BaseAddress}/api", "workman.read offline_access"));
 
         var token = (await JsonAsync(await SendAsync(system, HttpMethod.Post, $"/api/admin/users/{userB}/reset-link"), HttpStatusCode.Created))
             .GetProperty("token").GetString()!;

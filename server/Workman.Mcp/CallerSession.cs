@@ -19,9 +19,9 @@ namespace Workman.Mcp;
 /// </summary>
 public static class CallerSession
 {
-    internal const string ItemKey = "workstate.session";
+    internal const string ItemKey = "workman.session";
 
-    // Each read through WorkmanHeaders, which also accepts the old X-WorkState-* name.
+    // Each read through WorkmanHeaders.
     public const string AgentHeader = WorkmanHeaders.Agent;
     public const string SessionHeader = WorkmanHeaders.Session;
     public const string LaunchedByHeader = WorkmanHeaders.LaunchedBy;
@@ -36,21 +36,21 @@ public static class CallerSession
     /// <see cref="ClientHeader"/>, on the principal of a static agent token only — a minted token's
     /// session is its credential's, so its key is never read.
     /// </summary>
-    public const string ClientKeyClaim = "workstate:client-key";
+    public const string ClientKeyClaim = "workman:client-key";
 
     /// <summary>doc 14 §2 — on the principal of a minted token, and only there.</summary>
-    public const string SessionIdClaim = "workstate:session-id";
+    public const string SessionIdClaim = "workman:session-id";
 
-    public const string SessionNameClaim = "workstate:session-name";
+    public const string SessionNameClaim = "workman:session-name";
 
     /// <summary>One per grant the minted token carries; a static token never has one.</summary>
-    public const string GrantClaim = "workstate:grant";
+    public const string GrantClaim = "workman:grant";
 
     /// <summary>
     /// The <c>app_user</c> id behind an OAuth token, or behind a minted token a user minted. A static token has
     /// none, and its sessions share the workspace's names; a user's are theirs alone.
     /// </summary>
-    public const string UserIdClaim = "workstate:user-id";
+    public const string UserIdClaim = "workman:user-id";
 
     public static McpRequestHandler<CallToolRequestParams, CallToolResult> Filter(
         McpRequestHandler<CallToolRequestParams, CallToolResult> next)

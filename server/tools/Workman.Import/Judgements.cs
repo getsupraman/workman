@@ -153,13 +153,13 @@ public static class Judgements
         """;
 
     public const string Usage = """
-        Workman.Import — orchestration markdown into the WorkState store.
+        Workman.Import — orchestration markdown into the Workman store.
 
           Workman.Import --root <path> [--root <path>…] [--connection <cs>] [--workspace <slug>]
                            [--report <file>] [--migrate] [--ephemeral]
 
         <path> is a .claude/orchestration/<slug> directory, a repo root, or a directory of repo roots.
-        The connection string defaults to $WORKSTATE_CONNECTION, then to the compose.dev.yml database.
+        The connection string defaults to $WORKMAN_CONNECTION, then to the compose.dev.yml database.
 
           --migrate    apply the migrations to that database first
           --ephemeral  ignore the connection string and import into a throwaway postgres:17 container,
