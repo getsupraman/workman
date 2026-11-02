@@ -15,7 +15,7 @@ operator dashboard.
 | Runtime | **.NET 10**, `net10.0`, `.slnx`, nullable + implicit usings on, one root `Directory.Build.props` | workspace standard |
 | MCP | **`ModelContextProtocol.AspNetCore` 2.2.0** (+ `ModelContextProtocol.Core`) | official C# SDK; 2.2.0 aligns with the 2026‑07‑28 revision and negotiates down to 2025‑11‑25 |
 | Transport | **Streamable HTTP**, stateless | 2026‑07‑28 removed protocol sessions; 2.2.0 defaults to stateless HTTP. No sticky routing, trivial horizontal scale |
-| Data | **PostgreSQL 17+** via **Npgsql** | workspace substrate; `pg_trgm` + GIN, `jsonb`, `LISTEN/NOTIFY`, arrays. The server's own connections (Dapper data source and EF context) run with `jit=off` (`WorkStateDataSource.WithSessionSettings`, doc 15 §4.3): short queries, where a JIT compile cost more than the query |
+| Data | **PostgreSQL 17+** via **Npgsql** | workspace substrate; `pg_trgm` + GIN, `jsonb`, `LISTEN/NOTIFY`, arrays. The server's own connections (Dapper data source and EF context) run with `jit=off` (`WorkmanDataSource.WithSessionSettings`, doc 15 §4.3): short queries, where a JIT compile cost more than the query |
 | ORM | **EF Core 10** with `UseSnakeCaseNamingConvention()` for the write model; **raw SQL / Dapper for the recursive reads** | EF for migrations and the aggregate writes; hand-written SQL for the frontier, rollup and audit queries, which EF translates badly and which are the hot path |
 | Migrations | EF Core migrations, applied deliberately (never `dotnet ef database update` against a design-time factory that resolves prod — the corpus has that exact incident) | |
 | Observability | **OpenTelemetry** traces+metrics always *emitted*, exported only when an OTLP endpoint is configured; **Sentry** as an OTel backend gated on a DSN; correlation-id middleware **before** auth | standard non-negotiable #5 |
@@ -47,23 +47,23 @@ No state library: Solid stores + a small resource layer over the App API, with t
 ### Solution layout
 
 ```
-WorkState.slnx                     net10.0
-│  (WorkState.Abstractions/        REMOVED in U3. It held nothing but the probe's types, and the
+Workman.slnx                     net10.0
+│  (Workman.Abstractions/        REMOVED in U3. It held nothing but the probe's types, and the
 │                                  output contract is text-only — there are no wire DTOs to
 │                                  publish. A project with zero types is dead weight every later
 │                                  reader has to ask about. It returns when the App API needs a
 │                                  real published contract, and not before.)
-├─ WorkState.Core/                 domain, EF model, migrations, query services, rendering
+├─ Workman.Core/                 domain, EF model, migrations, query services, rendering
 │                                  (compact text + markdown). No ASP.NET.
-├─ WorkState.Mcp/                  tool / prompt / resource classes. Depends on Core only.
-├─ WorkState.Api/                  host: /mcp endpoint, App API, SSE, SPA static files,
+├─ Workman.Mcp/                  tool / prompt / resource classes. Depends on Core only.
+├─ Workman.Api/                  host: /mcp endpoint, App API, SSE, SPA static files,
 │                                  auth, telemetry, load-shedding, Scalar
-├─ WorkState.Tests/                xUnit, mirroring each layer
-├─ frontend/                       SolidJS SPA → WorkState.Api/wwwroot
-└─ tools/WorkState.Import/         markdown importer for the 181 existing files
+├─ Workman.Tests/                xUnit, mirroring each layer
+├─ frontend/                       SolidJS SPA → Workman.Api/wwwroot
+└─ tools/Workman.Import/         markdown importer for the 181 existing files
 ```
 
-**`WorkState.Core` owns the renderers.** The compact text form is domain logic, not presentation:
+**`Workman.Core` owns the renderers.** The compact text form is domain logic, not presentation:
 it is the primary product of every tool call, and it must be unit-tested for token density and for
 never leaking ids the agent cannot use.
 
@@ -75,7 +75,7 @@ never leaking ids the agent cannot use.
 builder.Services
     .AddMcpServer(o => { o.ServerInfo = new() { Name = "workman", Version = "…" }; })
     .WithHttpTransport()
-    .WithToolsFromAssembly()      // [McpServerToolType] classes in WorkState.Mcp
+    .WithToolsFromAssembly()      // [McpServerToolType] classes in Workman.Mcp
     .AddAuthorizationFilters()    // REQUIRED with ASP.NET Core; honours [Authorize] on tools
     .WithResourcesFromAssembly(); // fixed URIs only — templates are undiscoverable (doc 01 §8)
                                   // no WithPromptsFromAssembly: prompts are invisible (doc 01 §9)
@@ -94,7 +94,7 @@ Client registration:
 
 ```bash
 claude mcp add --transport http workman http://127.0.0.1:5290/mcp \
-  --header "Authorization: Bearer $WORKSTATE_TOKEN"
+  --header "Authorization: Bearer $WORKMAN_TOKEN"
 ```
 
 ---
@@ -121,7 +121,7 @@ rubric (one agent, end-to-end, one verification command that can go red).
 | 1.1 | EF model + migration for §2–§5 of the data model (workspace, kinds, item, criteria, links, docs, blocks). Trigger for `ancestors`; fractional `seq` helpers. |
 | 1.2 | Evidence + journal: attempts, reports, verifications, artifacts, events, `pg_notify`. |
 | 1.3 | Threads: assumptions, constraints, notes, claims, tokens. |
-| 1.4 | Query services: frontier, rollup, subtree, open-threads, search. Hand-written SQL. **`EXPLAIN`-checked 2026-10-27** against a seeded 4,955-item / 20,000-event workspace, see [doc 15](15-query-plans.md). Every hot read measured is under 32 ms after three fixes: a `lower(ref)` index (RefLookupIndex), a lateral per-row rollup instead of joining the `item_rollup` view, and `jit=off` on the server's connections. Board was 77 ms and Facts 67 ms before. The opt-in test `QueryPlanTests` (`WORKSTATE_EXPLAIN=1`) re-runs it. |
+| 1.4 | Query services: frontier, rollup, subtree, open-threads, search. Hand-written SQL. **`EXPLAIN`-checked 2026-10-27** against a seeded 4,955-item / 20,000-event workspace, see [doc 15](15-query-plans.md). Every hot read measured is under 32 ms after three fixes: a `lower(ref)` index (RefLookupIndex), a lateral per-row rollup instead of joining the `item_rollup` view, and `jit=off` on the server's connections. Board was 77 ms and Facts 67 ms before. The opt-in test `QueryPlanTests` (`WORKMAN_EXPLAIN=1`) re-runs it. |
 
 *Verify:* integration tests against a throwaway Postgres in compose. *Seam:* `ancestors` maintenance
 vs `work_move` — the one place the tree can silently corrupt.
@@ -159,7 +159,7 @@ assumed.
 
 | | |
 |---|---|
-| 4.1 | `work_import` + `tools/WorkState.Import`: parse a `.claude/orchestration/<slug>/` directory into items, docs and blocks, preserving every original line verbatim. Run it over all 181 files; the failures are the specification for what the schema is missing. |
+| 4.1 | `work_import` + `tools/Workman.Import`: parse a `.claude/orchestration/<slug>/` directory into items, docs and blocks, preserving every original line verbatim. Run it over all 181 files; the failures are the specification for what the schema is missing. |
 | 4.2 | Resources + templates. ~~+ completions~~ — **cancelled by measurement 2026-09-18:** completions have **no client mechanism** (doc 01 §8), so the handler would have been dead code. Templates shipped, but are readable only if you already know the URI — exact URIs beat them. |
 | 4.3 | ~~Prompts: `worker_brief`, `review_brief`, `gate_brief`, … with note-consumption on render.~~ **CANCELLED by measurement 2026-09-18:** MCP prompts are **invisible to the client** (doc 01 §9, [`PROBE.md`](PROBE.md)). Replaced by **`work_brief(for:)`** — a tool, and therefore actually reachable. Note-consumption happens there; see `BoardReader.BriefSessionAsync`. |
 | 4.4 | `work_audit` — the mechanical checks. |

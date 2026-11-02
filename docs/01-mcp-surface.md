@@ -193,7 +193,7 @@ suggested; the refusal routes to `work_tree` or `work_threads` instead.
 > **Changed 2026-10-26 (agent-import).** The row above used to describe a parser of
 > `.claude/orchestration/`. Owner decision: no parser — an agent discovers planning material anywhere
 > in the repo, keeps only what is true of the current code, asks the human, and writes through this
-> tool. `server/tools/WorkState.Import` is unchanged and not used by it.
+> tool. `server/tools/Workman.Import` is unchanged and not used by it.
 
 ### 3.6 Arguments that cannot bind
 
@@ -219,7 +219,7 @@ never reaches the tool's own refusals. A call-tool request filter (`ToolArgument
   lenient than a schema check, and what it still rejects comes back as the same refusal shape.
 - Authorization runs first: a token that cannot see a tool is forbidden it, never taught its
   arguments.
-- Every `work_xxx(name:…)` written in WorkState.Core and WorkState.Mcp names only parameters that
+- Every `work_xxx(name:…)` written in Workman.Core and Workman.Mcp names only parameters that
   tool declares. `RenderedCallTests` scans the source for it, because a NEXT line or a route the
   server cannot bind teaches the wrong call.
 
@@ -344,7 +344,7 @@ byte-for-byte what it was before the tool existed (pinned by `ImportVisibilityTe
 538 tokens of `tools/list`; a granted orchestrator's `work_*` list is 6,849.
 
 **Self-naming — `work_session(name, claude_session_id?)`** (doc 11). Hidden the same way: the
-`self-namer` policy needs any agent role **and** a `workstate:client-key` claim, which the bearer
+`self-namer` policy needs any agent role **and** a `workman:client-key` claim, which the bearer
 handler adds only for a **static** token on a request carrying `X-Workman-Client` (the session
 helper's key). A minted session never lists it — its name is its credential's — and neither does a
 session without the helper, whose `work_brief` names `/workman:setup` instead. Every other
@@ -480,7 +480,7 @@ URI scheme `work://`. Read-only projections, `cacheScope: "private"`, short `ttl
   `work_brief` — every variant that renders a scope, the project brief and the gate brief included,
   not a refusal — prints one under its header: the dashboard address of that item,
   `<base>/r/<fullRef>`, where `fullRef` is the v1 API's `project/run/ref` path and `/r` resolves it
-  (doc 13). `<base>` is `WORKSTATE_PUBLIC_URL` when set (doc 08), else the scheme and host the MCP
+  (doc 13). `<base>` is `WORKMAN_PUBLIC_URL` when set (doc 08), else the scheme and host the MCP
   request came in on; a render with no request behind it (the `work://` resources, tests) prints no
   line rather than guess a host. No tool opens a browser and none was added: the server runs in
   Docker, so the line is something to hand a human.

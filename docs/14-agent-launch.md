@@ -12,16 +12,16 @@ Supersedes the credential-helper proposal of doc 12 §7.3 (option G), which only
 ## 1. The shape
 
 ```
-controller model ──▶ agent_launch(name, brief, repo_root, controller, permission_mode, …, workstate:{role, env_file})
+controller model ──▶ agent_launch(name, brief, repo_root, controller, permission_mode, …, workman:{role, env_file})
                      │  plugin stdio MCP server "agents" (Node, no dependencies) — a host process
                      │  started by Claude Code for the session; the model never sees what it handles
-                     ├─ reads WORKSTATE_CONTROLLER_TOKEN from env_file (server/.env)        [code]
+                     ├─ reads WORKMAN_CONTROLLER_TOKEN from env_file (server/.env)        [code]
                      ├─ POST /api/agent-sessions {name, role, launchedBy, cwd, repo} → per-session token
                      ├─ writes <repo_root>/.claude/briefs/mcp-<name>.json  (that token; owner-only)
                      ├─ writes <repo_root>/.claude/briefs/brief-<name>.txt (protocol header + brief)
                      ├─ runs  claude --bg --name <name> … --mcp-config <file> --permission-mode <mode> "<prompt>"
                      ├─ reads the session uuid from `claude agents --json`, PATCHes it onto the session
-                     └─ returns {name, id, sessionId, brief, workstate:{session, role, expiresAt}}   ← no secret
+                     └─ returns {name, id, sessionId, brief, workman:{session, role, expiresAt}}   ← no secret
 
 agent_stop(id) ──▶ claude stop [rm] · DELETE /api/agent-sessions/{id} (revoke) · delete mcp-<name>.json
 ```
@@ -36,7 +36,7 @@ All new; additive; **not** under `/api/v1` (v1 is read-only by rule).
 
 | Call | Who | Does |
 |---|---|---|
-| `POST /api/agent-sessions` `{name, role, launchedBy?, origin?, cwd?, externalRole?, claudeSessionId?, ttlHours?, replace?, repo?:{remote?, root?}, grants?:["import"]}` | a bearer with **orchestrator or controller** role (static or minted), or an OAuth access token for `<origin>/api` with scope `workstate.sessions` (controller) | creates/updates the `agent_session` row for `name`, issues a token `wss_<base64url 32 bytes>`, stores only its SHA-256, returns `201 {sessionId, name, role, token, expiresAt}` **once** |
+| `POST /api/agent-sessions` `{name, role, launchedBy?, origin?, cwd?, externalRole?, claudeSessionId?, ttlHours?, replace?, repo?:{remote?, root?}, grants?:["import"]}` | a bearer with **orchestrator or controller** role (static or minted), or an OAuth access token for `<origin>/api` with scope `workman.sessions` (controller) | creates/updates the `agent_session` row for `name`, issues a token `wss_<base64url 32 bytes>`, stores only its SHA-256, returns `201 {sessionId, name, role, token, expiresAt}` **once** |
 | `PATCH /api/agent-sessions/{id}` `{claudeSessionId}` | the same principal, or a controller | sets the Claude session uuid (history kept as an event, doc 11) |
 | `DELETE /api/agent-sessions/{id}` | the same principal, or a controller | revokes: `revoked_at = now()`, live claims of that session released (`release_reason = 'revoked'`) |
 | `POST /api/agent-sessions/{id}/release` | a **controller** only | frees the name (doc 11 "Releasing a name"): the row is renamed `<name>~released~<id>`, its token revoked, `session_name_released` journaled; `200 {sessionId, name, releasedAs}`, `409` while it holds live claims |
@@ -58,7 +58,7 @@ Rules:
   against the known names; migration `ImportGrant`). Only a minter that may mint at all (orchestrator
   or controller) can give one, an unknown name is `400`, and `import` on a `worker` role is `400` —
   `work_import` writes plan items, an orchestrator's act. Each mint sets the grants anew, so a
-  `replace` without `grants` drops them. The bearer handler adds one `workstate:grant` claim per
+  `replace` without `grants` drops them. The bearer handler adds one `workman:grant` claim per
   grant; `import` shows `work_import` (doc 01 §6). A static token never carries a grant.
 - **"The same principal":** a controller may PATCH/DELETE any session. Otherwise, a session minted by
   a minted token belongs to that minting session. A session minted by a static token belongs to any
@@ -91,7 +91,7 @@ Rules:
   from the principal and ignores an `X-Workman-Agent` header on that request. The name is then
   bound to the credential, not asserted by a header (doc 12 §7.1, SEP-2567's "authenticated principal").
 - **Minting with OAuth** (foreman-oauth): the whole group — mint, PATCH, DELETE — also takes an
-  OAuth access token whose audience is `<origin>/api` and whose scopes include `workstate.sessions`
+  OAuth access token whose audience is `<origin>/api` and whose scopes include `workman.sessions`
   (doc 10 rule 5); without the scope it is `403`, and a `/mcp` token is `401`. The request, the
   response, the role rules and the grants are exactly those above. The OAuth user is a signed-in
   dashboard user as controller, in the one tenant the token is for (doc 08 §4), so the role cap is
@@ -134,7 +134,7 @@ Tools appear as `mcp__plugin_workman_agents__<tool>`. No npm dependencies; plain
 | `repo_root` | path | required | must be a git working tree (refused otherwise); the session's cwd |
 | `controller` | string | required | `"<name> [<6-hex ref>]"` (refused without the ref) — goes into the protocol header |
 | `permission_mode` | `acceptEdits\|auto\|bypassPermissions\|manual\|dontAsk\|plan` | `auto` | `--permission-mode` |
-| `toolset` | `none\|readonly\|fix` | `fix` | the allow-list profiles of `Start-NestedAgent.ps1`, plus `mcp__workman` when `workstate.role` is not `none` (else the first `work_*` call parks the agent under `acceptEdits`); `mcp__workstate`, a user registration under the name before the rename, is then disallowed |
+| `toolset` | `none\|readonly\|fix` | `fix` | the allow-list profiles of `Start-NestedAgent.ps1`, plus `mcp__workman` when `workman.role` is not `none` (else the first `work_*` call parks the agent under `acceptEdits`) |
 | `allowed_tools` | string[] | `[]` | merged into `--allowedTools` |
 | `disallowed_tools` | string[] | `[]` | `--disallowedTools` |
 | `add_dirs` | path[] | `[]` | `--add-dir` |
@@ -142,12 +142,12 @@ Tools appear as `mcp__plugin_workman_agents__<tool>`. No npm dependencies; plain
 | `effort` | `low\|medium\|high\|xhigh\|max` | — | `--effort` |
 | `settings` | path or JSON string | — | `--settings` |
 | `append_system_prompt` | string | — | `--append-system-prompt` |
-| `workstate` | `{role: worker\|orchestrator\|controller\|none, env_file, url?, ttl_hours?, grants?: ["import"]}` | `{role: "worker"}` | §1/§2; `grants` is passed to the mint as is — the server enforces who may hold one |
+| `workman` | `{role: worker\|orchestrator\|controller\|none, env_file, url?, ttl_hours?, grants?: ["import"]}` | `{role: "worker"}` | §1/§2; `grants` is passed to the mint as is — the server enforces who may hold one |
 | `dry_run` | bool | false | everything except minting and spawning; returns the argv (token shown as `<minted>`) |
 
 Every variadic flag is closed by the next flag and the prompt goes last, exactly as the scripts do
 (agents §1, "Traps"). Arguments are passed as an argv array (no shell), so quoting traps are
-gone. If `workstate.role` is not `none` and minting fails (no env file, server down, 4xx), the launch
+gone. If `workman.role` is not `none` and minting fails (no env file, server down, 4xx), the launch
 is **refused** with the reason — never silently launched with the inherited controller registration.
 
 ### `agent_stop` `{id | name, remove?, keep_brief?}`
@@ -174,7 +174,7 @@ fix. No result ever contains a token.
 
 ## 5. Verification the controller runs before release
 
-1. A real `agent_launch` from this session with `permission_mode: "acceptEdits"`, `workstate.role:
+1. A real `agent_launch` from this session with `permission_mode: "acceptEdits"`, `workman.role:
    "worker"`: the child's `work_brief` shows no "session unnamed" line; its writes are recorded under
    its name with `run_by = worker`; it cannot see `work_status`.
 2. `agent_stop` → the token is revoked (a call with it is 401) and the config file is gone.

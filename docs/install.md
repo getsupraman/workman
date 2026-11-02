@@ -38,7 +38,7 @@ The skill finds which state the machine is in and runs one shipped script
 ([`setup.sh`](../plugin/skills/setup/assets/setup.sh) or
 [`setup.ps1`](../plugin/skills/setup/assets/setup.ps1)) that does only the part that is missing:
 
-1. writes a local `.env` with random tokens and a dashboard password, in `~/.workstate/`;
+1. writes a local `.env` with random tokens and a dashboard password, in `~/.workman/`;
 2. pulls the published image `ghcr.io/getsupraman/workman` and starts it with its Postgres 17;
 3. registers `http://127.0.0.1:5290/mcp` with Claude Code as `workman`, with browser sign-in by default;
 4. proves the server answers the way that registration needs.
@@ -55,6 +55,7 @@ The same skill keeps the install running:
 | *"Back up my Workman database"* (`--backup <file>`) | dumps the database to a file |
 | *"Restore Workman from &lt;file&gt;"* (`--restore <file>`) | writes a safety dump first, then replaces the data |
 | a clone of this repository (`--clone <path>`) | builds the image from your clone instead of pulling it |
+| *"Move my Workman 1.x install to 2.0"* (`--migrate`) | moves a 1.x `workstate` install (`~/.workstate`, project `workstate`) into `~/.workman`: dump, `.env` keys renamed, restore, old project stopped with its volume kept |
 
 Every flag and status line is in [plugin/skills/setup/SKILL.md](../plugin/skills/setup/SKILL.md).
 
@@ -67,9 +68,9 @@ workspaces and invite links.
 
 Two settings differ from a local install:
 
-- **`WORKSTATE_PUBLIC_URL`**: the origin people and agents reach the server on, for example
+- **`WORKMAN_PUBLIC_URL`**: the origin people and agents reach the server on, for example
   `https://workman.example.com`. It is the base of the links `work_brief` and `work_get` print.
-- **`WORKSTATE_TRUSTED_PROXIES`**: the address or CIDR of the reverse proxy, so the server believes its
+- **`WORKMAN_TRUSTED_PROXIES`**: the address or CIDR of the reverse proxy, so the server believes its
   `X-Forwarded-*` headers. Empty trusts nobody.
 
 [server/deploy/multi-deploy/](../server/deploy/multi-deploy/README.md) is a complete example: a
@@ -78,10 +79,10 @@ compose file, secret generation, backups on a systemd timer, upgrades and restor
 ### Several public URLs
 
 One server can answer on several host names. List the extra origins, comma-separated, in
-**`WORKMAN_PUBLIC_URLS`** (setting `WorkState:PublicUrls`), after `WORKSTATE_PUBLIC_URL`:
+**`WORKMAN_PUBLIC_URLS`** (setting `Workman:PublicUrls`), after `WORKMAN_PUBLIC_URL`:
 
 ```bash
-WORKSTATE_PUBLIC_URL=https://workman.example.com
+WORKMAN_PUBLIC_URL=https://workman.example.com
 WORKMAN_PUBLIC_URLS=https://workman.example.org
 ```
 
