@@ -1,11 +1,11 @@
 ---
 name: plan
-description: "Plan, propose and triage work in the WorkState store (the `work_*` MCP tools) without executing any of it. Turns a request like \"plan feature XY\" into a run in WorkState: a goal, units or phases with done-criteria and a verification command each, binding rules, open assumptions and ordering. Answers \"what should we build next\" by reading the board and the repo and ranking candidates. Grooms a backlog by proposing what to close, defer, merge or reorder. Then it stops at the approval gate, and the human hands the plan to an executor: \"approved, execute as /workman:controller\" or \"/workman:orchestrate\". It writes no product code, launches no agent and starts nothing. USE FOR: planning a feature, fix or migration before anyone builds it; \"propose what we should build next\"; triaging or grooming a backlog; \"where are we\" or \"show me the workstate\"; revising a plan after feedback. DO NOT USE FOR: executing a plan (use /workman:controller or /workman:orchestrate), importing existing PLAN.md or TODO files (use /workman:import), or installing the server (use /workman:setup)."
+description: "Plan, propose and triage work in Workman (the `work_*` MCP tools) without executing any of it. Turns a request like \"plan feature XY\" into a run in Workman: a goal, units or phases with done-criteria and a verification command each, binding rules, open assumptions and ordering. Answers \"what should we build next\" by reading the board and the repo and ranking candidates. Grooms a backlog by proposing what to close, defer, merge or reorder. Then it stops at the approval gate, and the human hands the plan to an executor: \"approved, execute as /workman:controller\" or \"/workman:orchestrate\". It writes no product code, launches no agent and starts nothing. USE FOR: planning a feature, fix or migration before anyone builds it; \"propose what we should build next\"; triaging or grooming a backlog; \"where are we\" or \"show me the workstate\"; revising a plan after feedback. DO NOT USE FOR: executing a plan (use /workman:controller or /workman:orchestrate), importing existing PLAN.md or TODO files (use /workman:import), or installing the server (use /workman:setup)."
 ---
 
-# WorkState: plan, propose, triage
+# Workman: plan, propose, triage
 
-You are the **planner**, not the builder. Your output is records in WorkState and a short proposal
+You are the **planner**, not the builder. Your output is records in Workman and a short proposal
 in chat. Nothing in the repo changes: no product code, no branch, no worktree, no agent. Execution
 starts only when the human says so, in words, and it starts in an executor skill:
 
@@ -23,7 +23,7 @@ Call **`work_brief(repo: {remote, root})`**. `remote` is `git remote get-url ori
 there is no origin). `root` is the parent directory of
 `git rev-parse --path-format=absolute --git-common-dir`.
 
-- **No `work_*` tools** → *"/workman:plan needs the WorkState MCP server. Run
+- **No `work_*` tools** → *"/workman:plan needs the Workman MCP server. Run
   `/workman:setup`."* Stop. There is no markdown fallback.
 - **`work_create` is missing** → the session has a worker token, and workers cannot plan. Say so in
   one line and stop.
@@ -42,7 +42,7 @@ Refs come from the server. Never invent one, in a call or in chat.
 | "plan feature XY", "plan the fix for …", "break this spec down" | **Plan** §2 | yes: a run, then stop |
 | "propose what we should build next", "what's worth doing" | **Propose** §3 | no, until a candidate is picked |
 | "triage", "groom the backlog", "clean up the board" | **Triage** §4 | no, until the moves are approved |
-| "where are we", "show me the workstate" | **Status** §5 | no |
+| "where are we", "show me the board" | **Status** §5 | no |
 | feedback on a plan you made ("split 3", "drop the API part") | **Revise** §6 | yes |
 
 When a request mixes modes ("propose something and plan it"), do them in order and still stop at
@@ -147,7 +147,7 @@ executor's job.
 
 ---
 
-## 5. Status: "where are we", "show me the workstate"
+## 5. Status: "where are we", "show me the board"
 
 Answer from `work_brief` (and `work_tree` if they asked about a run) in outcomes: what landed, what
 is in flight and who holds it, what is blocked and on whom, what needs the human. Give the `web`

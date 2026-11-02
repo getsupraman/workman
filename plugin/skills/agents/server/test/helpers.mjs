@@ -1,4 +1,4 @@
-// helpers.mjs — a fake WorkState, a throwaway git repo, and a stdio client for agents.mjs.
+// helpers.mjs — a fake Workman, a throwaway git repo, and a stdio client for agents.mjs.
 // @ts-check
 
 import fs from 'node:fs'
@@ -42,7 +42,7 @@ export function makeRepo(opts = {}) {
     const envDir = tmp('env')
     const envFile = path.join(envDir, '.env')
     fs.writeFileSync(envFile, [
-        '# WorkState local secrets',
+        '# Workman local secrets',
         '',
         'WORKSTATE_ORCHESTRATOR_TOKEN=orchestrator-not-this-one',
         `WORKSTATE_CONTROLLER_TOKEN="${CONTROLLER_TOKEN}"`,

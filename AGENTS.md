@@ -1,6 +1,6 @@
 # AGENTS.md — the repo contract
 
-Workman is a public repository: the WorkState server and the `workman` Claude Code plugin that drives
+Workman is a public repository: the Workman server and the `workman` Claude Code plugin that drives
 it. Read this before you change anything.
 
 ## Layout
@@ -12,7 +12,7 @@ it. Read this before you change anything.
 | `plugin/skills/{plan,orchestrate,controller,agents,setup,import}/` | the six skills, invoked as `/workman:<skill>` |
 | `plugin/skills/agents/server/` | the agents MCP server (`agent_launch`, `agent_list`, …), plain Node ES modules, no dependencies |
 | `plugin/skills/setup/assets/` | `setup.sh` / `setup.ps1` (twins: change both), `compose.yml`, `session-header.mjs`, `find-shadows.mjs` |
-| `server/` | the WorkState server: `WorkState.slnx` (.NET 10), `frontend/` (SolidJS dashboard), `Dockerfile`, composes |
+| `server/` | the Workman server: `WorkState.slnx` (.NET 10), `frontend/` (SolidJS dashboard), `Dockerfile`, composes |
 | `docs/` | the design documents, indexed by `docs/README.md` |
 | `.github/workflows/` | `ci.yml` (build and test), `image.yml` (publishes the server image) |
 

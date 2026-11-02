@@ -39,10 +39,10 @@ Otherwise use the `Agent` tool.
 
 **Use the `agent_launch` tool** (`mcp__plugin_workman_agents__agent_launch`). It is the plugin's
 `agents` MCP server — Node 18+, no dependencies — and it does what the scripts below do, plus the one
-thing they cannot: it mints the agent **its own WorkState token**, so the child's writes are recorded
+thing they cannot: it mints the agent **its own Workman token**, so the child's writes are recorded
 under its name and role instead of yours. It builds the argv in code (no shell, so no quoting traps),
 prepends the same protocol header, grants the same `toolset` profiles, and returns `name`, `id`,
-`sessionId`, `brief` and the WorkState session — never a token.
+`sessionId`, `brief` and the Workman session — never a token.
 
 | Param | Default | Maps to |
 |---|---|---|
@@ -55,7 +55,7 @@ prepends the same protocol header, grants the same `toolset` profiles, and retur
 | `allowed_tools` / `disallowed_tools` | `[]` | merged into `--allowedTools` / `--disallowedTools`. To keep an agent off the tracker, pass `workstate: {role: "none"}` and `disallowed_tools: ["mcp__workman"]`. With any other role `mcp__workstate` is always disallowed: the agent's own server is `workman`, and a user registration still named `workstate` (the name before the rename) would let it act as you |
 | `add_dirs` | `[]` | `--add-dir` |
 | `model`, `effort`, `settings`, `append_system_prompt` | — | `--model`, `--effort` (`low`…`max`), `--settings` (path or JSON), `--append-system-prompt` |
-| `workstate` | `{role: "worker"}` | `role` (`worker` `orchestrator` `controller` `none`), `env_file` (optional, for headless use: the PATH of the WorkState `.env` that `/workman:setup` names: `<home>/.env`, by default `~/.workstate/.env`, or `<clone>/server/.env`; never its contents. Without it the `agent_signin` grant mints — below), `url` (default `http://127.0.0.1:5290`), `ttl_hours` (idle window, default 72: the token lapses after that long unused; every use renews it, no hard cap), `grants` (`["import"]` shows `work_import` to the session — orchestrator or controller role only; see `/workman:import`) |
+| `workstate` | `{role: "worker"}` | `role` (`worker` `orchestrator` `controller` `none`), `env_file` (optional, for headless use: the PATH of the Workman `.env` that `/workman:setup` names: `<home>/.env`, by default `~/.workstate/.env`, or `<clone>/server/.env`; never its contents. Without it the `agent_signin` grant mints — below), `url` (default `http://127.0.0.1:5290`), `ttl_hours` (idle window, default 72: the token lapses after that long unused; every use renews it, no hard cap), `grants` (`["import"]` shows `work_import` to the session — orchestrator or controller role only; see `/workman:import`) |
 | `dry_run` | `false` | validate and return the argv; mints and spawns nothing (the token shows as `<minted>`) |
 
 An auto-mode worker — the usual case:
@@ -81,8 +81,8 @@ nothing and passes no `--mcp-config`. `agent_list` joins `claude agents --json` 
 
 ### Sign in once: `agent_signin`
 
-`agent_launch` mints with an OAuth grant that the agents server holds for the WorkState server, so no
-`.env` is needed. Get it once per server (WorkState 0.9.0 or later, local or remote):
+`agent_launch` mints with an OAuth grant that the agents server holds for the Workman server, so no
+`.env` is needed. Get it once per server (Workman server 0.9.0 or later, local or remote):
 
 ```
 agent_signin(url: "http://127.0.0.1:5290")      # url defaults to that
@@ -120,7 +120,7 @@ sign-in to finish.
 ### Fallback: the scripts
 
 When the agents server is not available — no Node, or no plugin — the launchers do the same launch
-without the WorkState token (the agent inherits your registration):
+without the Workman token (the agent inherits your registration):
 
 ```powershell
 $a = & "$env:CLAUDE_PLUGIN_ROOT/skills/agents/assets/Start-NestedAgent.ps1" `
@@ -510,7 +510,7 @@ hang — all three look exactly like "still working". Cover the failures first a
 2. Wait for `DONE`.
 3. Verify its claims yourself — never take an agent's word for green.
 4. Stop it: `agent_stop(name: "fix-B-07")` (or `id:`; `remove: true` also deletes the session,
-   `keep_brief: true` keeps the brief). It runs `claude stop`, **revokes the agent's WorkState token**
+   `keep_brief: true` keeps the brief). It runs `claude stop`, **revokes the agent's Workman token**
    and deletes `mcp-<name>.json` — always, even with `keep_brief`, because that file holds the secret.
    A revoke that fails is reported as an error; run `agent_stop` again.
 
@@ -623,7 +623,7 @@ already there.
 
 When you do run several: distinct `-Name` each, keep each returned object, and branch each one off the
 previous agent's branch rather than the base, so conflicts get resolved once by the agent that caused
-them instead of piling up at the end. If the work is tracked in WorkState, claim each unit with its own
+them instead of piling up at the end. If the work is tracked in Workman, claim each unit with its own
 worktree — `work_status(ref, "in_progress", tree: "<-RepoRoot>")` — or the second claim in the same run
 is refused.
 
@@ -670,7 +670,7 @@ The launcher prepends the protocol; your file supplies the work. A good brief:
 - **States the verification commands**, and demands a test that fails before the fix and passes after.
 - **Repeats the repo's binding conventions.** Agents default to narrating their own change in comments;
   if the repo forbids that, say so — the agent does not inherit your instructions. When the work is
-  tracked in WorkState, the run's binding rules are its constraints, and `work_brief(scope: "<item
+  tracked in Workman, the run's binding rules are its constraints, and `work_brief(scope: "<item
   ref>", for: "worker")` prints them in its BINDING block — paste that rather than retyping them.
 - **Says what to do instead of guessing**: *"if you believe the finding is wrong, STOP and report that
   rather than fixing something else."*

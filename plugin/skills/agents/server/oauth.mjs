@@ -1,4 +1,4 @@
-// oauth.mjs — sign in to a WorkState server (RFC 9728 discovery, RFC 7591 DCR, PKCE S256, RFC 8252
+// oauth.mjs — sign in to a Workman server (RFC 9728 discovery, RFC 7591 DCR, PKCE S256, RFC 8252
 // loopback redirect), keep the grant in ~/.workstate/grants.json, and trade it for access tokens.
 //
 // A refresh token, access token or code verifier goes nowhere but grants.json, a request body or an
@@ -134,7 +134,7 @@ const metadataCache = new Map()
  */
 async function getJson(url) {
     const res = await call(url, { headers: { Accept: 'application/json' } })
-    if (!res.ok) throw new Refusal(`${url} answered ${await serverReason(res)}: the server does not offer OAuth sign-in (WorkState 0.9.0 or later does), so pass workstate.env_file instead`)
+    if (!res.ok) throw new Refusal(`${url} answered ${await serverReason(res)}: the server does not offer OAuth sign-in (Workman server 0.9.0 or later does), so pass workstate.env_file instead`)
     try {
         return await res.json()
     } catch {
@@ -143,7 +143,7 @@ async function getJson(url) {
 }
 
 /**
- * @param {string} url  the WorkState base url
+ * @param {string} url  the Workman base url
  * @returns {Promise<Metadata>}
  */
 async function discover(url) {
@@ -505,7 +505,7 @@ export function forgetAccessToken(url) {
 
 /** @param {string} url */
 function notSignedIn(url) {
-    return new Refusal(`not signed in to ${originOf(url)}: run ${signinCall(url)} once to sign in in the browser. A headless launch instead needs workstate.env_file: the PATH of WorkState's .env (never its contents).`)
+    return new Refusal(`not signed in to ${originOf(url)}: run ${signinCall(url)} once to sign in in the browser. A headless launch instead needs workstate.env_file: the PATH of Workman's .env (never its contents).`)
 }
 
 /**
@@ -536,7 +536,7 @@ export async function accessToken(url) {
         try {
             res = await postForm(meta.token_endpoint, { grant_type: 'refresh_token', refresh_token: g.refresh_token, client_id: g.client_id, resource: meta.resource })
         } catch (e) {
-            throw new Refusal(`refreshing the WorkState sign-in failed: ${/** @type {Error} */ (e).message}. Nothing was launched.`)
+            throw new Refusal(`refreshing the Workman sign-in failed: ${/** @type {Error} */ (e).message}. Nothing was launched.`)
         }
         const j = await bodyJson(res)
         if (!res.ok || typeof j.access_token !== 'string') {
@@ -545,7 +545,7 @@ export async function accessToken(url) {
                 writeGrants(grants)
                 throw new Refusal(`the stored sign-in for ${origin} was refused (invalid_grant: expired or revoked) and is forgotten: run ${signinCall(url)} to sign in again, or pass workstate.env_file.`)
             }
-            throw new Refusal(`refreshing the WorkState sign-in failed: ${oauthReason(j, res.status)}. Nothing was launched.`)
+            throw new Refusal(`refreshing the Workman sign-in failed: ${oauthReason(j, res.status)}. Nothing was launched.`)
         }
         if (typeof j.refresh_token === 'string' && j.refresh_token !== g.refresh_token) {
             grants[origin] = { ...g, refresh_token: j.refresh_token, scope: typeof j.scope === 'string' ? j.scope : g.scope }

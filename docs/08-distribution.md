@@ -538,7 +538,7 @@ reasons not to, and the second is the real one:
 - **It is not free to install.** The moment it ships, every session in every repo with the workman
   plugin tries to reach `127.0.0.1:5290`. If the stack is not up or `WORKSTATE_TOKEN` is unset, the
   result is a failed MCP connection notice — in every project, whether or not that project has
-  anything to do with WorkState. That is a cost the owner should choose, not inherit.
+  anything to do with Workman. That is a cost the owner should choose, not inherit.
 - **An unbumped file in `plugin/` is a landmine.** It reaches nobody today, which reads as
   safe — but the next version bump for an unrelated reason ships it silently, to everyone, with
   nobody having decided to. Distribution here is gated on one field, so anything sitting inside the
