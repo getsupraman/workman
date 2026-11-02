@@ -7,6 +7,10 @@ All notable changes to the Workman server and the `workman` plugin are recorded 
 
 ## [Unreleased]
 
+## [1.2.0] — 2026-11-02
+
+Server 1.2.0, plugin 1.1.0. No database migration since 1.1.4.
+
 ### Changed — the machine-facing names are now `workman`
 
 The product has been Workman for a while; the names machines use said `workstate`. They now say
@@ -47,6 +51,11 @@ Scripts and other clients that send `X-WorkState-*` headers, read `X-WorkState-A
   stops the host from starting.
 - `server/deploy/multi-deploy/compose.yml`: `WORKMAN_PUBLIC_URLS`, and `WORKMAN_HOSTS`, the Traefik rule
   for both routers (unset, `Host(WORKSTATE_HOST)` as before).
+
+### Fixed
+
+- The dashboard lists an open phase or feature with no children under **Open**, and the progress
+  rollups (dashboard and `/api/v1`) count it as one item instead of none.
 
 ### Plugin 1.1.0
 
