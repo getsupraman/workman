@@ -25,7 +25,7 @@ public sealed class WorkmanNamesMigrationTests(PostgresFixture fixture)
         [ProjectAccess.HiddenFunction, ProjectAccessSeq.AccessFunction, ProjectAccessSeq.BumpFunction];
 
     private static readonly string[] NewFunctions =
-        [WorkmanNames.HiddenFunction, WorkmanNames.AccessFunction, WorkmanNames.BumpFunction];
+        [WorkmanNames.HiddenFunction, WorkmanNames.AccessFunction, WorkmanNames.BumpFunction, ConstraintRefAllocator.Function];
 
     [Fact]
     public async Task WorkmanNames_moves_a_120_database_to_the_workman_names_and_rls_still_holds()

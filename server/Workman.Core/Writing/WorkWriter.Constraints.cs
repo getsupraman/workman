@@ -260,10 +260,10 @@ public sealed partial class WorkWriter
     }
 
     /// <summary>
-    /// The first free <c>C…</c> in the workspace, by the probe <see cref="FreeAssumptionRefAsync"/>
-    /// uses for <c>A…</c>. The scope is the workspace and not the run: one BINDING block renders the
-    /// workspace-wide rules together with the ones scoped to the item's ancestors, so a per-run
-    /// number would print two <c>C1</c>s side by side.
+    /// The first free <c>C…</c> in the workspace. The scope is the workspace and not the run: one BINDING block renders
+    /// the workspace-wide rules together with the ones scoped to the item's ancestors, so a per-run number would print
+    /// two <c>C1</c>s side by side. Read by <see cref="Migrations.ConstraintRefAllocator"/>'s function, because the
+    /// caller's own reads cannot see the rules of a project they are not a member of, and those hold numbers too.
     /// </summary>
     private static async Task<string> FreeConstraintRefAsync(
         NpgsqlConnection connection,
@@ -271,29 +271,11 @@ public sealed partial class WorkWriter
         Guid workspaceId,
         CancellationToken cancellationToken)
     {
-        const string sql =
-            """
-            SELECT EXISTS (
-              SELECT 1 FROM constraint_rule
-              WHERE workspace_id = @workspace AND lower(ref) = lower(@ref));
-            """;
+        const string sql = $"SELECT {Migrations.ConstraintRefAllocator.Function}(@workspace);";
 
-        for (var n = 1; n < 500; n++)
-        {
-            var candidate = $"C{n}";
-            var taken = await connection.ExecuteScalarAsync<bool>(new CommandDefinition(
-                sql,
-                new { workspace = workspaceId, @ref = candidate },
-                transaction,
-                cancellationToken: cancellationToken));
-
-            if (!taken)
-            {
-                return candidate;
-            }
-        }
-
-        return $"C{Guid.CreateVersion7():n}"[..6];
+        return await connection.ExecuteScalarAsync<string?>(new CommandDefinition(
+                   sql, new { workspace = workspaceId }, transaction, cancellationToken: cancellationToken))
+               ?? throw new InvalidOperationException($"no free constraint ref in workspace {workspaceId}");
     }
 
     private static bool Kind(string? asked, out ConstraintKind kind)
