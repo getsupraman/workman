@@ -222,8 +222,9 @@ characters. A used, replaced, expired or unknown token is `404 {error}` on both.
 ItemRef = { "id": "uuid", "ref": "2.3", "qualifiedRef": "m1/2.3", "kind": "task", "title": "…", "status": "done",
            "fullRef": "workstate/m1/2.3" }
 Rollup  = { "total": 14, "done": 10, "inProgress": 1, "review": 0, "blocked": 0, "open": 3,
-            "cancelled": 0, "superseded": 0 }      // leaves only: task, followup, subtask, spike, question, incident
-          // total = every leaf below, cancelled and superseded included (the sum of the seven counts);
+            "cancelled": 0, "superseded": 0 }      // leaves only: task, followup, subtask, spike, question, incident,
+          // plus a phase or feature that has no children (an empty container is one item of work)
+          // total = every counted item below, cancelled and superseded included (the sum of the seven counts);
           // the MCP text's "n/m done" denominator is total − cancelled − superseded
 Session = { "id": "uuid", "name": "aw-m1", "role": "worker", "externalRole": "repo" | null,
             "origin": "foreman/orion/Orion" | null, "launchedBy": "skills-5d" | null,

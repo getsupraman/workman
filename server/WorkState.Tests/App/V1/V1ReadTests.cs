@@ -25,13 +25,13 @@ public sealed class V1ReadTests(PostgresFixture fixture)
         Assert.Equal(v1.World.ProjectId, project.GetProperty("item").GetProperty("id").GetGuid());
         Assert.Equal("project", project.GetProperty("item").GetProperty("kind").GetString());
 
-        // Leaf kinds only: tasks 1.1–1.7 count, phases and the finding F-1 do not.
+        // Tasks 1.1–1.7 and the empty phase 2 count; phase 1, which has children, and the finding F-1 do not.
         var rollup = project.GetProperty("rollup");
-        Assert.Equal(7, rollup.GetProperty("total").GetInt32());
+        Assert.Equal(8, rollup.GetProperty("total").GetInt32());
         Assert.Equal(2, rollup.GetProperty("done").GetInt32());
         Assert.Equal(1, rollup.GetProperty("inProgress").GetInt32());
         Assert.Equal(2, rollup.GetProperty("blocked").GetInt32());
-        Assert.Equal(2, rollup.GetProperty("open").GetInt32());
+        Assert.Equal(3, rollup.GetProperty("open").GetInt32());
 
         var run = Assert.Single(Array(project, "runs"));
         Assert.Equal(v1.World.RunId, run.GetProperty("item").GetProperty("id").GetGuid());
@@ -509,6 +509,39 @@ public sealed class V1ReadTests(PostgresFixture fixture)
         var response = await Reader(server).GetAsync($"/api/v1/inbox?project={Guid.CreateVersion7()}", Ct);
 
         Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+    }
+
+    /// <summary>
+    /// An empty phase is one item of work, so it counts in the rollup the dashboard prints (state.ts
+    /// tally() counts it the same). A phase with children, even only cancelled ones, and a finding do not.
+    /// </summary>
+    [Fact]
+    public async Task The_rollup_counts_an_empty_phase_as_one_item()
+    {
+        var world = await WriteSeed.CreateAsync(fixture);
+
+        await WriteSeed.ChildAsync(world, world.PhaseId, "F-1", kind: "finding");
+        await WriteSeed.ChildAsync(world, world.RunId, "3", kind: "phase", status: ItemStatus.Done);
+        var withCancelled = await WriteSeed.ChildAsync(world, world.RunId, "4", kind: "phase");
+        await WriteSeed.ChildAsync(world, withCancelled, "4.1", status: ItemStatus.Cancelled);
+
+        await using var server = await StartAsync(fixture, world.Slug);
+        var reader = Reader(server);
+        var rows = Array(await GetAsync(reader, $"/api/v1/runs/{world.RunId}/board"), "rows");
+
+        // 1.1 open, phase 2 open and empty, phase 3 done and empty, 4.1 cancelled; phases 1 and 4 and F-1 are not items.
+        var run = ByRef(rows, "run-a").GetProperty("rollup");
+        Assert.Equal(4, run.GetProperty("total").GetInt32());
+        Assert.Equal(2, run.GetProperty("open").GetInt32());
+        Assert.Equal(1, run.GetProperty("done").GetInt32());
+        Assert.Equal(1, run.GetProperty("cancelled").GetInt32());
+
+        Assert.Equal(0, ByRef(rows, "2").GetProperty("rollup").GetProperty("total").GetInt32());
+        Assert.Equal(1, ByRef(rows, "4").GetProperty("rollup").GetProperty("total").GetInt32());
+
+        var project = Assert.Single(Array(await GetAsync(reader, "/api/v1/overview"), "projects"));
+        Assert.Equal(4, project.GetProperty("rollup").GetProperty("total").GetInt32());
+        Assert.Equal(4, Assert.Single(Array(project, "runs")).GetProperty("rollup").GetProperty("total").GetInt32());
     }
 
     private static IEnumerable<string?> Flags(JsonElement row)

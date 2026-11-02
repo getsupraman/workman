@@ -54,7 +54,8 @@ type PlanGroup = { head: BoardRow | null; tally: Tally | null; rows: PlanRow[] }
 /**
  * The plan list: loose top-level work first under "Tasks", then one group per phase with its whole
  * subtree flattened beneath it. Row 0 of a board is the run itself and is never listed. Cancelled
- * rows are left out unless `cancelled` is set, an emptied cancelled phase with them.
+ * rows are left out unless `cancelled` is set, an emptied cancelled phase with them. A phase with no
+ * children at all is judged as a row itself, so an open empty phase stays under Open.
  */
 export function plan(board: Board, filter: Filter, cancelled = false): PlanGroup[] {
   const rows = board.rows
@@ -69,7 +70,8 @@ export function plan(board: Board, filter: Filter, cancelled = false): PlanGroup
 
     if (top.item.kind === 'phase') {
       const inner = below.filter((r) => keep(filter, r, cancelled)).map((row) => ({ row, indent: row.depth - 2 }))
-      if (inner.length === 0 && (filter !== 'all' || !keep(filter, top, cancelled))) continue
+      const listable = filter === 'all' || below.length === 0
+      if (inner.length === 0 && !(listable && keep(filter, top, cancelled))) continue
       phases.push({ head: top, tally: tally(below), rows: inner })
       continue
     }
