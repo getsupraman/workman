@@ -9,7 +9,7 @@ All notable changes to the Workman server and the `workman` plugin are recorded 
 
 ## [2.1.0] — 2026-11-03
 
-Server 2.1.0 and plugin 2.1.0: the 1.x rename workarounds go. No migration.
+Server 2.1.0 and plugin 2.1.0: the 1.x rename workarounds go, and rules number correctly again. One additive migration (`ConstraintRefAllocator`).
 
 ### Changed — the dashboard's prompts state the goal
 
@@ -24,6 +24,13 @@ Server 2.1.0 and plugin 2.1.0: the 1.x rename workarounds go. No migration.
   the current code and the human's later decisions, propose keep, reword, retire or rescope and the missing
   rules, and never retire a red line without an explicit yes for it.
 - `docs/language.md`: the vocabulary for talking to an AI that uses Workman, with example conversations.
+
+### Fixed
+
+- `work_constrain` numbers a new rule past the rules of projects the caller is not a member of. Its probe read
+  `constraint_rule` under project access, so it offered a `C…` a hidden rule held and every new rule was refused by
+  `constraint_ref_unique`. The number now comes from `workman_free_constraint_ref` (migration
+  `ConstraintRefAllocator`), which counts every rule of the workspace and returns only the number.
 
 ### Removed
 
