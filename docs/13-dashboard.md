@@ -1,6 +1,6 @@
 # 13 — The dashboard
 
-Built from the prototype the owner approved (WorkState item
+Built from the prototype the owner approved (Workman item
 `mature/ui`), on the [v1 read API](10-read-api.md) and one write: archiving a project
 (`POST /api/projects/{id}/archive|unarchive`, doc 10). Everything else agents write, through the MCP
 tools. Code: `server/frontend` (SolidJS, `@solidjs/router`, Vite, Tailwind 4; no other dependency).

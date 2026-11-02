@@ -171,7 +171,7 @@ nothing"* — pointed at ourselves.
 **The protocol:**
 
 1. A **fresh** session. The server registered, a seeded project present, **no skill loaded**, no
-   `CLAUDE.md` describing WorkState, nothing in the repo that documents the tools.
+   `CLAUDE.md` describing Workman, nothing in the repo that documents the tools.
 2. **The entire prompt is one sentence of intent**, and it must be *outcome* language a user would
    actually type. Permitted:
    > *"Use workstate to pick up the next task on the atlas entity-store run and take it to done."*

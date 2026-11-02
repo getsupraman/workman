@@ -26,11 +26,11 @@ controller model ──▶ agent_launch(name, brief, repo_root, controller, perm
 agent_stop(id) ──▶ claude stop [rm] · DELETE /api/agent-sessions/{id} (revoke) · delete mcp-<name>.json
 ```
 
-Why a **plugin** server and not a WorkState tool: WorkState runs in a container; launching `claude`
+Why a **plugin** server and not a Workman tool: Workman runs in a container; launching `claude`
 needs the host's CLI, the worktree on disk and the user's Claude login. A stdio server that Claude
 Code starts for the session is a host process and has all three (doc 12 §1).
 
-## 2. WorkState: per-session tokens
+## 2. Workman: per-session tokens
 
 All new; additive; **not** under `/api/v1` (v1 is read-only by rule).
 
@@ -153,10 +153,10 @@ is **refused** with the reason — never silently launched with the inherited co
 ### `agent_stop` `{id | name, remove?, keep_brief?}`
 `claude stop` (and `rm` with `remove`), revoke the minted token, delete `mcp-<name>.json` always (it
 holds a secret; the brief does not). State of launched agents is kept in `${CLAUDE_PLUGIN_DATA}`
-(name, id, repo_root, WorkState session id, config path — never the token).
+(name, id, repo_root, Workman session id, config path — never the token).
 
 ### `agent_list`
-`claude agents --json` joined with that state: name, id, status, waitingFor, repo_root, WorkState
+`claude agents --json` joined with that state: name, id, status, waitingFor, repo_root, Workman
 session and role.
 
 ### Results

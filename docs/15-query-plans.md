@@ -310,7 +310,7 @@ Two fixes, both in migration `TenantRls`:
    par and halves the rest, but cannot give the indexes back.
 2. **LEAKPROOF** on `arraycontains(anyarray, anyarray)`, `lower(text)`, `ts_match_vq(tsvector, tsquery)`
    and `to_tsvector(regconfig, text)`. The fourth serves `note_search_idx`. It was found on the 5k seed
-   (§7.2): without it, search took 20.6 ms instead of 2.2 ms. Why this is safe for WorkState, and what it
+   (§7.2): without it, search took 20.6 ms instead of 2.2 ms. Why this is safe for Workman, and what it
    needs, is in doc 02 §15.
 
 **Verdict on server time: passes.** Frontier +6%, rollup +15%, board −27%. Every other read measured is

@@ -24,7 +24,7 @@ Four questions from the owner, answered against what is verified rather than ass
 | Alive between sessions | ✗ | **✓** |
 | Can host a web UI | ✗ — it dies with the session | **✓** |
 
-So: **WorkState is not "always running" because it is a plugin. It is always running because you
+So: **Workman is not "always running" because it is a plugin. It is always running because you
 run it.** Claude Code only ever *connects*; it never manages the process.
 
 Two consequences that were not obvious when the transport was chosen:
@@ -235,7 +235,7 @@ warns about — and the file path would rot, because nobody would exercise it.
   > And the deeper reason it was wrong: **a brief for a nested session is not bookkeeping.** Its
   > allow-list, its banned-shell-shapes table, its “established facts, do not verify them” block and
   > its named environment noise are the things that stop an agent parking — fourteen launches in
-  > the WorkState run were lost to defects in exactly those sections, and **not one** would have
+  > the run that built Workman were lost to defects in exactly those sections, and **not one** would have
   > been prevented by anything the store holds. `work_brief` renders an *item's* state; it knows
   > nothing about which verbs a session may run. **`briefs.md` mostly stays.**
 - **What stays, because the store cannot hold judgement:** the cost table, the risk dial, red-checks,

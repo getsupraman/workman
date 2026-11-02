@@ -186,7 +186,7 @@ is a **separate undertaking**, gated on Phase 4 being real:
   cancelled by measurement (task 4.3 above, in this same file). **`briefs.md` mostly stays**, and
   not merely for want of a destination: a nested session's brief is the allow-list, the banned
   shell shapes, the established facts and the named environment noise. Fourteen launches in the
-  WorkState run were lost to defects in those sections and **not one** would have been prevented
+  run that built Workman were lost to defects in those sections and **not one** would have been prevented
   by anything the store holds. `work_brief` renders an *item's* state; it does not know which
   verbs a session may run.
 - `assets/LEDGER.template.md`, `assets/CONVENTIONS.template.md` → deleted.
