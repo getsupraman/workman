@@ -74,14 +74,15 @@ rebuilds it for a fresh session or for the same one after compaction: the goal, 
 the rules that bind it, the open assumptions, the notes left for it, and the literal next call. It is
 generated from the record every time, so it can't go stale.
 
-**What you see.** The first call of every session, and the whole recovery (abridged; the format is
-specified in [docs/06-rendering.md](docs/06-rendering.md#4-work_brief--the-recovery-payload)):
+**What you see.** The first call of every session is all it needs to pick up where things stand
+(an abridged example; the format is specified in
+[docs/06-rendering.md](docs/06-rendering.md#4-work_brief--the-recovery-payload)):
 
 ```
-RUN checkout-v2  ·  project shop  ·  branch feat/checkout-v2
-GOAL A guest's cart survives sign-in: merged into the account's cart, nothing lost or doubled.
+RUN checkout-v2  ·  branch feat/checkout-v2
+GOAL Ship the new checkout behind a flag: carts survive a sign out, payment fits on one page.
 
-WHERE  phase 1 of 3 — Cart merge. 1 of 2 tasks done, gate not yet run.
+WHERE  phase 1 of 3 — Saved carts. 1 of 3 tasks done, gate not yet run.
 NEXT   work_status(ref:"1.2", to:"in_progress")   ← the literal next action
 
 BINDING (2)
