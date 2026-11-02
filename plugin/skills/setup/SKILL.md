@@ -65,7 +65,8 @@ is not broken, it is a session that began before the registration did. The same 
 `workman` line that says it needs authentication: that is an OAuth registration nobody has signed
 in to yet. Change nothing; the user signs in (§5).
 
-A `workstate` line is a 1.x registration. Running §3 moves it to `workman` (below).
+A `workstate` line is a 1.x registration. §3 registers `workman` beside it and leaves it alone; once
+`workman` works, the user removes it: `claude mcp remove workstate -s <scope>`.
 
 ---
 
@@ -112,7 +113,7 @@ or in PowerShell:
 | `--auth oauth\|token` | `-Auth …` | how the registration signs in (below); **the default is the right choice** |
 | `--role orchestrator\|controller\|worker` | `-Role …` | token only: whose token is registered; orchestrator if you pass none |
 | `--agent <session>` | `-Agent <session>` | register at **local** scope (this project only) with `X-Workman-Agent: <session>`, so sessions here are recorded by that name |
-| `--name <name>` | `-Name <name>` | registration name (default `workman`; passing it skips the move below) |
+| `--name <name>` | `-Name <name>` | registration name (default `workman`) |
 | `--port <port>` | `-Port <port>` | host port, used only when it writes a **new** `.env` (default 5290) |
 | `--image-version <tag>` | `-ImageVersion <tag>` | pin the image instead of `latest` |
 | `--update` | `-Update` | pull the image again (home) or rebuild it (clone) |
@@ -152,21 +153,6 @@ The roles nest — a controller token also satisfies orchestrator and worker. Re
 `/workman:agents`'s `agent_launch` get their own minted token and name instead; sign it in once with
 `agent_signin`, or, headless, give it `workman.env_file` = the `.env` this script names
 (`<home>/.env` or `<clone>/server/.env`) — a path, which is all it needs.
-
-**A 1.x registration named `workstate` is moved to `workman`.** Without `--name`, when this scope (user,
-or local with `--agent`) holds a `workstate` registration and no `workman` one, the script adds `workman`
-with the same url and token, each `X-WorkState-*` header renamed `X-Workman-*` (a 2.0 server reads no
-other) and its headersHelper pointed at this home's copy, then removes `workstate` (`claude mcp add-json`,
-then `claude mcp remove`). The entry goes from Claude Code's config to Claude Code again: neither you nor the
-script sees or prints its token. It prints one line:
-
-```
-move      'workstate' -> 'workman' (user scope; http://127.0.0.1:5290/mcp, session helper, no token stored); with OAuth sign in again: /mcp, pick 'workman', Authenticate
-```
-
-An OAuth registration asks for a new sign-in under its new name; that is expected. When both names
-are registered, nothing is moved and the line says which command removes the old one; without `node`
-nothing is moved, `workman` is registered fresh, and the line names the command that removes `workstate`.
 
 Each step prints one line; every step is idempotent, so running it again is always safe:
 

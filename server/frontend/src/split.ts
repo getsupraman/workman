@@ -3,7 +3,6 @@
  * the right. Every input is a measured width of the run area, never the window: the sidebar, a
  * zoom and a narrow browser all change how much room there really is.
  */
-import { adoptOldKey } from './storage.ts'
 
 /** The centre column, page gutters included: below this the list stops being readable. */
 export const LIST_MIN = 440
@@ -45,7 +44,6 @@ const local = (): Store => localStorage
 
 /** The remembered width, or `undefined` for "no preference" when nothing usable is stored. */
 export function rememberedWidth(store: () => Store = local): number | undefined {
-  adoptOldKey(WIDTH_KEY, store)
   try {
     const raw = store().getItem(WIDTH_KEY)
     const value = raw === null ? NaN : Number(raw)

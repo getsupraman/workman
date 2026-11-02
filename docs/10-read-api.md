@@ -182,8 +182,7 @@ characters. A used, replaced, expired or unknown token is `404 {error}` on both.
    `WWW-Authenticate: Bearer resource_metadata="<origin>/.well-known/oauth-protected-resource/api"`
    (a wrong static or `wss_` token still gets the bare `401`). Scopes: `workman.read` for
    `GET /api/v1/*` and `/api/stream`, `workman.sessions` for the agent-session group (doc 14 §2).
-   The 1.x scope names `workstate.read` and `workstate.sessions` are accepted as aliases of those two
-   in authorize, token and refresh requests, until Supraman has switched;
+   The 1.x scope names `workstate.read` and `workstate.sessions` are refused (`invalid_scope`) since server 2.1;
    a valid `/api` token without the route's scope is `403`. The scopes bind the OAuth principal only:
    the cookie, static tokens and `wss_` tokens need no scope. The user behind the token is the
    signed-in dashboard user, in the one tenant they approved it in (doc 08 §4), mapped to the

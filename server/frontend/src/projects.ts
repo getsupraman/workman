@@ -2,7 +2,6 @@ import { createSignal } from 'solid-js'
 import type { ProjectOverview, RunOverview } from './api.ts'
 import { projectName } from './format.ts'
 import { CLOSED } from './state.ts'
-import { adoptOldKey } from './storage.ts'
 
 /** A project with an open run, or with activity this recent, is Active; the rest are Quiet. */
 export const ACTIVE_DAYS = 14
@@ -43,7 +42,6 @@ const KEY = 'workman.archived-open'
 
 /** Storage can throw outright (a private window, blocked site data); the toggle then lasts the page. */
 function storedOpen(): boolean {
-  adoptOldKey(KEY)
   try {
     return localStorage.getItem(KEY) === '1'
   } catch {

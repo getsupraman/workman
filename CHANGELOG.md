@@ -7,7 +7,11 @@ All notable changes to the Workman server and the `workman` plugin are recorded 
 
 ## [Unreleased]
 
-### Server — the dashboard's prompts state the goal
+## [2.1.0] — 2026-11-03
+
+Server 2.1.0 and plugin 2.1.0: the 1.x rename workarounds go. No migration.
+
+### Changed — the dashboard's prompts state the goal
 
 - The copy-paste prompts (`PromptCatalogue`, doc 13) no longer spell out `work_*` calls. Each states its goal
   in the words of the new [docs/language.md](docs/language.md), starts from the brief of the scope it was
@@ -21,7 +25,18 @@ All notable changes to the Workman server and the `workman` plugin are recorded 
   rules, and never retire a red line without an explicit yes for it.
 - `docs/language.md`: the vocabulary for talking to an AI that uses Workman, with example conversations.
 
-### Plugin 2.0.1
+### Removed
+
+- Server: the OAuth scope aliases `workstate.read` and `workstate.sessions`. An authorize, token or refresh
+  request naming one is refused with `invalid_scope`; a token granted under one before the upgrade no longer
+  reaches `/api` (`403`), so its client signs in again for `workman.read` / `workman.sessions`. A client row
+  registered under 1.x keeps its inert `scp:workstate.*` permissions beside the 2.0 ones.
+- Dashboard: the one-time move of a remembered choice from its `workstate.*` localStorage key to `workman.*`.
+  A choice still stored under the old key is forgotten once: the default applies.
+- Plugin (`/workman:setup`): the move of a 1.x `workstate` registration to `workman` (`move-registration.mjs`).
+  Setup now registers `workman` beside it; remove the old one with `claude mcp remove workstate -s <scope>`.
+
+## [Plugin 2.0.1] — 2026-11-02
 
 - `agent_launch` accepts `workstate: {…}` as the 1.x name of `workman: {…}` (one or the other, not both), so a
   Supraman 0.1.2 repo-controller can still launch units. It goes when Supraman has switched.

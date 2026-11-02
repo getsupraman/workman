@@ -158,7 +158,7 @@ public sealed class OAuthTests(PostgresFixture fixture)
     /// OpenIddict refuses some requests before it has validated the redirect URI, and those it answers
     /// itself rather than redirecting; either way the error is named and no code is issued.
     /// </summary>
-    private static async Task AssertRefusedAsync(HttpResponseMessage response, string error)
+    internal static async Task AssertRefusedAsync(HttpResponseMessage response, string error)
     {
         if (response.StatusCode == HttpStatusCode.Redirect)
         {

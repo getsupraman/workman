@@ -137,9 +137,6 @@ const SCOPES: Record<string, Omit<ScopeLine, 'scope'> | null> = {
   },
   'workman.read': READ,
   'workman.sessions': SESSIONS,
-  // The 1.x names, which a client may still ask for: the same access, so the same words.
-  'workstate.read': READ,
-  'workstate.sessions': SESSIONS,
   offline_access: {
     label: 'Stay connected',
     detail: 'Keep access without asking again until you revoke it or it goes unused for 30 days.',

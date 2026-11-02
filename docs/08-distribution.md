@@ -6,9 +6,8 @@ Four questions from the owner, answered against what is verified rather than ass
 > plugin 2.0 every machine-facing name is `workman`: `serverInfo.name`, the registration
 > `/workman:setup` writes (so `mcp__workman__*` tools), the `X-Workman-*` headers, the `WORKMAN_*`
 > environment and `Workman:*` settings, the compose project and volume, the home `~/.workman`. The 1.x
-> `workstate` names are no longer read, with one exception: the OAuth scopes `workstate.read` and
-> `workstate.sessions` stay accepted as aliases of `workman.read` and `workman.sessions` until Supraman
-> has switched. `CHANGELOG.md` holds the upgrade guide. A public URL is still one OAuth issuer, and `WORKMAN_PUBLIC_URLS` adds more (§4).
+> `workstate` names are no longer read; since server 2.1 that includes the OAuth scopes `workstate.read` and
+> `workstate.sessions`. `CHANGELOG.md` holds the upgrade guide. A public URL is still one OAuth issuer, and `WORKMAN_PUBLIC_URLS` adds more (§4).
 
 ---
 
@@ -282,9 +281,8 @@ routes.
 | minted `wss_…` (per session) | none — `POST /api/agent-sessions` with an orchestrator or controller bearer returns it once; the store keeps only its SHA-256. Expires after `ttlHours` (default 72, max 720) **unused** — an idle window each use renews, no hard cap — revoked by `DELETE` | exactly what a static token of its granted role reaches (never above its minter's role), and its calls are that session's: `X-Workman-Agent` is ignored |
 
 Foreman signs in with OAuth only (autowork m5/43): it registers by DCR, signs in with PKCE for the
-scopes `workman.read workman.sessions offline_access` (a Supraman that still asks for the 1.x
-`workstate.read workstate.sessions` is served the same: the server accepts those as aliases until
-Supraman has switched), and mints a `wss_` session per agent it launches. It holds no reader token.
+scopes `workman.read workman.sessions offline_access` (the 1.x `workstate.*` names are refused with
+`invalid_scope` since server 2.1), and mints a `wss_` session per agent it launches. It holds no reader token.
 
 **The dashboard's users (m48).** The cookie is issued to a row of `app_user` (doc 02 §12a), not to the
 configured credential. `Workman:Dashboard:{Username,Password}` (`WORKMAN_DASHBOARD_USERNAME` /

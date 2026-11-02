@@ -16,9 +16,7 @@
                          oauth when the server offers it (its OAuth metadata answers 200), else token
   -Role <role>           orchestrator (default) | controller | worker - whose token to register
                          (token only: an OAuth sign-in always gets the controller toolset)
-  -Name <name>           registration name (default workman). Without -Name, a 1.x registration named
-                         workstate in the same scope is moved to workman: same url and token, its
-                         X-WorkState-* headers renamed X-Workman-*; nothing is printed of its token
+  -Name <name>           registration name (default workman)
   -Agent <session>       register at LOCAL scope (this directory's project only) with the header
                          X-Workman-Agent: <session>, so sessions here are recorded by that name
   -Port <port>           host port, written only into a NEW .env (default 5290)
@@ -285,42 +283,7 @@ if ($Agent) { $scope = 'local' }
 $getOut = ''
 $here = (Get-Location).Path
 
-# the move - a 1.x registration becomes '$Name' with the same url, scope and token, its X-WorkState-* headers
-# renamed and its headersHelper pointed at this home's copy. The plan's third line is the entry, token
-# included: captured here, never printed.
 $helperCommand = "node `"$($helperFile.Replace('\', '/'))`"\"
-$legacyName = 'workstate'
-$nameGiven = $PSBoundParameters.ContainsKey('Name')
-if (-not $nameGiven -and (Get-Command claude -ErrorAction SilentlyContinue)) {
-    if ($node) {
-        $plan = @(& node (Join-Path $scriptDir 'move-registration.mjs') --from $legacyName --to $Name --scope $scope --dir $here --helper $helperCommand 2>$null)
-        $verdict = if ($plan.Count -gt 0) { [string]$plan[0] } else { 'not checked: the move check printed nothing' }
-        if ($verdict -eq 'move' -and $plan.Count -ge 3) {
-            $moveJson = [string]$plan[2]
-            if ($DryRun) { Status 'move' "dry run, would move '$legacyName' to '$Name' ($scope scope; $($plan[1]))" }
-            else {
-                # Windows PowerShell 5.1 strips the JSON's quotes from a native argument unless they are escaped.
-                if ($PSVersionTable.PSVersion.Major -lt 7 -or (Get-Variable PSNativeCommandArgumentPassing -ValueOnly -ErrorAction SilentlyContinue) -eq 'Legacy') {
-                    $moveJson = $moveJson.Replace('"', '\"')
-                }
-                & claude mcp add-json --scope $scope $Name $moveJson *> $null
-                if ($LASTEXITCODE -ne 0) { Die "move      claude mcp add-json --scope $scope $Name failed; '$legacyName' is left as it is" }
-                & claude mcp remove $legacyName --scope $scope *> $null
-                if ($LASTEXITCODE -ne 0) { Die "move      '$Name' added, but claude mcp remove $legacyName --scope $scope failed: run it yourself" }
-                Status 'move' "'$legacyName' -> '$Name' ($scope scope; $($plan[1])); with OAuth sign in again: /mcp, pick '$Name', Authenticate"
-            }
-            $moveJson = $null
-            $plan = $null
-        }
-        elseif ($verdict -eq 'both') {
-            Status 'move' "'$legacyName' and '$Name' are both registered ($scope scope): '$legacyName' left as it is; once '$Name' works, run: claude mcp remove $legacyName -s $scope"
-        }
-        elseif ($verdict -ne 'none') { Status 'move' $verdict }
-    }
-    else {
-        Status 'move' "not checked (needs node): a 1.x '$legacyName' registration is not moved; once '$Name' works, run: claude mcp remove $legacyName -s $scope"
-    }
-}
 if (-not (Get-Command claude -ErrorAction SilentlyContinue)) {
     if (-not $DryRun) { Die 'register  the claude CLI is not on PATH: install Claude Code, or run this where it is' }
 }
