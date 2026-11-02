@@ -1,15 +1,15 @@
 ---
 name: setup
-description: "Get the WorkState MCP server running and registered, so the `work_*` tools are callable. WorkState is a self-hosted HTTP MCP server (a .NET service plus a Postgres, in Docker, on your own machine) that holds what coding agents are doing - projects, runs, phases, tasks, claims, evidence and an append-only journal - with an operator dashboard on the same port. This skill detects which of four states the machine is in and runs one shipped script that does only the part that is missing: writes the local-only `.env` with random tokens, pulls the published image (no clone needed) or builds from a clone, starts it, registers it with `claude mcp add` - with OAuth sign-in by default, so no token is stored, or with a role's token - and proves that the server answers the way that registration needs - without the model ever reading, pasting or curling a token. Also backs up and restores the database. USE FOR: `work_brief` or any other `work_*` tool is missing and a skill told you it needs the store; a first install of WorkState; \"the workstate tools are gone\"; the server is up but this session cannot see it; backing up or restoring WorkState. DO NOT USE FOR: using the tools once they work (call `work_brief`), or deploying WorkState anywhere but localhost."
+description: "Get the Workman MCP server running and registered, so the `work_*` tools are callable. Workman is a self-hosted HTTP MCP server (a .NET service plus a Postgres, in Docker, on your own machine) that holds what coding agents are doing - projects, runs, phases, tasks, claims, evidence and an append-only journal - with an operator dashboard on the same port. This skill detects which of four states the machine is in and runs one shipped script that does only the part that is missing: writes the local-only `.env` with random tokens, pulls the published image (no clone needed) or builds from a clone, starts it, registers it with `claude mcp add` - with OAuth sign-in by default, so no token is stored, or with a role's token - and proves that the server answers the way that registration needs - without the model ever reading, pasting or curling a token. Also backs up and restores the database. USE FOR: `work_brief` or any other `work_*` tool is missing and a skill told you it needs the store; a first install of Workman; \"the workstate tools are gone\"; the server is up but this session cannot see it; backing up or restoring Workman. DO NOT USE FOR: using the tools once they work (call `work_brief`), or deploying Workman anywhere but localhost."
 ---
 
-# WorkState setup
+# Workman setup
 
 **After running this, `work_brief` works — in the *next* session, not this one.** MCP servers are
 resolved at session start; nothing you do here can add a tool to the session you are standing in.
 Say that up front, or your own success reads as a failure.
 
-WorkState is a server **you** run. Claude Code only ever connects to it. Everything below is one
+Workman is a server **you** run. Claude Code only ever connects to it. Everything below is one
 script, shipped next to this file — `assets/setup.sh` (bash: macOS, Linux, WSL, Git Bash)
 and `assets/setup.ps1` (PowerShell) — and your job is to pick its flags and read its status
 lines. Find it with `echo "$CLAUDE_PLUGIN_ROOT"`: the scripts are at
@@ -70,14 +70,14 @@ A `workstate` line is a registration from before the rename. It keeps working un
 
 ---
 
-## 2. Which install: the WorkState home, or a clone
+## 2. Which install: the Workman home, or a clone
 
-**The default needs no clone.** The script keeps everything in the **WorkState home**,
+**The default needs no clone.** The script keeps everything in the **Workman home**,
 `~/.workstate/` (`%USERPROFILE%\.workstate` on Windows): a `compose.yml` that pulls the published
 image `ghcr.io/getsupraman/workman`, and the `.env`. A machine needs Docker and nothing else.
 
-Use **`--clone <path>`** instead when the machine already runs WorkState from a clone of
-`github.com/getsupraman/workman` (a `<clone>/server/.env` exists), or the user develops WorkState: the script
+Use **`--clone <path>`** instead when the machine already runs Workman from a clone of
+`github.com/getsupraman/workman` (a `<clone>/server/.env` exists), or the user develops Workman: the script
 then uses `<clone>/server/compose.yml`, which builds the image from source, and `<clone>/server/.env`.
 
 **An existing clone install keeps `--clone`.** Both composes use the project name `workstate` and so

@@ -1,6 +1,6 @@
 <#
 .SYNOPSIS
-  Install, start, register and prove a local WorkState server.
+  Install, start, register and prove a local Workman server.
 .DESCRIPTION
   Twin of setup.sh: same steps, same flags, same status lines. Change both together.
 
@@ -8,8 +8,8 @@
   the harness's own config, and nothing here echoes them (SKILL.md "What the model never sees").
 
   -Clone <path>          use a clone of github.com/getsupraman/workman: <path>/server/compose.yml (builds the
-                         image) and <path>/server/.env. Without it: the WorkState home.
-  -HomeDir <dir>         the WorkState home (default %USERPROFILE%\.workstate): compose.yml (pulls the
+                         image) and <path>/server/.env. Without it: the Workman home.
+  -HomeDir <dir>         the Workman home (default %USERPROFILE%\.workstate): compose.yml (pulls the
                          published image) and .env
   -Auth <oauth|token>    how the registration authenticates. oauth: no token stored, the user signs in
                          on first use (/mcp -> Authenticate). token: a role's bearer token. Default:

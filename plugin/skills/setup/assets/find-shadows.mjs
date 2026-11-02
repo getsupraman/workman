@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// find-shadows.mjs — lists every registration of the WorkState server that wins over the user-scope
+// find-shadows.mjs — lists every registration of the Workman server that wins over the user-scope
 // one: a local-scope entry in the claude config (projects[<dir>].mcpServers[<name>]) and a
 // project-scope entry in <dir>/.mcp.json. Claude Code resolves local > project > user, so a session in
 // such a directory never sees the user registration or its headersHelper.

@@ -1,6 +1,6 @@
 ---
 name: controller
-description: "Drive a QUEUE of large, mostly independent undertakings to completion — a backlog of bugs, issues, TODOs, migrations or features — by sequencing them, briefing a nested Claude for each, steering it, independently verifying what it produced, landing it, and recording the decisions in the WorkState store (the `work_*` MCP tools), which this skill requires. One level above /workman:orchestrate: orchestrate executes ONE plan inside a session, a controller runs many plans across sessions and owns the integration, the verification and the record. USE FOR - a backlog too large for one session; several medium-to-large units that are unrelated to each other; work where each unit needs its own full context window; anything where you must be able to say afterwards what was done, what was deferred and why. DO NOT USE FOR - a single plan (use /workman:orchestrate), a task that fits one subagent (use the Agent tool), or a queue you intend to do yourself."
+description: "Drive a QUEUE of large, mostly independent undertakings to completion — a backlog of bugs, issues, TODOs, migrations or features — by sequencing them, briefing a nested Claude for each, steering it, independently verifying what it produced, landing it, and recording the decisions in Workman (the `work_*` MCP tools), which this skill requires. One level above /workman:orchestrate: orchestrate executes ONE plan inside a session, a controller runs many plans across sessions and owns the integration, the verification and the record. USE FOR - a backlog too large for one session; several medium-to-large units that are unrelated to each other; work where each unit needs its own full context window; anything where you must be able to say afterwards what was done, what was deferred and why. DO NOT USE FOR - a single plan (use /workman:orchestrate), a task that fits one subagent (use the Agent tool), or a queue you intend to do yourself."
 ---
 
 # Controller
@@ -29,13 +29,13 @@ launch. This skill is the **discipline** of running the queue on top of it, and 
 ## 0. Preflight — before anything else
 
 **Call `work_brief(repo: {remote, root})`.** The queue, its order, the evidence and the record live in
-WorkState; this skill has no other place to keep them. One project per repository, found from the
+Workman; this skill has no other place to keep them. One project per repository, found from the
 repo: `remote` is `git remote get-url origin` (omit it with no origin), `root` the parent directory of
 `git rev-parse --path-format=absolute --git-common-dir` — the main checkout, the same from any
 worktree. A session `agent_launch` started already carries both; a bare `work_brief()` finds its
 project.
 
-- **No `work_*` tools in your list** → tell the human in one line: *"controller needs the WorkState
+- **No `work_*` tools in your list** → tell the human in one line: *"controller needs the Workman
   MCP server and this session cannot see it — run `/workman:setup`."* Then stop. There is no
   markdown fallback.
 - **`work_brief` exists but `work_constrain` does not** → the server is older than this skill. Say so
@@ -141,10 +141,10 @@ the agents server is unavailable). Per unit:
   routine work. It is set per launch, so choose it per unit.
 - `workstate.role: "worker"` for every unit. The agent then writes under its own minted token, its
   evidence is a **worker's**, and it can never close the unit — the close stays yours.
-- No credential to pass once the human has run `agent_signin` for that WorkState server
+- No credential to pass once the human has run `agent_signin` for that Workman server
   (`/workman:agents` §1): the launch mints with that grant, and a missing or expired one is
   refused with the sign-in call to make. Headless, pass `workstate.env_file` — the PATH of the
-  WorkState `.env` (`~/.workstate/.env`, or `<clone>/server/.env`), never a value; it wins over the
+  Workman `.env` (`~/.workstate/.env`, or `<clone>/server/.env`), never a value; it wins over the
   grant. Either way no token reaches your transcript.
 - `agent_stop` when the unit is done; it revokes the token.
 

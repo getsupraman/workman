@@ -1,4 +1,4 @@
-# WorkState without a clone: pulls the published image instead of building server/Dockerfile.
+# Workman without a clone: pulls the published image instead of building server/Dockerfile.
 # Keep the services in step with server/compose.yml; only `image:` differs. The project name is the same
 # (`workstate`), so a machine that used the clone-based compose keeps its volume and its data.
 # /workman:setup copies this file to ~/.workstate/compose.yml and runs it with that directory's .env.

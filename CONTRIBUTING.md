@@ -61,7 +61,7 @@ claude plugin validate .
   plugin only when that version changes, so a skill or asset edit without a bump never arrives.
 - **User-visible changes go in [CHANGELOG.md](CHANGELOG.md).**
 - **Machine-facing names stay stable**: the MCP server name `workman`, the `work_*` tools, the
-  `X-Workman-*` headers, the environment variable names and the `WorkState.*` projects. Renaming one
+  `X-Workman-*` headers, the environment variable names and the settings keys. Renaming one
   needs a compatibility window.
 - **Nothing private.** This repository is public. No client or company names, private hosts or
   domains, tokens, or live data, in code, docs, tests, fixtures or commit messages. Use `example.com`,
