@@ -3,13 +3,13 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import fs from 'node:fs'
 import path from 'node:path'
-import { startServer, makeRepo, fakeWorkstate, CONTROLLER, CONTROLLER_TOKEN } from './helpers.mjs'
+import { startServer, makeRepo, fakeWorkman, CONTROLLER, CONTROLLER_TOKEN } from './helpers.mjs'
 
 /** @param {ReturnType<typeof startServer>} s @param {string} url @param {ReturnType<typeof makeRepo>} repo @param {string} name */
 async function launch(s, url, repo, name) {
     const r = await s.call('agent_launch', {
         name, brief: 'task.md', repo_root: repo.root, controller: CONTROLLER,
-        workstate: { env_file: repo.envFile, url },
+        workman: { env_file: repo.envFile, url },
     })
     assert.equal(r.isError, false, r.content[0].text)
     return r.structuredContent
@@ -17,7 +17,7 @@ async function launch(s, url, repo, name) {
 
 test('stop with keep_brief: claude stop, DELETE with the controller token, config deleted, brief kept', async () => {
     const repo = makeRepo()
-    const ws = await fakeWorkstate()
+    const ws = await fakeWorkman()
     const s = startServer()
     try {
         await launch(s, ws.url, repo, 'unit-s1')
@@ -44,7 +44,7 @@ test('stop with keep_brief: claude stop, DELETE with the controller token, confi
 
 test('stop by id with remove: claude stop and rm, brief deleted', async () => {
     const repo = makeRepo()
-    const ws = await fakeWorkstate()
+    const ws = await fakeWorkman()
     const s = startServer()
     try {
         await launch(s, ws.url, repo, 'unit-s2')
@@ -63,7 +63,7 @@ test('stop by id with remove: claude stop and rm, brief deleted', async () => {
 
 test('a failed revoke is an error, and the record is kept for a retry; the config is still deleted', async () => {
     const repo = makeRepo()
-    const ws = await fakeWorkstate()
+    const ws = await fakeWorkman()
     const s = startServer()
     try {
         await launch(s, ws.url, repo, 'unit-s3')
@@ -93,7 +93,7 @@ test('stop of an unknown name is refused', async () => {
 
 test('list joins claude agents --json with the launch records', async () => {
     const repo = makeRepo()
-    const ws = await fakeWorkstate()
+    const ws = await fakeWorkman()
     const s = startServer()
     try {
         await launch(s, ws.url, repo, 'unit-l1')
@@ -104,12 +104,12 @@ test('list joins claude agents --json with the launch records', async () => {
         assert.deepEqual(mine, {
             name: 'unit-l1', id: 'abc12345', status: 'busy', state: 'running', waitingFor: null,
             sessionId: '11111111-2222-3333-4444-555555555555', repo_root: repo.root,
-            workstate: { session: 'ws-42', role: 'worker', expiresAt: '2026-10-27T00:00:00Z' }, tracked: true,
+            workman: { session: 'ws-42', role: 'worker', expiresAt: '2026-10-27T00:00:00Z' }, tracked: true,
         })
         const other = rows.find((/** @type {any} */ x) => x.id === 'ffff0000')
         assert.equal(other.tracked, false)
         assert.equal(other.waitingFor, 'permission prompt')
-        assert.equal(other.workstate, null)
+        assert.equal(other.workman, null)
         assert.match(r.content[0].text, /unit-l1  abc12345  busy/)
     } finally {
         await s.close()

@@ -5,7 +5,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { execFileSync } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
-import { startServer, makeRepo, fakeWorkstate, CONTROLLER, tmp } from './helpers.mjs'
+import { startServer, makeRepo, fakeWorkman, CONTROLLER, tmp } from './helpers.mjs'
 import { normaliseRemote, normaliseRoot, repoKeys } from '../repo.mjs'
 
 const here = path.dirname(fileURLToPath(import.meta.url))
@@ -53,12 +53,12 @@ test('agent_launch from a worktree mints with the remote and the main root', asy
     const repo = repoWithOrigin()
     const worktree = path.join(tmp('wt'), 'launch')
     git(repo.root, 'worktree', 'add', '-q', '-b', 'launch', worktree)
-    const ws = await fakeWorkstate()
+    const ws = await fakeWorkman()
     const s = startServer()
     try {
         const r = await s.call('agent_launch', {
             name: 'unit-repo', brief: 'task.md', repo_root: worktree, controller: CONTROLLER,
-            workstate: { env_file: repo.envFile, url: ws.url },
+            workman: { env_file: repo.envFile, url: ws.url },
         })
         assert.equal(r.isError, false, r.content[0].text)
         const mint = ws.requests.find((q) => q.method === 'POST')

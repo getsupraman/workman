@@ -45,7 +45,7 @@ test('tools/list: five tools, each an object schema; enum params carry enums', a
         assert.deepEqual(props.permission_mode.enum, ['acceptEdits', 'auto', 'bypassPermissions', 'manual', 'dontAsk', 'plan'])
         assert.deepEqual(props.toolset.enum, ['none', 'readonly', 'fix'])
         assert.deepEqual(props.effort.enum, ['low', 'medium', 'high', 'xhigh', 'max'])
-        assert.deepEqual(props.workstate.properties.role.enum, ['worker', 'orchestrator', 'controller', 'none'])
+        assert.deepEqual(props.workman.properties.role.enum, ['worker', 'orchestrator', 'controller', 'none'])
     } finally {
         await s.close()
     }

@@ -1,6 +1,6 @@
 ---
 name: setup
-description: "Get the Workman MCP server running and registered, so the `work_*` tools are callable. Workman is a self-hosted HTTP MCP server (a .NET service plus a Postgres, in Docker, on your own machine) that holds what coding agents are doing - projects, runs, phases, tasks, claims, evidence and an append-only journal - with an operator dashboard on the same port. This skill detects which of four states the machine is in and runs one shipped script that does only the part that is missing: writes the local-only `.env` with random tokens, pulls the published image (no clone needed) or builds from a clone, starts it, registers it with `claude mcp add` - with OAuth sign-in by default, so no token is stored, or with a role's token - and proves that the server answers the way that registration needs - without the model ever reading, pasting or curling a token. Also backs up and restores the database. USE FOR: `work_brief` or any other `work_*` tool is missing and a skill told you it needs the store; a first install of Workman; \"the workstate tools are gone\"; the server is up but this session cannot see it; backing up or restoring Workman. DO NOT USE FOR: using the tools once they work (call `work_brief`), or deploying Workman anywhere but localhost."
+description: "Get the Workman MCP server running and registered, so the `work_*` tools are callable. Workman is a self-hosted HTTP MCP server (a .NET service plus a Postgres, in Docker, on your own machine) that holds what coding agents are doing - projects, runs, phases, tasks, claims, evidence and an append-only journal - with an operator dashboard on the same port. This skill detects which of four states the machine is in and runs one shipped script that does only the part that is missing: writes the local-only `.env` with random tokens, pulls the published image (no clone needed) or builds from a clone, starts it, registers it with `claude mcp add` - with OAuth sign-in by default, so no token is stored, or with a role's token - and proves that the server answers the way that registration needs - without the model ever reading, pasting or curling a token. Also backs up and restores the database. USE FOR: `work_brief` or any other `work_*` tool is missing and a skill told you it needs the store; a first install of Workman; \"the workman tools are gone\"; moving a 1.x workstate install to 2.0; the server is up but this session cannot see it; backing up or restoring Workman. DO NOT USE FOR: using the tools once they work (call `work_brief`), or deploying Workman anywhere but localhost."
 ---
 
 # Workman setup
@@ -22,7 +22,7 @@ The script reads them and hands them to Docker and to `claude mcp add` itself; *
 and you keep it that way:**
 
 - **never `Read`, `cat`, `grep` or open the `.env`**, and never write one yourself;
-- **never run `claude mcp get workman`** (nor `claude mcp get workstate`, its name before the rename) — it
+- **never run `claude mcp get workman`** (nor `claude mcp get workstate`, the 1.x name) — it
   prints the registration's `Authorization` header in clear. Use `claude mcp list`: it shows the URL and
   the status and no header;
 - never put a token on a command line, in a `curl`, or in a file you write.
@@ -53,7 +53,7 @@ claude mcp list
 curl -s -m 5 -o /dev/null -w "%{http_code}" http://127.0.0.1:5290/health
 ```
 
-| `workman` line in `claude mcp list` (or `workstate`, from before the rename) | `/health` | State | Do |
+| `workman` line in `claude mcp list` | `/health` | State | Do |
 |---|---|---|---|
 | none | fails / not `200` | **nothing present** | §2, then §3 |
 | present | fails / not `200` | **registered, server down** | §2, then §3 — the script keeps the registration |
@@ -65,30 +65,71 @@ is not broken, it is a session that began before the registration did. The same 
 `workman` line that says it needs authentication: that is an OAuth registration nobody has signed
 in to yet. Change nothing; the user signs in (§5).
 
-A `workstate` line is a registration from before the rename. It keeps working until server 2.0; running
-§3 moves it to `workman` (below).
+**A 1.x install is a sixth state.** A `workstate` line in `claude mcp list`, a `~/.workstate/` directory
+or a compose project named `workstate` (`docker ps -a --filter label=com.docker.compose.project=workstate`)
+is Workman 1.x, from before the rename. A 2.0 server reads none of its names, so it is **migrated**, not
+upgraded in place: §2a.
 
 ---
 
 ## 2. Which install: the Workman home, or a clone
 
 **The default needs no clone.** The script keeps everything in the **Workman home**,
-`~/.workstate/` (`%USERPROFILE%\.workstate` on Windows): a `compose.yml` that pulls the published
+`~/.workman/` (`%USERPROFILE%\.workman` on Windows): a `compose.yml` that pulls the published
 image `ghcr.io/getsupraman/workman`, and the `.env`. A machine needs Docker and nothing else.
 
 Use **`--clone <path>`** instead when the machine already runs Workman from a clone of
 `github.com/getsupraman/workman` (a `<clone>/server/.env` exists), or the user develops Workman: the script
 then uses `<clone>/server/compose.yml`, which builds the image from source, and `<clone>/server/.env`.
 
-**An existing clone install keeps `--clone`.** Both composes use the project name `workstate` and so
+**An existing clone install keeps `--clone`.** Both composes use the project name `workman` and so
 the same database volume — but the volume only accepts the Postgres password it was created with,
 which is in the clone's `.env`. Moving such a machine to the home means the user copies
-`<clone>/server/.env` to `~/.workstate/.env` first (a `cp`; nobody needs to read it). The script
+`<clone>/server/.env` to `~/.workman/.env` first (a `cp`; nobody needs to read it). The script
 refuses to write a new `.env` next to an existing database volume, so a wrong guess stops with
 `env  … already has a database volume` instead of locking the API out of its data.
 
 Never clone anything yourself: the home install does not need it, and a clone is a directory on
 someone else's machine that they choose.
+
+### 2a. Migrating a 1.x `workstate` install
+
+Workman 2.0 renamed everything machine-facing: the home `~/.workstate` is now `~/.workman`, the compose
+project and volume `workstate` are `workman`, the `.env` keys `WORKSTATE_*` are `WORKMAN_*`, and the
+registration is `workman`. When the script finds a 1.x install where the new one would go (a
+`~/.workstate/.env` or a `workstate` compose project, and no `~/.workman/.env` yet; with `--clone`, a
+`server/.env` that still has `WORKSTATE_*` keys), it **stops and offers the move** instead of installing
+a second, empty server beside it:
+
+```
+migrate   found a 1.x install (home /home/u/.workstate, project 'workstate'): run this again with --migrate to move it into /home/u/.workman, or with --fresh to install beside it
+```
+
+**Tell the user what `--migrate` does and get their go** — it stops their running 1.x server — then run
+the script again with `--migrate` (`-Migrate`). It:
+
+1. stops the 1.x `api`, and dumps the 1.x database with `pg_dump -Fc` inside its `db` container, to
+   `<new home>/backups/migrate-from-workstate-<time>.dump`;
+2. writes the new `.env` from the old one with **only the key names rewritten** (`sed 's/^WORKSTATE_/WORKMAN_/'`;
+   with `--clone`, in place, keeping the 1.x copy as `server/.env.1x`). No value is read or printed.
+   `POSTGRES_DB`, `POSTGRES_USER` and `POSTGRES_PASSWORD` are copied as they are (`workstate`, usually),
+   so the restored database keeps its owner; only a new install gets `workman` there. A pinned
+   `WORKSTATE_VERSION` line is dropped, because a 1.x image cannot read the 2.0 names;
+3. starts the new project's `db`, **refuses if its volume already holds tables**, recreates the 1.x
+   NOLOGIN role the dump's policies name (roles are not in a dump), and restores the dump in one
+   transaction — a failure restores nothing and leaves the 1.x install as it was;
+4. stops every 1.x container and **keeps its volume**, printing the command that removes both;
+5. starts the 2.0 `api` (its own EF migration takes the restored database to 2.0), then registers
+   and proves as usual — a `workstate` registration is **moved** to `workman` (below), same url, same
+   token.
+
+It is safe to run again: a marker file `<new home>/.migrated-from-workstate` skips the dump and restore
+the second time. `--from-home <dir>` and `--from-project <name>` (`-FromHome`, `-FromProject`) name a
+1.x install somewhere else. Every OAuth client signs in again after the move (the 2.0 server's key ring
+is new): the user does §5 step 2 once more, and `agent_signin` again for agents.
+
+Once the user has checked that the 2.0 server shows their work, they remove the 1.x container and
+volume with the command the `migrate` line printed. Do not run it for them.
 
 ---
 
@@ -109,7 +150,7 @@ or in PowerShell:
 | bash | PowerShell | Does |
 |---|---|---|
 | `--clone <path>` | `-Clone <path>` | use a clone (§2) instead of the home |
-| `--home-dir <dir>` | `-HomeDir <dir>` | a different home than `~/.workstate` |
+| `--home-dir <dir>` | `-HomeDir <dir>` | a different home than `~/.workman` |
 | `--auth oauth\|token` | `-Auth …` | how the registration signs in (below); **the default is the right choice** |
 | `--role orchestrator\|controller\|worker` | `-Role …` | token only: whose token is registered; orchestrator if you pass none |
 | `--agent <session>` | `-Agent <session>` | register at **local** scope (this project only) with `X-Workman-Agent: <session>`, so sessions here are recorded by that name |
@@ -121,12 +162,15 @@ or in PowerShell:
 | `--session-names` | `-SessionNames` | re-register an existing install with the session helper, keeping its token's role |
 | `--dry-run` | `-DryRun` | do everything but write the registration; show it (a token masked as `***`) |
 | `--backup <file>` / `--restore <file>` | `-Backup` / `-Restore` | §4, and nothing else |
+| `--migrate` | `-Migrate` | move a 1.x `workstate` install into this one (§2a) |
+| `--from-home <dir>` / `--from-project <name>` | `-FromHome` / `-FromProject` | where the 1.x install is (default `~/.workstate`, `workstate`) |
+| `--fresh` | `-Fresh` | install beside a 1.x install that was found, instead of migrating it |
 
 **OAuth is the default for a human's own registration.** When the server offers it (its
 `/.well-known/oauth-protected-resource/mcp` document answers), the script registers the URL with
 **no `Authorization` header** and stores no token anywhere. On first use the user signs in once in
 the browser: in a new session, `/mcp`, pick the server, **Authenticate**, sign in with the
-**dashboard user** (`WORKSTATE_DASHBOARD_USERNAME` / `_PASSWORD` from the `.env`) and **Approve**.
+**dashboard user** (`WORKMAN_DASHBOARD_USERNAME` / `_PASSWORD` from the `.env`) and **Approve**.
 The server remembers the approval, so a later sign-in skips the consent page. An OAuth sign-in is
 the dashboard user, who gets the **controller** toolset — `--role` does not apply, and passing it
 with `--auth oauth` stops with a line saying so. A server image older than OAuth (an
@@ -151,13 +195,14 @@ hand-started session that shares this registration. A new install gets it; an ex
 The roles nest — a controller token also satisfies orchestrator and worker. Register a worker token
 (`--role worker`) only for a session that just executes tasks handed to it. Sessions launched by
 `/workman:agents`'s `agent_launch` get their own minted token and name instead; sign it in once with
-`agent_signin`, or, headless, give it `workstate.env_file` = the `.env` this script names
+`agent_signin`, or, headless, give it `workman.env_file` = the `.env` this script names
 (`<home>/.env` or `<clone>/server/.env`) — a path, which is all it needs.
 
-**A registration named `workstate` is moved to `workman`.** Without `--name`, when this scope (user, or
-local with `--agent`) holds a `workstate` registration and no `workman` one, the script adds `workman`
-with the same url, headers and headersHelper, then removes `workstate` (`claude mcp add-json`, then
-`claude mcp remove`). The entry goes from Claude Code's config to Claude Code again: neither you nor the
+**A 1.x registration named `workstate` is moved to `workman`.** Without `--name`, when this scope (user,
+or local with `--agent`) holds a `workstate` registration and no `workman` one, the script adds `workman`
+with the same url and token, each `X-WorkState-*` header renamed `X-Workman-*` (a 2.0 server reads no
+other) and its headersHelper pointed at this home's copy, then removes `workstate` (`claude mcp add-json`,
+then `claude mcp remove`). The entry goes from Claude Code's config to Claude Code again: neither you nor the
 script sees or prints its token. It prints one line:
 
 ```
@@ -166,20 +211,20 @@ move      'workstate' -> 'workman' (user scope; http://127.0.0.1:5290/mcp, sessi
 
 An OAuth registration asks for a new sign-in under its new name; that is expected. When both names
 are registered, nothing is moved and the line says which command removes the old one; without `node`
-the old registration is kept, and used, as it is.
+nothing is moved, `workman` is registered fresh, and the line names the command that removes `workstate`.
 
 Each step prints one line; every step is idempotent, so running it again is always safe:
 
 ```
-home      /home/u/.workstate (pull-only compose written)
-env       wrote /home/u/.workstate/.env: 3 tokens, dashboard and Postgres passwords (values not shown, mode 600)
-helper    /home/u/.workstate/session-header.mjs (names each session; needs node, found)
-start     project 'workstate' up, http://127.0.0.1:5290/health 200
+home      /home/u/.workman (pull-only compose written)
+env       wrote /home/u/.workman/.env: 3 tokens, dashboard and Postgres passwords (values not shown, mode 600)
+helper    /home/u/.workman/session-header.mjs (names each session; needs node, found)
+start     project 'workman' up, http://127.0.0.1:5290/health 200
 auth      oauth: the server offers OAuth sign-in (http://127.0.0.1:5290/.well-known/oauth-protected-resource/mcp 200)
 register  'workman' -> http://127.0.0.1:5290/mcp with OAuth sign-in, session helper (user scope; no token stored)
-shadows   none: no local or project 'workman' or 'workstate' entry overrides it
+shadows   none: no local or project 'workman' entry overrides it
 prove     POST /mcp without a token: 401 with resource_metadata=http://127.0.0.1:5290/.well-known/oauth-protected-resource/mcp, which answers 200 - Claude Code finds the sign-in from there
-dashboard http://127.0.0.1:5290 - sign in with WORKSTATE_DASHBOARD_USERNAME / _PASSWORD from /home/u/.workstate/.env
+dashboard http://127.0.0.1:5290 - sign in with WORKMAN_DASHBOARD_USERNAME / _PASSWORD from /home/u/.workman/.env
 next      start a new Claude Code session, run /mcp, pick 'workman', Authenticate, sign in with that dashboard user and Approve: the work_* tools appear there, not in this one
 ```
 
@@ -238,11 +283,11 @@ The Postgres volume is the only copy of every plan, claim and verification. Back
 anything risky (an upgrade, a restore, moving machines):
 
 ```
-bash "$CLAUDE_PLUGIN_ROOT/skills/setup/assets/setup.sh" --backup ~/workstate-2026-10-26.dump
+bash "$CLAUDE_PLUGIN_ROOT/skills/setup/assets/setup.sh" --backup ~/workman-2026-10-26.dump
 ```
 
 It runs `pg_dump -Fc` inside the running `db` container (found by compose project, `--project` if not
-`workstate`) and copies the dump out; no password passes anywhere. `--restore <file>` first writes a
+`workman`) and copies the dump out; no password passes anywhere. `--restore <file>` first writes a
 safety dump of the current database to `<home>/backups/`, stops the API, runs
 `pg_restore --clean --if-exists`, and starts the API again — **it replaces the data**, so confirm
 with the user before you run it. Pass `--clone <path>` for a clone install, as everywhere else.
