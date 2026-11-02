@@ -10,6 +10,80 @@ All notable changes to the Workman server and the `workman` plugin are recorded 
 - Plugin 1.2.0 (wording only): the skills, the agents MCP and the setup scripts say Workman instead of WorkState in their prose and printed messages, and so do the docs; no machine-facing name changes.
 - Server source: the .NET projects, namespaces and types are `Workman.*` (`server/Workman.slnx`, `Workman.Api.dll` in the image). No behaviour, setting or stored name changes.
 
+### Plugin 2.0.0 — every machine-facing name is `workman`
+
+Plugin 2.0.0 goes with server 2.0.0 and needs it: it sends only the 2.0 names. The 1.x `workstate` names
+that 1.2.0 still accepted are gone, with one exception, the OAuth scope aliases (below).
+
+- **`/workman:setup`** (`setup.sh` / `setup.ps1`): the home is `~/.workman` (`%USERPROFILE%\.workman`),
+  the compose project and volume are `workman` / `workman-db-data`, the `.env` it writes has `WORKMAN_*`
+  keys and `POSTGRES_DB` / `POSTGRES_USER` `workman`, and the registration is `workman`. New flags
+  `--migrate` / `-Migrate`, `--from-home`, `--from-project` and `--fresh` (below). A `workstate`
+  registration is still moved to `workman`, now with its `X-WorkState-*` headers renamed `X-Workman-*`
+  and its `headersHelper` pointed at the new home.
+- **The pull-only `compose.yml`**: project `workman`, `Workman__*` settings, `ConnectionStrings__Workman`,
+  `WORKMAN_*` variables, database and user `workman` by default.
+- **`session-header.mjs`** sends `X-Workman-*` only; **`find-shadows.mjs`** checks `workman` only.
+- **The agents MCP**: `agent_launch`'s parameter is `workman: {role, env_file, url, ttl_hours, grants}`
+  (was `workstate`); an `env_file` is read for `WORKMAN_CONTROLLER_TOKEN` / `WORKMAN_ORCHESTRATOR_TOKEN`;
+  the structured results carry `workman` instead of `workstate`; the OAuth sign-in asks for
+  `workman.sessions offline_access`; the grant store is `~/.workman/grants.json` (`WORKMAN_GRANTS_FILE`);
+  the state directory is `workman-agents` only (an old `rlarch-agents` is no longer read); a launched
+  agent gets `mcp__workman` and no special handling of `mcp__workstate`.
+- **`server/deploy/multi-deploy`**: project, volume and Traefik router/service/middleware names
+  `workman`; `WORKMAN_*` keys in `compose.yml` and `gen-env.sh` (default version 2.0.0); `backup.sh`
+  dumps with the container's own `POSTGRES_USER` / `POSTGRES_DB`; the systemd units are
+  `workman-backup.service` / `.timer`.
+- Skills and docs use the 2.0 names in every instruction and example.
+
+### Upgrading from 1.x to 2.0
+
+Server 2.0 reads none of the 1.x names, so an install is **moved**, not edited in place. Back up first
+(`/workman:setup --backup <file>`, or `./backup.sh` on multi-deploy).
+
+**Self-hosted home installs** (`~/.workstate`, compose project `workstate`): update the plugin to 2.0.0,
+start a new session, and run `/workman:setup --migrate` (PowerShell: `-Migrate`). Without the flag, setup
+finds the 1.x install and stops with a line offering it. The migration:
+
+1. stops the 1.x api and dumps its database with `pg_dump -Fc` inside its `db` container, to
+   `~/.workman/backups/migrate-from-workstate-<time>.dump`;
+2. writes `~/.workman/.env` from `~/.workstate/.env` with only the key names rewritten
+   (`sed 's/^WORKSTATE_/WORKMAN_/'`): no value is read or printed. `POSTGRES_DB`, `POSTGRES_USER` and
+   `POSTGRES_PASSWORD` keep their 1.x values (`workstate`), so the restored database keeps its owner; a
+   pinned `WORKSTATE_VERSION` is dropped;
+3. starts the `workman` project's db, refuses if its volume already holds tables, recreates the 1.x
+   role `workstate_app` the dump's policies name (roles are not in a dump), and restores in one
+   transaction; then the 2.0 api starts and its own migration takes the database to 2.0;
+4. stops the 1.x containers and **keeps their volume**, printing the command that removes them once you
+   have checked the new server;
+5. moves the `workstate` registration to `workman`: same url, same token.
+
+Running it again is safe (a marker file skips the restore). With a clone, `--migrate --clone <path>`
+renames the keys of `<clone>/server/.env` in place (the 1.x copy is kept as `.env.1x`).
+
+**multi-deploy**: follow *Upgrading a 1.x workstate app to 2.0* in `server/deploy/multi-deploy/README.md`
+— a new app folder `apps/workman`, the `.env` copied with its keys renamed, dump and restore into the new
+volume, the old app stopped and its volume kept until the new one is verified, and the backup units
+replaced by `workman-backup.*`.
+
+**Clients and scripts:**
+
+- Environment and settings: every `WORKSTATE_<X>` is `WORKMAN_<X>` (`WORKMAN_PUBLIC_URLS` and
+  `WORKMAN_HOSTS` are unchanged); `WorkState:*` / `WorkState__*` settings are `Workman:*` / `Workman__*`;
+  `ConnectionStrings:WorkState` is `ConnectionStrings:Workman`.
+- Headers: send `X-Workman-*` (`Agent`, `Session`, `Launched-By`, `Origin`, `Cwd`, `Foreman-Role`,
+  `Client`, `Write`); `X-WorkState-*` is ignored. Read `X-Workman-Api`; `X-WorkState-Api` is no longer
+  sent.
+- A registration or `--mcp-config` that names the server `workstate` keeps connecting, but its tools are
+  `mcp__workstate__*`; the skills and allow-lists expect `workman`. Re-register it as `workman`.
+- OAuth scopes are `workman.read` and `workman.sessions`. **`workstate.read` and `workstate.sessions`
+  stay accepted as aliases** in authorize, token and refresh requests until Supraman has switched
+  (Supraman v0.1.2 asks for `workstate.read workstate.sessions offline_access`).
+- **Everyone signs in again.** The data-protection key ring is new, so 1.x dashboard cookies, OAuth
+  grants and refresh tokens no longer open the server: sign in to the dashboard, `/mcp` → pick
+  `workman` → **Authenticate** in each Claude Code install, and `agent_signin` once for the agents MCP.
+  Minted `wss_` agent tokens live in the database and survive the move.
+
 ## [1.2.0] — 2026-11-02
 
 Server 1.2.0, plugin 1.1.0. No database migration since 1.1.4.
