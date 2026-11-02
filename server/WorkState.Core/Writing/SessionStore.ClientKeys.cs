@@ -7,7 +7,7 @@ namespace WorkState.Core.Writing;
 
 /// <summary>
 /// doc 11 — self-naming. A hand-started session shares the static registration and so has no name
-/// of its own; the session helper sends <c>X-WorkState-Client</c>, a key for the Claude Code process
+/// of its own; the session helper sends <c>X-Workman-Client</c>, a key for the Claude Code process
 /// it runs under, and <c>work_session(name)</c> binds that key to a row. Every later call carrying
 /// only the key resolves to that row.
 /// </summary>
@@ -177,7 +177,7 @@ public sealed partial class SessionStore
 
     public static string NoKey()
         => Refusal.Blocked(
-            "this session sends no X-WorkState-Client header.",
+            "this session sends no X-Workman-Client header.",
             "work_session binds the key the session helper sends; without it there is nothing to name",
             "/workman:setup (it installs the session helper), then start a new session");
 

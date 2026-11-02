@@ -21,7 +21,7 @@ public static class ProjectEndpoints
     /// from the dashboard's own origin. The cookie is already <c>SameSite=Strict</c>; this does not
     /// lean on the browser honouring that.
     /// </summary>
-    public const string WriteHeader = "X-WorkState-Write";
+    public const string WriteHeader = WorkmanHeaders.Write;
 
     public static void MapProjectArchive(this RouteGroupBuilder api)
     {
@@ -50,7 +50,7 @@ public static class ProjectEndpoints
     public static TBuilder RequireWriteHeader<TBuilder>(this TBuilder builder)
         where TBuilder : IEndpointConventionBuilder
         => builder.AddEndpointFilter(async (context, next) =>
-            string.IsNullOrWhiteSpace(context.HttpContext.Request.Headers[WriteHeader])
+            WorkmanHeaders.Text(context.HttpContext.Request.Headers, WriteHeader) is null
                 ? Error(StatusCodes.Status403Forbidden, $"a dashboard write needs the {WriteHeader} header")
                 : await next(context));
 

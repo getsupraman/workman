@@ -101,7 +101,7 @@ public sealed class StaticTokenHandler(
         {
             var identity = Identity(roles);
             if (roles.Contains(WorkStatePolicies.Worker)
-                && Request.Headers[CallerSession.ClientHeader].ToString().Trim() is { Length: > 0 } key)
+                && WorkmanHeaders.Text(Request.Headers, CallerSession.ClientHeader) is { } key)
             {
                 identity.AddClaim(new Claim(CallerSession.ClientKeyClaim, key));
             }

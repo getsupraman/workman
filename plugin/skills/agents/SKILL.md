@@ -51,8 +51,8 @@ prepends the same protocol header, grants the same `toolset` profiles, and retur
 | `repo_root` | required | absolute path of a git working tree (refused otherwise); the agent's cwd |
 | `controller` | required | your address from `ListAgents`, ref included: `'name [6-hex]'` |
 | `permission_mode` | `auto` | `--permission-mode`: `acceptEdits` `auto` `bypassPermissions` `manual` `dontAsk` `plan` |
-| `toolset` | `fix` | the §3 profile: `none` `readonly` `fix`; with a `workstate.role` other than `none`, `mcp__workstate` is added (the server limits the role's tools) |
-| `allowed_tools` / `disallowed_tools` | `[]` | merged into `--allowedTools` / `--disallowedTools` |
+| `toolset` | `fix` | the §3 profile: `none` `readonly` `fix`; with a `workstate.role` other than `none`, `mcp__workman` is added (the server limits the role's tools) |
+| `allowed_tools` / `disallowed_tools` | `[]` | merged into `--allowedTools` / `--disallowedTools`. To keep an agent off the tracker, pass `workstate: {role: "none"}` and `disallowed_tools: ["mcp__workman"]`. With any other role `mcp__workstate` is always disallowed: the agent's own server is `workman`, and a user registration still named `workstate` (the name before the rename) would let it act as you |
 | `add_dirs` | `[]` | `--add-dir` |
 | `model`, `effort`, `settings`, `append_system_prompt` | — | `--model`, `--effort` (`low`…`max`), `--settings` (path or JSON), `--append-system-prompt` |
 | `workstate` | `{role: "worker"}` | `role` (`worker` `orchestrator` `controller` `none`), `env_file` (optional, for headless use: the PATH of the WorkState `.env` that `/workman:setup` names: `<home>/.env`, by default `~/.workstate/.env`, or `<clone>/server/.env`; never its contents. Without it the `agent_signin` grant mints — below), `url` (default `http://127.0.0.1:5290`), `ttl_hours` (idle window, default 72: the token lapses after that long unused; every use renews it, no hard cap), `grants` (`["import"]` shows `work_import` to the session — orchestrator or controller role only; see `/workman:import`) |

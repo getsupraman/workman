@@ -87,7 +87,7 @@ test('agent_launch without env_file mints with the stored grant in a new process
         assert.equal(mint?.body.role, 'worker')
         const [minted] = ws.minted()
         const mcp = JSON.parse(fs.readFileSync(path.join(repo.briefs, 'mcp-oa-1.json'), 'utf8'))
-        assert.equal(mcp.mcpServers.workstate.headers.Authorization, `Bearer ${minted}`, 'the agent gets the minted wss_ token, unchanged')
+        assert.equal(mcp.mcpServers.workman.headers.Authorization, `Bearer ${minted}`, 'the agent gets the minted wss_ token, unchanged')
         assert.equal(await mcpAnswers(ws, minted), 200, 'the worker can report into that server')
         assert.equal(ws.requests.find((q) => q.method === 'PATCH')?.auth, mint?.auth)
 

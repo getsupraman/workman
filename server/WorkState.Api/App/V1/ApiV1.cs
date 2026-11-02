@@ -13,7 +13,10 @@ public static partial class ApiV1
     /// <summary>Cookie, any agent token, or a reader token (rule 5).</summary>
     public const string Policy = "api-v1-read";
 
-    public const string Header = "X-WorkState-Api";
+    public const string Header = WorkmanHeaders.Api;
+
+    /// <summary>The same value under the old name, sent until server 2.0: Supraman reads it.</summary>
+    public static string LegacyHeader => WorkmanHeaders.Legacy(Header);
 
     public const string Version = "1";
 
@@ -34,7 +37,7 @@ public static partial class ApiV1
         {
             if (context.Request.Path.StartsWithSegments("/api/v1") || context.Request.Path.StartsWithSegments("/api/stream"))
             {
-                context.Response.Headers[Header] = Version;
+                WorkmanHeaders.Send(context.Response.Headers, Header, Version);
             }
 
             await next();

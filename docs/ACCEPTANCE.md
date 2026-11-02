@@ -30,10 +30,10 @@ dotnet run --project server/WorkState.Api
 ## 2. Register it
 
 ```
-claude mcp add --transport http workstate http://localhost:5290/mcp --header "Authorization: Bearer dev-orchestrator-token"
+claude mcp add --transport http workman http://localhost:5290/mcp --header "Authorization: Bearer dev-orchestrator-token"
 ```
 
-Remove with `claude mcp remove workstate` afterwards.
+Remove with `claude mcp remove workman` afterwards.
 
 ## 3. The prompts — frozen, and the only thing the agent is told about the subject
 
@@ -88,7 +88,7 @@ Two practical notes for whoever re-runs this:
 
 ## 4b. What the acceptance agent may do, and why it is narrow
 
-Granted: **read-only shell, `Read`/`Glob`/`Grep`, and all 18 `mcp__workstate__*` tools.**
+Granted: **read-only shell, `Read`/`Glob`/`Grep`, and all 18 `mcp__workman__*` tools.**
 Nothing else. No `Edit`, no `Write`, no repo access to the projects the imported runs describe.
 
 Two reasons, and the second is the one that matters:

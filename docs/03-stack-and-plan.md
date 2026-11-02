@@ -73,7 +73,7 @@ never leaking ids the agent cannot use.
 
 ```csharp
 builder.Services
-    .AddMcpServer(o => { o.ServerInfo = new() { Name = "workstate", Version = "…" }; })
+    .AddMcpServer(o => { o.ServerInfo = new() { Name = "workman", Version = "…" }; })
     .WithHttpTransport()
     .WithToolsFromAssembly()      // [McpServerToolType] classes in WorkState.Mcp
     .AddAuthorizationFilters()    // REQUIRED with ASP.NET Core; honours [Authorize] on tools
@@ -93,7 +93,7 @@ app.MapFallbackToFile("index.html");                              // SPA
 Client registration:
 
 ```bash
-claude mcp add --transport http workstate http://127.0.0.1:5290/mcp \
+claude mcp add --transport http workman http://127.0.0.1:5290/mcp \
   --header "Authorization: Bearer $WORKSTATE_TOKEN"
 ```
 

@@ -49,6 +49,7 @@ that alters any tool's name, description or schema must repin its constants and 
 - **Nothing private (C95).** No client names, private hosts or domains, ssh details, tokens, or live
   data — in code, docs, tests, fixtures or commit messages. Use placeholders (`example.com`,
   `127.0.0.1`) and synthetic data.
-- Machine-facing names stay stable: the MCP server name `workstate`, the `work_*` tools, the
-  `X-WorkState-*` headers, the env var names and the `WorkState.*` projects. Renaming any of them
-  needs a compatibility window.
+- Machine-facing names stay stable: the MCP server name `workman`, the `work_*` tools, the
+  `X-Workman-*` headers, the env var names and the `WorkState.*` projects. Renaming any of them
+  needs a compatibility window, as the move from `workstate` / `X-WorkState-*` has (`CHANGELOG.md`:
+  the old names work until server 2.0 / plugin 2.0; `WorkmanHeaders` is the one place that reads them).

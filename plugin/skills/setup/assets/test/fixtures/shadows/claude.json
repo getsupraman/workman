@@ -39,6 +39,15 @@
                 "github": { "type": "http", "url": "https://api.example.com/mcp" }
             }
         },
+        "P:/Projects/Renamed": {
+            "mcpServers": {
+                "workman": {
+                    "type": "http",
+                    "url": "http://127.0.0.1:5290/mcp",
+                    "headers": { "Authorization": "Bearer SENTINEL-TOKEN-renamed-5b17" }
+                }
+            }
+        },
         "P:/Projects/Empty": {}
     }
 }

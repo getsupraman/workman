@@ -52,6 +52,7 @@ internal sealed class AppServer : IAsyncDisposable
         string? heartbeat = null,
         string? publicUrl = null,
         string? trustedProxies = null,
+        string? publicUrls = null,
         Action<WebApplicationBuilder>? configure = null,
         bool soleMember = true)
     {
@@ -70,6 +71,7 @@ internal sealed class AppServer : IAsyncDisposable
                 ["WorkState:Dashboard:Password"] = dashboardConfigured ? Password : null,
                 ["WorkState:Stream:Heartbeat"] = heartbeat,
                 ["WORKSTATE_PUBLIC_URL"] = publicUrl,
+                ["WorkState:PublicUrls"] = publicUrls,
                 ["WORKSTATE_TRUSTED_PROXIES"] = trustedProxies,
             });
             configure?.Invoke(builder);

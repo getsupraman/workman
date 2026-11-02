@@ -46,17 +46,27 @@ test('a project .mcp.json entry is reported as the committed team file, not as a
 
 test('another server name is ignored, and --name selects it instead', () => {
     const { lines } = finder([CONFIG])
-    assert.equal(lines.length, 2)
+    assert.equal(lines.length, 3)
     assert.ok(!lines.some((l) => l.includes('Unrelated')))
     const staging = finder([CONFIG, '--name', 'workstate-staging']).lines
     assert.equal(staging.length, 1)
     assert.match(staging[0], /^local\s+P:\/Projects\/Unrelated .*claude mcp remove workstate-staging -s local$/)
 })
 
+test('both names are checked by default: workman, and workstate from before the rename', () => {
+    const { lines } = finder([CONFIG])
+    assert.match(lineFor(lines, 'P:/Projects/Renamed') ?? '', /claude mcp remove workman -s local$/)
+    assert.match(lineFor(lines, 'P:/Projects/Acme/Skills') ?? '', /claude mcp remove workstate -s local$/)
+    assert.equal(finder([CONFIG, '--name', 'workman']).lines.length, 1)
+    assert.equal(finder([CONFIG, '--name', 'workstate']).lines.length, 2)
+    assert.equal(finder([CONFIG, '--name', 'workman', '--name', 'workstate']).lines.length, 3)
+})
+
 test('--own skips the local entry the script itself just wrote', () => {
     const { lines } = finder([CONFIG, '--own', 'P:\\Projects\\Acme\\Skills\\'])
-    assert.equal(lines.length, 1)
-    assert.ok(lines[0].includes('P:/Projects/Other'))
+    assert.equal(lines.length, 2)
+    assert.ok(lines.some((l) => l.includes('P:/Projects/Other')))
+    assert.ok(!lines.some((l) => l.includes('P:/Projects/Acme/Skills')))
 })
 
 test('no shadowing entry prints nothing', () => {

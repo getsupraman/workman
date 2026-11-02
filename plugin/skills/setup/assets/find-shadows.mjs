@@ -3,7 +3,9 @@
 // one: a local-scope entry in the claude config (projects[<dir>].mcpServers[<name>]) and a
 // project-scope entry in <dir>/.mcp.json. Claude Code resolves local > project > user, so a session in
 // such a directory never sees the user registration or its headersHelper.
-//   node find-shadows.mjs [<claude config>] [--name <server>] [--dir <dir>] [--own <dir>]
+//   node find-shadows.mjs [<claude config>] [--name <server>]... [--dir <dir>] [--own <dir>]
+// Without --name it checks both names the server has had: workman, and workstate (until 2.0). Each
+// --name replaces that pair; repeat it to check several.
 // <claude config> defaults to $CLAUDE_CONFIG_DIR/.claude.json, else ~/.claude.json. --dir also checks
 // that directory's .mcp.json. --own skips the local entry of that directory (the one -Agent wrote).
 // One line per shadowing entry with the command that removes it; nothing when none shadows; exit 0.
@@ -17,6 +19,9 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 /** @typedef {{scope: 'local' | 'project', dir: string, file: string, url: string, helper: boolean}} Shadow */
+
+/** The registration's name, then the name it had before the rename (accepted until 2.0). */
+export const DEFAULT_NAMES = Object.freeze(['workman', 'workstate'])
 
 /** @param {string} dir */
 export function sameDir(dir) {
@@ -99,22 +104,28 @@ function readJson(file) {
 
 /** @param {string[]} argv @returns {string[]} the lines to print */
 export function findShadows(argv) {
-    /** @type {{config?: string, name: string, dir?: string, own?: string}} */
-    const opt = { name: 'workstate' }
+    /** @type {{config?: string, names: string[], dir?: string, own?: string}} */
+    const opt = { names: [] }
     for (let i = 0; i < argv.length; i++) {
         const a = argv[i]
-        if (a === '--name') opt.name = argv[++i] ?? opt.name
+        if (a === '--name') {
+            const n = argv[++i]
+            if (n && !opt.names.includes(n)) opt.names.push(n)
+        }
         else if (a === '--dir') opt.dir = argv[++i]
         else if (a === '--own') opt.own = argv[++i]
         else if (!opt.config) opt.config = a
     }
+    if (opt.names.length === 0) opt.names.push(...DEFAULT_NAMES)
     const configFile = opt.config
         ?? path.join(process.env.CLAUDE_CONFIG_DIR || os.homedir(), '.claude.json')
     /** @type {string[]} */
     const lines = []
     const config = readJson(configFile)
     if (config.ok) {
-        for (const s of localShadows(config.value, opt.name, configFile, opt.own)) lines.push(formatShadow(s, opt.name))
+        for (const name of opt.names) {
+            for (const s of localShadows(config.value, name, configFile, opt.own)) lines.push(formatShadow(s, name))
+        }
     } else {
         lines.push(`not checked: ${configFile} is ${config.why}`)
     }
@@ -122,7 +133,11 @@ export function findShadows(argv) {
         const mcpFile = path.join(opt.dir, '.mcp.json')
         if (fs.existsSync(mcpFile)) {
             const mcp = readJson(mcpFile)
-            if (mcp.ok) for (const s of projectShadows(mcp.value, opt.name, opt.dir, mcpFile)) lines.push(formatShadow(s, opt.name))
+            if (mcp.ok) {
+                for (const name of opt.names) {
+                    for (const s of projectShadows(mcp.value, name, opt.dir, mcpFile)) lines.push(formatShadow(s, name))
+                }
+            }
             else lines.push(`not checked: ${mcpFile} is ${mcp.why}`)
         }
     }

@@ -161,11 +161,11 @@ export async function revokeSession(a) {
 }
 
 /**
- * The --mcp-config file. A server named "workstate" here replaces the user-scope one, and a --bg
+ * The --mcp-config file. A server named "workman" here replaces the user-scope one, and a --bg
  * session gets no ${VAR} expansion, so the token value itself goes in (docs/12 §5).
  * @param {string} url
  * @param {string} token
  */
 export function mcpConfigJson(url, token) {
-    return JSON.stringify({ mcpServers: { workstate: { type: 'http', url: `${url}/mcp`, headers: { Authorization: `Bearer ${token}` } } } }, null, 2) + '\n'
+    return JSON.stringify({ mcpServers: { workman: { type: 'http', url: `${url}/mcp`, headers: { Authorization: `Bearer ${token}` } } } }, null, 2) + '\n'
 }

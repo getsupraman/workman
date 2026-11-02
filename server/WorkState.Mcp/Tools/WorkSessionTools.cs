@@ -8,7 +8,7 @@ namespace WorkState.Mcp.Tools;
 
 /// <summary>
 /// doc 11 — self-naming. Listed only where it can work: a static token on a request whose session
-/// helper sent <c>X-WorkState-Client</c> (<see cref="WorkStatePolicies.SelfNamer"/>).
+/// helper sent <c>X-Workman-Client</c> (<see cref="WorkStatePolicies.SelfNamer"/>).
 /// </summary>
 [McpServerToolType]
 public sealed class WorkSessionTools(

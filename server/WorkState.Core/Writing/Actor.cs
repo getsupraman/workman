@@ -14,7 +14,7 @@ public sealed record Actor(string Name, ActorRole Role)
     /// <summary>doc 11 — which session wrote. It decides who holds a tree, never what the role may do.</summary>
     public Guid? SessionId { get; init; }
 
-    /// <summary>The session's name, from <c>X-WorkState-Agent</c>.</summary>
+    /// <summary>The session's name, from <c>X-Workman-Agent</c>.</summary>
     public string? Session { get; init; }
 
     /// <summary>The signed-in user the credential belongs to; null for a static token. A project they create is theirs.</summary>

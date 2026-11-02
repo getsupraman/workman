@@ -152,11 +152,11 @@ public sealed partial class SessionStore(NpgsqlDataSource dataSource)
     private static string Collision(string name, string? held, string? asked)
         => Refusal.Blocked(
             $"the session name \"{name}\" is held by a session launched by {held ?? "no launcher"}.",
-            $"this call's X-WorkState-Launched-By says {asked ?? "no launcher"}; a name is unique per "
+            $"this call's X-Workman-Launched-By says {asked ?? "no launcher"}; a name is unique per "
             + "workspace and user, and two launchers' sessions cannot share one. Nothing ran",
-            "work_brief() once WorkState is registered with X-WorkState-Agent:<a name of your own> — "
+            "work_brief() once WorkState is registered with X-Workman-Agent:<a name of your own> — "
             + "the name your session goes by, e.g. the one ListAgents prints",
-            "work_brief() once X-WorkState-Launched-By names the launcher that started this session, "
+            "work_brief() once X-Workman-Launched-By names the launcher that started this session, "
             + "if it is the same one");
 
     private static async Task TouchAsync(

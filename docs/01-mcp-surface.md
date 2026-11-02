@@ -345,7 +345,7 @@ byte-for-byte what it was before the tool existed (pinned by `ImportVisibilityTe
 
 **Self-naming — `work_session(name, claude_session_id?)`** (doc 11). Hidden the same way: the
 `self-namer` policy needs any agent role **and** a `workstate:client-key` claim, which the bearer
-handler adds only for a **static** token on a request carrying `X-WorkState-Client` (the session
+handler adds only for a **static** token on a request carrying `X-Workman-Client` (the session
 helper's key). A minted session never lists it — its name is its credential's — and neither does a
 session without the helper, whose `work_brief` names `/workman:setup` instead. Every other
 `tools/list` is unchanged bytes. Measured 2026-10-26 (chars/4): the tool costs 147–148 tokens; to keep

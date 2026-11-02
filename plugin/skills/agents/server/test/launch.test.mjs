@@ -5,7 +5,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { startServer, makeRepo, fakeWorkstate, CONTROLLER, CONTROLLER_TOKEN, MINTED_TOKEN, tmp } from './helpers.mjs'
 import { FIX_TOOLS, READONLY_TOOLS } from '../header.mjs'
-import { WORKSTATE_TOOLS } from '../launch-args.mjs'
+import { WORKSTATE_TOOLS, LEGACY_TOOLS } from '../launch-args.mjs'
 import { normaliseRoot } from '../repo.mjs'
 
 /** @param {ReturnType<typeof startServer>} s */
@@ -47,7 +47,7 @@ test('every parameter maps to its flag, variadics closed in order, prompt last',
         assert.deepEqual(argv, [
             '--bg', '--name', 'unit-1',
             '--allowedTools', ...READONLY_TOOLS, WORKSTATE_TOOLS, 'Bash(node --test:*)',
-            '--disallowedTools', 'Bash(git push:*)', 'WebFetch',
+            '--disallowedTools', 'Bash(git push:*)', 'WebFetch', LEGACY_TOOLS,
             '--add-dir', 'P:\\packages\\nuget', '/opt/cache',
             '--mcp-config', mcp,
             '--model', 'claude-opus-5-5',
@@ -64,7 +64,7 @@ test('every parameter maps to its flag, variadics closed in order, prompt last',
         assert.equal(mint?.auth, `Bearer ${CONTROLLER_TOKEN}`)
 
         assert.deepEqual(JSON.parse(fs.readFileSync(mcp, 'utf8')), {
-            mcpServers: { workstate: { type: 'http', url: `${ws.url}/mcp`, headers: { Authorization: `Bearer ${MINTED_TOKEN}` } } },
+            mcpServers: { workman: { type: 'http', url: `${ws.url}/mcp`, headers: { Authorization: `Bearer ${MINTED_TOKEN}` } } },
         })
         if (process.platform !== 'win32') assert.equal(fs.statSync(mcp).mode & 0o777, 0o600)
 
@@ -99,6 +99,7 @@ test('defaults: auto, fix profile, worker role; --permission-mode closes the las
         assert.deepEqual(argv, [
             '--bg', '--name', 'unit-2',
             '--allowedTools', ...FIX_TOOLS, WORKSTATE_TOOLS,
+            '--disallowedTools', LEGACY_TOOLS,
             '--mcp-config', path.join(repo.briefs, 'mcp-unit-2.json'),
             '--permission-mode', 'auto',
             prompt(repo.briefs, 'unit-2'),
@@ -284,7 +285,7 @@ test('dry_run: argv returned with the token as <minted>; nothing minted, spawned
         assert.equal(sc.dry_run, true)
         assert.equal(sc.argv[0], 'claude')
         assert.equal(sc.argv.at(-1), prompt(repo.briefs, 'unit-6'))
-        assert.equal(sc.mcpConfig.content.mcpServers.workstate.headers.Authorization, 'Bearer <minted>')
+        assert.equal(sc.mcpConfig.content.mcpServers.workman.headers.Authorization, 'Bearer <minted>')
         assert.match(r.content[0].text, /Bearer <minted>/)
         assert.equal(ws.requests.length, 0)
         assert.equal(s.claudeCalls().length, 0)

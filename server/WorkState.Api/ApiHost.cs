@@ -41,6 +41,9 @@ public static class ApiHost
         var builder = WebApplication.CreateBuilder(args);
         configure?.Invoke(builder);
 
+        var publicUrls = ReadPublicUrls(builder.Configuration);
+        builder.Services.AddSingleton(publicUrls);
+
         // doc 08 §4 — one process, two audiences. The dashboard's bootstrap credential is read once here, for
         // POST /api/session's first sign-in.
         var dashboard = new DashboardOptions();
@@ -56,7 +59,7 @@ public static class ApiHost
                 options.ControllerToken = builder.Configuration["WorkState:Auth:ControllerToken"];
                 options.ReaderToken = builder.Configuration["WorkState:Auth:ReaderToken"];
             })
-            .AddCookie(DashboardAuth.SchemeName, options => DashboardAuth.Configure(options, PublicUrl(builder.Configuration)))
+            .AddCookie(DashboardAuth.SchemeName, options => DashboardAuth.Configure(options, publicUrls))
 
             // Registered with or without a store, because WorkStatePolicies.Any names it; without one there
             // is no OAuth server and it admits no one and challenges as the static scheme does.
@@ -129,14 +132,14 @@ public static class ApiHost
 
         RateLimits.Add(builder.Services);
 
-        AddWorkState(builder);
+        AddWorkState(builder, publicUrls);
 
         builder.Services
             .AddMcpServer(options =>
             {
                 options.ServerInfo = new Implementation
                 {
-                    Name = "workstate",
+                    Name = "workman",
                     Title = "Workman",
                     Version = "1.1.4",
                 };
@@ -217,7 +220,7 @@ public static class ApiHost
     /// The store, through U1's shared registration. Hand-rolling a <c>DbContextOptionsBuilder</c>
     /// here would skip the native enum mapping and fail at the first status column read.
     /// </summary>
-    private static void AddWorkState(WebApplicationBuilder builder)
+    private static void AddWorkState(WebApplicationBuilder builder, PublicUrls publicUrls)
     {
         var connectionString =
             builder.Configuration.GetConnectionString(ConnectionStringName)
@@ -264,9 +267,7 @@ public static class ApiHost
             sp.GetRequiredService<BoardQueries>(),
             sp.GetRequiredService<Housekeeping>()));
         builder.Services.AddSingleton<CallerIdentity>();
-        builder.Services.AddSingleton(sp => new WebBase(
-            sp.GetRequiredService<IHttpContextAccessor>(),
-            PublicUrl(builder.Configuration)));
+        builder.Services.AddSingleton(sp => new WebBase(sp.GetRequiredService<IHttpContextAccessor>(), publicUrls));
         builder.Services.AddSingleton(sp => new SessionStore(sp.GetRequiredService<NpgsqlDataSource>()));
         builder.Services.AddSingleton(sp => new UserStore(sp.GetRequiredService<NpgsqlDataSource>()));
         builder.Services.AddSingleton(sp => new AdminStore(sp.GetRequiredService<NpgsqlDataSource>()));
@@ -280,11 +281,14 @@ public static class ApiHost
             sp.GetRequiredService<BoardQueries>(),
             sp.GetRequiredService<WorkWriter>()));
 
-        OAuthServer.Add(builder.Services, connectionString, PublicUrl(builder.Configuration));
+        OAuthServer.Add(builder.Services, connectionString, publicUrls);
     }
 
-    private static string? PublicUrl(IConfiguration configuration)
-        => configuration[WebBase.Key] ?? configuration[WebBase.EnvironmentKey];
+    /// <summary><see cref="PublicUrls"/>: each key, else its environment variable.</summary>
+    private static PublicUrls ReadPublicUrls(IConfiguration configuration)
+        => PublicUrls.Parse(
+            configuration[PublicUrls.Key] ?? configuration[PublicUrls.EnvironmentKey],
+            configuration[PublicUrls.ListKey] ?? configuration[PublicUrls.ListEnvironmentKey]);
 
     /// <summary>
     /// The dashboard cookie's signing keys, into Postgres rather than the container filesystem — see

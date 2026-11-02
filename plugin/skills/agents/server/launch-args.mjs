@@ -10,8 +10,14 @@ export class Refusal extends Error {}
 
 export const PERMISSION_MODES = ['acceptEdits', 'auto', 'bypassPermissions', 'manual', 'dontAsk', 'plan']
 export const TOOLSETS = ['none', 'readonly', 'fix']
-/** Every tool of the server named "workstate" in mcp-<name>.json. */
-export const WORKSTATE_TOOLS = 'mcp__workstate'
+/** Every tool of the server named "workman" in mcp-<name>.json. */
+export const WORKSTATE_TOOLS = 'mcp__workman'
+/**
+ * The tools of a registration still named "workstate", the name before the rename (until 2.0). A minted
+ * agent is denied them: its own server is "workman", so a user-scope "workstate" left unmoved is no longer
+ * overridden by name, and through it the agent would act as the user.
+ */
+export const LEGACY_TOOLS = 'mcp__workstate'
 export const EFFORTS = ['low', 'medium', 'high', 'xhigh', 'max']
 export const ROLES = ['worker', 'orchestrator', 'controller', 'none']
 export const DEFAULT_WORKSTATE_URL = 'http://127.0.0.1:5290'
@@ -173,7 +179,8 @@ export function validateLaunch(input) {
     // parks the agent. The server, not this list, limits which work_* tools the role sees.
     const workstateTools = workstate.role === 'none' ? [] : [WORKSTATE_TOOLS]
     const allowedTools = [...new Set([...toolsetProfile(toolset), ...workstateTools, ...stringArray(a.allowed_tools, 'allowed_tools')])]
-    const disallowedTools = stringArray(a.disallowed_tools, 'disallowed_tools')
+    const legacyTools = workstate.role === 'none' ? [] : [LEGACY_TOOLS]
+    const disallowedTools = [...new Set([...stringArray(a.disallowed_tools, 'disallowed_tools'), ...legacyTools])]
     const addDirs = stringArray(a.add_dirs, 'add_dirs')
     const model = optString(a.model, 'model')
     const effort = oneOf(a.effort, EFFORTS, 'effort', undefined)

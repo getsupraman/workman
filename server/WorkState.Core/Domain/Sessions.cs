@@ -29,7 +29,7 @@ public class AgentSession
     /// <summary>The token's role at the last call — recorded, never consulted.</summary>
     public ActorRole Role { get; set; }
 
-    /// <summary><c>X-WorkState-Foreman-Role</c>, when it differs from the token role.</summary>
+    /// <summary><c>X-Workman-Foreman-Role</c>, when it differs from the token role.</summary>
     public string? ExternalRole { get; set; }
 
     public string? Origin { get; set; }
@@ -89,8 +89,8 @@ public class AgentSession
     public string[] Grants { get; set; } = [];
 
     /// <summary>
-    /// doc 11 — <c>X-WorkState-Client</c> of the process this session runs in, bound by
-    /// <c>work_session</c> or an <c>X-WorkState-Agent</c> call carrying it. Unique per workspace.
+    /// doc 11 — <c>X-Workman-Client</c> of the process this session runs in, bound by
+    /// <c>work_session</c> or an <c>X-Workman-Agent</c> call carrying it. Unique per workspace.
     /// </summary>
     public string? ClientKey { get; set; }
 }

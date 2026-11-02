@@ -214,7 +214,7 @@ tables, not from the client's account of itself.
 | Scopes requested | `mcp offline_access`, stored as a permanent authorization, so the next sign-in skips consent. |
 | Tokens issued | Code, redeemed within 1 s. Access token valid for 1 h. Refresh token valid for 30 d. |
 | Refresh | A refresh token was issued; its use was not observed in this run. It shows up as a second access token row after the first one expires. |
-| Session name | *unnamed*. The header-less registration has no `headersHelper`. The OAuth principal is the static controller identity, so `X-WorkState-Agent` names it just as it names a token registration. |
+| Session name | *unnamed*. The header-less registration has no `headersHelper`. The OAuth principal is the static controller identity, so `X-Workman-Agent` names it just as it names a token registration. |
 
 What follows:
 - **Dynamic registration is a fallback**, kept for clients without a metadata document. The

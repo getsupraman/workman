@@ -19,7 +19,7 @@ all below, and the dashboard's two writes:
 Archives or restores a project (doc 02 "Archived projects"). **Cookie only**, like `/api/session`:
 a bearer token — agent or reader — is never evaluated here and gets 401; an agent archives with
 `work_update(archived:)`. **Cross-site guard:** the request must carry the header
-`X-WorkState-Write` (any value), else 403 and nothing is written. A cross-site form post cannot set
+`X-Workman-Write` (any value), else 403 and nothing is written. A cross-site form post cannot set
 a header, and a cross-origin `fetch` that sets one is preflighted, which this host answers without
 CORS — so the header proves the dashboard's own origin. A header rather than an antiforgery token
 because it needs no token endpoint and no state, and the cookie is `SameSite=Strict` besides.
@@ -31,7 +31,7 @@ Answers `200 { "id", "ref", "archivedAt": "…" | null, "changed": true }`; 404 
 
 A project's members (doc 02 §12b, doc 08 §4 "Projects"), for the dashboard's sharing. **Cookie only**
 — a bearer token gets 401 — in the cookie's workspace and no other (C62); writes carry the
-`X-WorkState-Write` guard. Allowed to a member of the project and to an admin of the workspace (a
+`X-Workman-Write` guard. Allowed to a member of the project and to an admin of the workspace (a
 system administrator is one of every workspace). **Anyone else gets the same `404 {error}` as an id
 that is no project** — a member of the workspace who is not in the project, a user of another
 workspace — so a private project's existence is not revealed. An admin manages the members of a project
@@ -50,7 +50,7 @@ Each change journals `member_added` / `member_removed` on the project with the u
 ### `POST /api/sessions/{id}/release` (outside v1)
 
 The Sessions page's Release (doc 11 "Releasing a name"): frees the session's name so the next mint
-creates the session fresh. Cookie only and the same `X-WorkState-Write` guard as archiving; a
+creates the session fresh. Cookie only and the same `X-Workman-Write` guard as archiving; a
 bearer token is never evaluated here (a controller uses `POST /api/agent-sessions/{id}/release`,
 doc 14 §2). Answers `200 { "sessionId", "name", "releasedAs" }`; 404 for an unknown id, and for a
 session that is not the caller's (a member releases only their own, as `/api/v1/sessions` lists only
@@ -66,7 +66,7 @@ administrator, every other workspace, oldest first:
 ```jsonc
 [{ "id": "uuid", "slug": "default", "role": "admin" | "member" | "system-admin", "current": true }]
 ```
-`POST {"id": "uuid"}`, with the same `X-WorkState-Write` guard as archiving, re-issues the cookie in
+`POST {"id": "uuid"}`, with the same `X-Workman-Write` guard as archiving, re-issues the cookie in
 that workspace: `204`, or `403 {error}` unless the user is a member of it or a system administrator (an
 id that is no workspace is the same 403). A sign-in lands in the user's first membership — a system
 administrator with none, in the oldest workspace — and a user with no membership cannot sign in (`403
@@ -81,7 +81,7 @@ offers (the Admin link); the admin API judges every call itself.
 
 ### `POST /api/session/password` (outside v1)
 
-Cookie only, with the `X-WorkState-Write` guard, rate-limited like sign-in (5 a minute per client, its
+Cookie only, with the `X-Workman-Write` guard, rate-limited like sign-in (5 a minute per client, its
 own window). `{ "current", "next" }`: `204` when `current` is the user's password, the cookie
 re-issued with the user's new security stamp; a bare `401`, as sign-in gives, when it is not (the
 dashboard tells it from a lapsed session by asking `GET /api/session`); `400 {error}` for a `next`
@@ -97,7 +97,7 @@ client's display name, else its client id; `lastUsedAt` is when the newest token
 sign-in or a refresh), or null; `sessions` counts the live `wss_` sessions minted with its tokens. No token or
 secret is ever in it.
 
-`POST …/revoke` carries the `X-WorkState-Write` guard. It revokes the approval and every token under it — the same
+`POST …/revoke` carries the `X-Workman-Write` guard. It revokes the approval and every token under it — the same
 method a client's sign-out at `/connect/revoke` runs — then each live session minted under it, as the user, which
 releases their claims (doc 11). `200 { "tokensRevoked", "sessionsRevoked" }`. An id that is not one of the
 caller's valid approvals in this tenant — another user's, another tenant's, unknown or already revoked — is
@@ -106,7 +106,7 @@ caller's valid approvals in this tenant — another user's, another tenant's, un
 ### `/api/admin/*` (outside v1)
 
 The Admin page's API (doc 08 §4 "Administration"). **Cookie only** — a bearer token gets 401 — and
-every write carries the `X-WorkState-Write` guard. Each call is judged against the caller's rights as
+every write carries the `X-Workman-Write` guard. Each call is judged against the caller's rights as
 the table has them on that request: a user who administers nothing gets `403 {error}` on every route;
 a tenant admin gets 403 for a workspace that is not theirs (asked before whether it exists); a system
 administrator gets 404 for an id that is no workspace. Errors are `{ "error": "…" }` and say what to do.
@@ -130,7 +130,7 @@ administrator gets 404 for an id that is no workspace. Errors are `{ "error": "�
 The invite page's two calls (doc 08 §4 "Invite links"). **No session needed**, rate-limited per
 client (10 a minute, `429` with `Retry-After`). `GET` answers `200 { tenantId, tenant, role,
 expiresAt, signedInAs, member }` — `signedInAs` the dashboard cookie's user, if the request carries
-one, and `member` whether they already are one. `POST`, with the `X-WorkState-Write` guard, takes
+one, and `member` whether they already are one. `POST`, with the `X-Workman-Write` guard, takes
 `{ name, password }` without a session and nothing with one: `200 { name, tenantId }` with the
 cookie set in that workspace; `400 {error}` for a blank name or a password under 12 characters; `409
 {error}` for a name already taken (the link stays unused). A used, revoked, expired or unknown token
@@ -139,7 +139,7 @@ is `404 {error}` on both.
 ### `GET /api/reset/{token}` · `POST /api/reset/{token}` (outside v1)
 
 The reset page's two calls (doc 08 §4 "Passwords"), shaped like the invite's: no session needed,
-rate-limited per client, the `POST` with the `X-WorkState-Write` guard. `GET` answers `200 { name,
+rate-limited per client, the `POST` with the `X-Workman-Write` guard. `GET` answers `200 { name,
 expiresAt }`. `POST { password }` answers `200 { name }` once the password is set — every cookie of
 that user is signed out, and the browser is not signed in — or `400 {error}` for a password under 12
 characters. A used, replaced, expired or unknown token is `404 {error}` on both.
@@ -165,7 +165,7 @@ characters. A used, replaced, expired or unknown token is `404 {error}` on both.
    whether an SSE frame is already reflected.
 4. **Additive only after freeze.** New fields and endpoints may appear; nothing is renamed or removed
    without `/api/v2`. Clients ignore unknown fields. Every response carries the header
-   `X-WorkState-Api: 1`.
+   `X-Workman-Api: 1`.
 5. **Auth — any of:** the dashboard cookie; `Authorization: Bearer <token>` with any agent token
    (controller/orchestrator/worker); a **reader** token — a token kind that can call nothing but
    `GET /api/v1/*` and `/api/stream` (no MCP tools at all); or an **OAuth access token for the
@@ -229,7 +229,7 @@ Session = { "id": "uuid", "name": "aw-m1", "role": "worker", "externalRole": "re
             "origin": "foreman/orion/Orion" | null, "launchedBy": "skills-5d" | null,
             "claudeSessionId": "…" | null, "cwd": "…" | null, "tree": "…" | null,
             "client": "claude-code 2.x" | null, "firstSeenAt": "…", "lastSeenAt": "…" }
-          // doc 11: a session exists only when named by the X-WorkState-Agent header;
+          // doc 11: a session exists only when named by the X-Workman-Agent header;
           // unnamed calls carry "session": null and are identified by actor/role alone
 Claim   = { "item": ItemRef, "run": ItemRef, "session": Session | null, "agent": "controller",  // agent = legacy label
             "role": "worker", "tree": "P:/…/m1-tool-args" | null, "acquiredAt": "…", "heartbeatAt": "…",
@@ -237,7 +237,7 @@ Claim   = { "item": ItemRef, "run": ItemRef, "session": Session | null, "agent":
             "heldBySession": "aw-m4-2b" | null }
           // heldBySession: the holding session's name (claim.session_id → agent_session.name), so a
           // client shows "aw-m4-2b · controller" without reaching into session; null for a claim
-          // taken without a session (a static token with no X-WorkState-Agent), shown by role alone.
+          // taken without a session (a static token with no X-Workman-Agent), shown by role alone.
           // Every Claim carries it: overview workingNow, board rows, the item page, /sessions.
 JournalEvent = { "seq": 1, "at": "…", "item": ItemRef | null, "run": ItemRef | null, "session": Session | null,
                  "actor": "controller", "role": "controller", "kind": "…", "summary": "…", "payload": { } }

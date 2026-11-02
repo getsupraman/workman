@@ -53,7 +53,7 @@ Rules:
   whose `launched_by` is NULL only when the row's `claude_session_id` is set and equals the mint's
   `claudeSessionId`; the row then records the launcher (journal `session_launcher_taken_over`). Any
   other mismatch stays `409`, and its message names the release path above.
-- `externalRole` fills `external_role` exactly as `X-WorkState-Foreman-Role` does.
+- `externalRole` fills `external_role` exactly as `X-Workman-Foreman-Role` does.
 - **Grants:** `grants` is a set of capabilities stored on the row (`agent_session.grants`, checked
   against the known names; migration `ImportGrant`). Only a minter that may mint at all (orchestrator
   or controller) can give one, an unknown name is `400`, and `import` on a `worker` role is `400` —
@@ -88,7 +88,7 @@ Rules:
 - **Authentication:** the bearer handler accepts the three static tokens as today, and a `wss_` token
   by hash lookup (not revoked, not expired). A minted token's principal carries the granted role
   (with the nesting the static tokens have) **and the session** — `CallerSession` takes the session
-  from the principal and ignores an `X-WorkState-Agent` header on that request. The name is then
+  from the principal and ignores an `X-Workman-Agent` header on that request. The name is then
   bound to the credential, not asserted by a header (doc 12 §7.1, SEP-2567's "authenticated principal").
 - **Minting with OAuth** (foreman-oauth): the whole group — mint, PATCH, DELETE — also takes an
   OAuth access token whose audience is `<origin>/api` and whose scopes include `workstate.sessions`
@@ -134,7 +134,7 @@ Tools appear as `mcp__plugin_workman_agents__<tool>`. No npm dependencies; plain
 | `repo_root` | path | required | must be a git working tree (refused otherwise); the session's cwd |
 | `controller` | string | required | `"<name> [<6-hex ref>]"` (refused without the ref) — goes into the protocol header |
 | `permission_mode` | `acceptEdits\|auto\|bypassPermissions\|manual\|dontAsk\|plan` | `auto` | `--permission-mode` |
-| `toolset` | `none\|readonly\|fix` | `fix` | the allow-list profiles of `Start-NestedAgent.ps1`, plus `mcp__workstate` when `workstate.role` is not `none` (else the first `work_*` call parks the agent under `acceptEdits`) |
+| `toolset` | `none\|readonly\|fix` | `fix` | the allow-list profiles of `Start-NestedAgent.ps1`, plus `mcp__workman` when `workstate.role` is not `none` (else the first `work_*` call parks the agent under `acceptEdits`); `mcp__workstate`, a user registration under the name before the rename, is then disallowed |
 | `allowed_tools` | string[] | `[]` | merged into `--allowedTools` |
 | `disallowed_tools` | string[] | `[]` | `--disallowedTools` |
 | `add_dirs` | path[] | `[]` | `--add-dir` |
@@ -168,7 +168,7 @@ fix. No result ever contains a token.
 - The `.ps1`/`.sh` launchers stay as the fallback (no plugin server, no Node) and as the reference for
   the argv order. The skill says the tool is the primary path.
 - Header-named sessions (doc 11) keep working for registrations that cannot mint (human sessions
-  with `--header X-WorkState-Agent`). Foreman mints with its OAuth token (§2, "Minting with OAuth").
+  with `--header X-Workman-Agent`). Foreman mints with its OAuth token (§2, "Minting with OAuth").
 - `/workman:setup` still registers the user-level server with a static token. Making setup itself
   token-free is doc 12 §7.4, not in this unit.
 

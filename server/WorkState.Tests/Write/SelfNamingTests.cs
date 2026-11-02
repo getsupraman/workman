@@ -14,7 +14,7 @@ namespace WorkState.Tests.Write;
 
 /// <summary>
 /// doc 11 — a hand-started session on the shared static registration names itself: the session
-/// helper sends X-WorkState-Client, work_session(name) binds it, and every later call carrying only
+/// helper sends X-Workman-Client, work_session(name) binds it, and every later call carrying only
 /// the key is signed with the name. A minted session's name stays its credential's.
 /// </summary>
 [Collection(StoreCollection.Name)]

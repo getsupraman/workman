@@ -22,8 +22,9 @@ The script reads them and hands them to Docker and to `claude mcp add` itself; *
 and you keep it that way:**
 
 - **never `Read`, `cat`, `grep` or open the `.env`**, and never write one yourself;
-- **never run `claude mcp get workstate`** — it prints the registration's `Authorization` header in
-  clear. Use `claude mcp list`: it shows the URL and the status and no header;
+- **never run `claude mcp get workman`** (nor `claude mcp get workstate`, its name before the rename) — it
+  prints the registration's `Authorization` header in clear. Use `claude mcp list`: it shows the URL and
+  the status and no header;
 - never put a token on a command line, in a `curl`, or in a file you write.
 
 The dashboard password is for the human: tell them it is in the `.env` the script names; do not print
@@ -52,7 +53,7 @@ claude mcp list
 curl -s -m 5 -o /dev/null -w "%{http_code}" http://127.0.0.1:5290/health
 ```
 
-| `workstate` line in `claude mcp list` | `/health` | State | Do |
+| `workman` line in `claude mcp list` (or `workstate`, from before the rename) | `/health` | State | Do |
 |---|---|---|---|
 | none | fails / not `200` | **nothing present** | §2, then §3 |
 | present | fails / not `200` | **registered, server down** | §2, then §3 — the script keeps the registration |
@@ -61,8 +62,11 @@ curl -s -m 5 -o /dev/null -w "%{http_code}" http://127.0.0.1:5290/health
 
 That last row is the one worth reading twice: a `Connected` server with no `work_*` tool in your list
 is not broken, it is a session that began before the registration did. The same goes for a
-`workstate` line that says it needs authentication: that is an OAuth registration nobody has signed
+`workman` line that says it needs authentication: that is an OAuth registration nobody has signed
 in to yet. Change nothing; the user signs in (§5).
+
+A `workstate` line is a registration from before the rename. It keeps working until server 2.0; running
+§3 moves it to `workman` (below).
 
 ---
 
@@ -108,8 +112,8 @@ or in PowerShell:
 | `--home-dir <dir>` | `-HomeDir <dir>` | a different home than `~/.workstate` |
 | `--auth oauth\|token` | `-Auth …` | how the registration signs in (below); **the default is the right choice** |
 | `--role orchestrator\|controller\|worker` | `-Role …` | token only: whose token is registered; orchestrator if you pass none |
-| `--agent <session>` | `-Agent <session>` | register at **local** scope (this project only) with `X-WorkState-Agent: <session>`, so sessions here are recorded by that name |
-| `--name <name>` | `-Name <name>` | registration name (default `workstate`) |
+| `--agent <session>` | `-Agent <session>` | register at **local** scope (this project only) with `X-Workman-Agent: <session>`, so sessions here are recorded by that name |
+| `--name <name>` | `-Name <name>` | registration name (default `workman`; passing it skips the move below) |
 | `--port <port>` | `-Port <port>` | host port, used only when it writes a **new** `.env` (default 5290) |
 | `--image-version <tag>` | `-ImageVersion <tag>` | pin the image instead of `latest` |
 | `--update` | `-Update` | pull the image again (home) or rebuild it (clone) |
@@ -150,6 +154,20 @@ The roles nest — a controller token also satisfies orchestrator and worker. Re
 `agent_signin`, or, headless, give it `workstate.env_file` = the `.env` this script names
 (`<home>/.env` or `<clone>/server/.env`) — a path, which is all it needs.
 
+**A registration named `workstate` is moved to `workman`.** Without `--name`, when this scope (user, or
+local with `--agent`) holds a `workstate` registration and no `workman` one, the script adds `workman`
+with the same url, headers and headersHelper, then removes `workstate` (`claude mcp add-json`, then
+`claude mcp remove`). The entry goes from Claude Code's config to Claude Code again: neither you nor the
+script sees or prints its token. It prints one line:
+
+```
+move      'workstate' -> 'workman' (user scope; http://127.0.0.1:5290/mcp, session helper, no token stored); with OAuth sign in again: /mcp, pick 'workman', Authenticate
+```
+
+An OAuth registration asks for a new sign-in under its new name; that is expected. When both names
+are registered, nothing is moved and the line says which command removes the old one; without `node`
+the old registration is kept, and used, as it is.
+
 Each step prints one line; every step is idempotent, so running it again is always safe:
 
 ```
@@ -158,11 +176,11 @@ env       wrote /home/u/.workstate/.env: 3 tokens, dashboard and Postgres passwo
 helper    /home/u/.workstate/session-header.mjs (names each session; needs node, found)
 start     project 'workstate' up, http://127.0.0.1:5290/health 200
 auth      oauth: the server offers OAuth sign-in (http://127.0.0.1:5290/.well-known/oauth-protected-resource/mcp 200)
-register  'workstate' -> http://127.0.0.1:5290/mcp with OAuth sign-in, session helper (user scope; no token stored)
-shadows   none: no local or project 'workstate' entry overrides it
+register  'workman' -> http://127.0.0.1:5290/mcp with OAuth sign-in, session helper (user scope; no token stored)
+shadows   none: no local or project 'workman' or 'workstate' entry overrides it
 prove     POST /mcp without a token: 401 with resource_metadata=http://127.0.0.1:5290/.well-known/oauth-protected-resource/mcp, which answers 200 - Claude Code finds the sign-in from there
 dashboard http://127.0.0.1:5290 - sign in with WORKSTATE_DASHBOARD_USERNAME / _PASSWORD from /home/u/.workstate/.env
-next      start a new Claude Code session, run /mcp, pick 'workstate', Authenticate, sign in with that dashboard user and Approve: the work_* tools appear there, not in this one
+next      start a new Claude Code session, run /mcp, pick 'workman', Authenticate, sign in with that dashboard user and Approve: the work_* tools appear there, not in this one
 ```
 
 With a token (`--auth token`, a `--role`, or a server without OAuth) the `auth`, `register`, `prove`
@@ -170,7 +188,7 @@ and `next` lines read instead:
 
 ```
 auth      token: --auth token
-register  'workstate' -> http://127.0.0.1:5290/mcp as orchestrator, session helper (user scope; token stored by Claude Code, not shown)
+register  'workman' -> http://127.0.0.1:5290/mcp as orchestrator, session helper (user scope; token stored by Claude Code, not shown)
 prove     19 work_* tools for the orchestrator token: orchestrator/controller
 next      start a new Claude Code session: the work_* tools appear there, not in this one
 ```

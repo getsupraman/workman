@@ -186,7 +186,7 @@ public sealed partial class RenderedCallTests(PostgresFixture fixture)
 
     /// <summary>
     /// The static controller's tools/list, unioned with a minted controller's that carries every
-    /// grant and with a static controller's whose request carries X-WorkState-Client: some tools are
+    /// grant and with a static controller's whose request carries X-Workman-Client: some tools are
     /// shown only to granted sessions (work_import) or only to a keyed static one (work_session).
     /// </summary>
     private async Task<Dictionary<string, HashSet<string>>> DeclaredAsync()

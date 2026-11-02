@@ -2,6 +2,8 @@
 # Copy this folder to /opt/multi-deploy/apps/workstate/, run ./gen-env.sh once, then `app deploy workstate`.
 # Keep the services in step with plugin/skills/setup/assets/compose.yml; this file adds
 # the Traefik labels, the `web` network, the public origin and the trusted proxy, and publishes no port.
+# More than one host: list every origin in WORKMAN_PUBLIC_URLS (each is its own OAuth issuer) and route them
+# all with WORKMAN_HOSTS, a Traefik rule, e.g. Host(`workman.example.com`) || Host(`workman.example.org`).
 # The image is pinned by WORKSTATE_VERSION in .env: an upgrade is a deliberate edit, after a backup.
 
 name: workstate
@@ -34,6 +36,8 @@ services:
       WorkState__Dashboard__Username: ${WORKSTATE_DASHBOARD_USERNAME:?set WORKSTATE_DASHBOARD_USERNAME in .env}
       WorkState__Dashboard__Password: ${WORKSTATE_DASHBOARD_PASSWORD:?set WORKSTATE_DASHBOARD_PASSWORD in .env}
       WorkState__PublicUrl: ${WORKSTATE_PUBLIC_URL:?set WORKSTATE_PUBLIC_URL in .env}
+      # Optional: further origins, comma-separated; a request is answered as the one its host names.
+      WorkState__PublicUrls: ${WORKMAN_PUBLIC_URLS:-}
       WorkState__TrustedProxies: ${WORKSTATE_TRUSTED_PROXIES:?set WORKSTATE_TRUSTED_PROXIES in .env}
       ConnectionStrings__WorkState: >-
         Host=db;Port=5432;Database=${POSTGRES_DB:-workstate};Username=${POSTGRES_USER:-workstate};Password=${POSTGRES_PASSWORD}
@@ -43,7 +47,7 @@ services:
     labels:
       - "traefik.enable=true"
       - "traefik.docker.network=web"
-      - "traefik.http.routers.workstate.rule=Host(`${WORKSTATE_HOST:?set WORKSTATE_HOST in .env}`)"
+      - "traefik.http.routers.workstate.rule=${WORKMAN_HOSTS:-Host(`${WORKSTATE_HOST:?set WORKSTATE_HOST in .env}`)}"
       - "traefik.http.routers.workstate.entrypoints=websecure"
       - "traefik.http.routers.workstate.tls.certresolver=letsencrypt"
       - "traefik.http.routers.workstate.middlewares=workstate-headers"
@@ -59,7 +63,7 @@ services:
       - "traefik.http.middlewares.workstate-headers.headers.forceSTSHeader=true"
       - "traefik.http.middlewares.workstate-headers.headers.referrerPolicy=same-origin"
       - "traefik.http.middlewares.workstate-headers.headers.contentTypeNosniff=true"
-      - "traefik.http.routers.workstate-http.rule=Host(`${WORKSTATE_HOST}`)"
+      - "traefik.http.routers.workstate-http.rule=${WORKMAN_HOSTS:-Host(`${WORKSTATE_HOST}`)}"
       - "traefik.http.routers.workstate-http.entrypoints=web"
       - "traefik.http.routers.workstate-http.middlewares=workstate-https"
       - "traefik.http.middlewares.workstate-https.redirectscheme.scheme=https"

@@ -192,7 +192,7 @@ internal static class RefLinks
           button.addEventListener('click', async () => {
             const response = await fetch('/api/session/tenant', {
               method: 'POST',
-              headers: { 'Content-Type': 'application/json', 'X-WorkState-Write': '1' },
+              headers: { 'Content-Type': 'application/json', 'X-Workman-Write': '1' },
               body: JSON.stringify({ id: button.dataset.tenant }),
             })
             if (response.ok) location.reload()
