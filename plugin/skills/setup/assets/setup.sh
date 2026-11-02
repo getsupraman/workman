@@ -21,9 +21,7 @@ usage: setup.sh [options]
                           oauth when the server offers it (its OAuth metadata answers 200), else token
   --role <role>           orchestrator (default) | controller | worker - whose token to register
                           (token only: an OAuth sign-in always gets the controller toolset)
-  --name <name>           registration name (default workman). Without --name, a 1.x registration named
-                          workstate in the same scope is moved to workman: same url and token, its
-                          X-WorkState-* headers renamed X-Workman-*; nothing is printed of its token
+  --name <name>           registration name (default workman)
   --agent <session>       register at LOCAL scope (this directory's project only) with the header
                           X-Workman-Agent: <session>, so sessions here are recorded by that name
   --port <port>           host port, written only into a NEW .env (default 5290)
@@ -44,7 +42,6 @@ status() { printf '%-10s%s\n' "$1" "$2"; }
 
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 clone=""; home_dir=""; role="orchestrator"; name="workman"; agent=""; port="5290"; project="workman"
-name_given=0
 image_version=""; update=0; force=0; session_names=0; role_given=0; dry_run=0; backup=""; restore=""
 auth=""
 
@@ -54,7 +51,7 @@ while [ $# -gt 0 ]; do
         --home-dir) home_dir="${2:?--home-dir needs a directory}"; shift 2 ;;
         --auth) auth="${2:?--auth needs oauth or token}"; shift 2 ;;
         --role) role="${2:?--role needs a value}"; role_given=1; shift 2 ;;
-        --name) name="${2:?--name needs a value}"; name_given=1; shift 2 ;;
+        --name) name="${2:?--name needs a value}"; shift 2 ;;
         --agent) agent="${2:?--agent needs a session name}"; shift 2 ;;
         --port) port="${2:?--port needs a value}"; shift 2 ;;
         --project) project="${2:?--project needs a value}"; shift 2 ;;
@@ -241,38 +238,6 @@ here="$PWD"
 command -v cygpath >/dev/null 2>&1 && here="$(cygpath -m "$PWD")"
 helper_path="$helper_file"
 command -v cygpath >/dev/null 2>&1 && helper_path="$(cygpath -m "$helper_file")"
-
-# the move - a 1.x registration becomes '$name' with the same url, scope and token, its X-WorkState-* headers
-# renamed and its headersHelper pointed at this home's copy. The plan's third line is the entry, token
-# included: captured here, never printed.
-legacy_name="workstate"
-if [ "$name_given" -eq 0 ] && command -v claude >/dev/null 2>&1; then
-    if [ "$has_node" -eq 1 ]; then
-        plan="$(node "$script_dir/move-registration.mjs" --from "$legacy_name" --to "$name" --scope "$scope" --dir "$here" --helper "node \"$helper_path\"" 2>/dev/null || true)"
-        verdict="$(printf '%s\n' "$plan" | sed -n 1p)"
-        move_summary="$(printf '%s\n' "$plan" | sed -n 2p)"
-        if [ "$verdict" = "move" ]; then
-            move_json="$(printf '%s\n' "$plan" | sed -n 3p)"
-            if [ "$dry_run" -eq 1 ]; then
-                status "move" "dry run, would move '$legacy_name' to '$name' ($scope scope; $move_summary)"
-            else
-                claude mcp add-json --scope "$scope" "$name" "$move_json" >/dev/null 2>&1 \
-                    || die "move      claude mcp add-json --scope $scope $name failed; '$legacy_name' is left as it is"
-                claude mcp remove "$legacy_name" --scope "$scope" >/dev/null 2>&1 \
-                    || die "move      '$name' added, but claude mcp remove $legacy_name --scope $scope failed: run it yourself"
-                status "move" "'$legacy_name' -> '$name' ($scope scope; $move_summary); with OAuth sign in again: /mcp, pick '$name', Authenticate"
-            fi
-            move_json=""
-        elif [ "$verdict" = "both" ]; then
-            status "move" "'$legacy_name' and '$name' are both registered ($scope scope): '$legacy_name' left as it is; once '$name' works, run: claude mcp remove $legacy_name -s $scope"
-        elif [ "$verdict" != "none" ]; then
-            status "move" "${verdict:-not checked: the move check printed nothing}"
-        fi
-        plan=""
-    else
-        status "move" "not checked (needs node): a 1.x '$legacy_name' registration is not moved; once '$name' works, run: claude mcp remove $legacy_name -s $scope"
-    fi
-fi
 
 if ! command -v claude >/dev/null 2>&1; then
     [ "$dry_run" -eq 1 ] || die "register  the claude CLI is not on PATH: install Claude Code, or run this where it is"

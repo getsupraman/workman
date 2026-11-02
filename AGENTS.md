@@ -51,5 +51,4 @@ that alters any tool's name, description or schema must repin its constants and 
   `127.0.0.1`) and synthetic data.
 - Machine-facing names stay stable: the MCP server name `workman`, the `work_*` tools, the
   `X-Workman-*` headers, the `WORKMAN_*` env var names, the `Workman:` settings keys and the OAuth scopes.
-  Renaming any of them needs a major version. The 1.x scopes `workstate.read` / `workstate.sessions` are
-  accepted as aliases (`OAuthServer.ScopeAliases`) until Supraman has switched.
+  Renaming any of them needs a major version.

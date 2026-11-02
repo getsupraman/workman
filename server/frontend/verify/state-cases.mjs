@@ -11,7 +11,6 @@ import { boardHref, copyValue, itemHref, pathCrumbs, routeReads } from '../src/n
 import { appIconHref, consentForm, consentStep, consentView, hiddenFields, iconStep, initials, isConnectPath, returnTarget, scopeLines, signInHref, signInStart, signInStep } from '../src/connect.ts'
 import { formerName, isReleased, releasable, tokenLabel } from '../src/sessions.ts'
 import { arrange, chordLabel, commands, entryHref, isPaletteChord, isSlash, matchCommands } from '../src/palette.ts'
-import { adoptOldKey } from '../src/storage.ts'
 import { HANDLE, LIST_MIN, PANEL_MIN, PANEL_SHARE, WIDTH_KEY, clampWidth, docks, panelWidth, rememberWidth, rememberedWidth } from '../src/split.ts'
 import { MEMBERS_ANCHOR, memberLine, membersHref, projectOnPath, shareMarker } from '../src/sharing.ts'
 import { PHONE_QUERY, closesOnMove, pageName } from '../src/menu.ts'
@@ -287,24 +286,6 @@ let threw = false
 try { rememberWidth(400, () => throwing) } catch { threw = true }
 check('storing into throwing storage does not throw', threw, false)
 
-console.log('\n── remembered choices: the 1.x keys move once ──────────────────────────────')
-const store = (entries) => {
-  const map = new Map(entries)
-  return { getItem: (k) => map.get(k) ?? null, setItem: (k, v) => map.set(k, v), removeItem: (k) => map.delete(k), map }
-}
-const oldWidth = store([['workstate.run-panel-width', '512']])
-check('a width stored under the 1.x key is read', rememberedWidth(() => oldWidth), 512)
-check('and now lives under the workman key only', [...oldWidth.map.entries()], [[WIDTH_KEY, '512']])
-const both = store([['workstate.theme', 'dark'], ['workman.theme', 'light']])
-adoptOldKey('workman.theme', () => both)
-check('a value already under the new key wins; the old key goes', [...both.map.entries()], [['workman.theme', 'light']])
-const none = store([])
-adoptOldKey('workman.theme', () => none)
-check('nothing stored moves nothing', none.map.size, 0)
-threw = false
-try { adoptOldKey('workman.theme', () => throwing) } catch { threw = true }
-check('throwing storage moves nothing and does not throw', threw, false)
-
 console.log('\n── the consent page: loading, client shown, approve, deny, error ────────────')
 const search = '?response_type=code&client_id=c1&redirect_uri=http%3A%2F%2F127.0.0.1%3A7777%2Fcallback&scope=openid+mcp+offline_access&state=s&resource=r1&resource=r2'
 const info = { clientName: 'Claude Code', clientHost: null, redirectHost: '127.0.0.1', loopbackOnly: true }
@@ -370,10 +351,6 @@ check('the /api scopes in plain words', scopeLines('?scope=workman.read%20workma
   ['workman.read', 'Read your board and its live updates'],
   ['workman.sessions', 'Start agent sessions on your behalf'],
   ['offline_access', 'Stay connected'],
-])
-check('the 1.x /api scope names read as the new ones', scopeLines('?scope=workstate.read%20workstate.sessions').map((l) => [l.scope, l.label]), [
-  ['workstate.read', 'Read your board and its live updates'],
-  ['workstate.sessions', 'Start agent sessions on your behalf'],
 ])
 check('a lapsed session goes back through sign-in', signInHref('?client_id=c1&state=s'), '/connect/signin?returnUrl=%2Fconnect%2Fauthorize%3Fclient_id%3Dc1%26state%3Ds')
 

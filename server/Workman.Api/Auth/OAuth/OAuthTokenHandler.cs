@@ -64,8 +64,7 @@ public sealed class OAuthTokenHandler(
 
         var identity = StaticTokenHandler.Identity(StaticTokenHandler.Nested(ActorRole.Controller), SchemeName);
         await UserAsync(identity, principal.GetClaim(OpenIddictConstants.Claims.Subject) ?? string.Empty, principal);
-        // A token granted under a 1.x scope name grants what its current name does.
-        foreach (var scope in principal.GetScopes().Select(OAuthServer.Canonical).Distinct(StringComparer.Ordinal))
+        foreach (var scope in principal.GetScopes())
         {
             identity.AddClaim(new Claim(ScopeClaim, scope));
         }

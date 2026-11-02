@@ -326,7 +326,6 @@ public static class OAuthEndpoints
             },
             Requirements = { Requirements.Features.ProofKeyForCodeExchange },
         };
-        descriptor.Permissions.UnionWith(OAuthServer.ScopeAliases.Keys.Select(alias => Permissions.Prefixes.Scope + alias));
         return descriptor;
     }
 

@@ -31,9 +31,6 @@ public sealed class ApiOAuthTests(PostgresFixture fixture)
     private const string Callback = "http://127.0.0.1:7777/callback";
     private const string Foreman = "workman.read workman.sessions offline_access";
 
-    /// <summary>What Supraman v0.1.2 asks for: the 1.x names, accepted as aliases until it has switched.</summary>
-    private const string SupramanV012 = "workstate.read workstate.sessions offline_access";
-
     [Fact]
     public async Task Foreman_reads_streams_mints_and_refreshes_with_an_api_token()
     {
@@ -88,28 +85,17 @@ public sealed class ApiOAuthTests(PostgresFixture fixture)
     }
 
     [Fact]
-    public async Task A_client_asking_for_the_1x_scope_names_gets_the_same_access_and_refreshes_under_them()
+    public async Task The_1x_scope_names_are_refused()
     {
-        var world = await WriteSeed.CreateAsync(fixture);
-        await using var server = await AppServer.StartAsync(fixture.ConnectionString, world.Slug, Ct);
-        var tokens = await SignInAsync(server, Api(server), SupramanV012);
+        await using var server = await AppServer.StartAsync(fixture.ConnectionString, Slug(), Ct);
+        var clientId = await OAuthTests.RegisterAsync(server.NewClient());
+        var browser = await server.SignInAsync(Ct);
 
-        await AssertFullApiAccessAsync(server, tokens.AccessToken, "alias-1");
-
-        // A refresh that names no scope, and one that names the old ones again, as a 1.x client sends it.
-        var refreshed = await RefreshAsync(server, tokens);
-        await AssertFullApiAccessAsync(server, refreshed.AccessToken, "alias-2");
-        var renamed = await RefreshAsync(server, refreshed, SupramanV012);
-        await AssertFullApiAccessAsync(server, renamed.AccessToken, "alias-3");
-
-        // Each alias grants its own route and no other.
-        var readOnly = await SignInAsync(server, Api(server), "workstate.read offline_access");
-        Assert.Equal(HttpStatusCode.OK, (await GetAsync(server, readOnly.AccessToken, "/api/v1/overview")).StatusCode);
-        Assert.Equal(HttpStatusCode.Forbidden, (await MintAsync(server, readOnly.AccessToken, new { name = "alias-ro", role = "worker" })).Status);
-
-        var sessionsOnly = await SignInAsync(server, Api(server), "workstate.sessions");
-        Assert.Equal(HttpStatusCode.Forbidden, (await GetAsync(server, sessionsOnly.AccessToken, "/api/v1/overview")).StatusCode);
-        Assert.Equal(HttpStatusCode.Created, (await MintAsync(server, sessionsOnly.AccessToken, new { name = "alias-so", role = "worker" })).Status);
+        foreach (var scope in new[] { "workstate.read workstate.sessions offline_access", "workstate.read", "workstate.sessions" })
+        {
+            var response = await browser.GetAsync(AuthorizeUrl(clientId, OAuthTests.Pkce.Create(), [Api(server)], scope), Ct);
+            await OAuthTests.AssertRefusedAsync(response, "invalid_scope");
+        }
     }
 
     [Fact]
@@ -180,7 +166,7 @@ public sealed class ApiOAuthTests(PostgresFixture fixture)
         Assert.Contains("workman.sessions", Strings(discovery, "scopes_supported"));
         Assert.Contains("mcp", Strings(discovery, "scopes_supported"));
 
-        // The 1.x names are accepted, never offered.
+        // The 1.x names are gone.
         Assert.DoesNotContain(Strings(discovery, "scopes_supported"), scope => scope.StartsWith("workstate.", StringComparison.Ordinal));
         Assert.DoesNotContain(Strings(resource, "scopes_supported"), scope => scope.StartsWith("workstate.", StringComparison.Ordinal));
 
@@ -380,22 +366,7 @@ public sealed class ApiOAuthTests(PostgresFixture fixture)
         return query["code"].ToString();
     }
 
-    /// <summary>Read, stream and mint: everything an <c>/api</c> token with both scopes may do.</summary>
-    private static async Task AssertFullApiAccessAsync(AppServer server, string token, string name)
-    {
-        Assert.Equal(HttpStatusCode.OK, (await GetAsync(server, token, "/api/v1/overview")).StatusCode);
-
-        using (var stream = new CancellationTokenSource(TimeSpan.FromSeconds(30)))
-        {
-            using var opened = await Bearer(server, token).GetAsync("/api/stream", HttpCompletionOption.ResponseHeadersRead, stream.Token);
-            Assert.Equal(HttpStatusCode.OK, opened.StatusCode);
-            await stream.CancelAsync();
-        }
-
-        Assert.Equal(HttpStatusCode.Created, (await MintAsync(server, token, new { name, role = "worker" })).Status);
-    }
-
-    private static async Task<OAuthTests.TokenSet> RefreshAsync(AppServer server, OAuthTests.TokenSet tokens, string? scope = null)
+    private static async Task<OAuthTests.TokenSet> RefreshAsync(AppServer server, OAuthTests.TokenSet tokens)
     {
         var form = new Dictionary<string, string>
         {
@@ -403,10 +374,6 @@ public sealed class ApiOAuthTests(PostgresFixture fixture)
             ["refresh_token"] = tokens.RefreshToken!,
             ["client_id"] = tokens.ClientId,
         };
-        if (scope is not null)
-        {
-            form["scope"] = scope;
-        }
 
         var response = await server.NewClient().PostAsync("/connect/token", new FormUrlEncodedContent(form), Ct);
 
