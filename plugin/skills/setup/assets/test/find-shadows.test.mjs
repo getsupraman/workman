@@ -25,46 +25,46 @@ test('a local entry without headersHelper is reported with its remove command', 
     const line = lineFor(finder([CONFIG]).lines, 'P:/Projects/Acme/Skills')
     assert.ok(line, 'the Skills local entry is reported')
     assert.match(line, /^local\s+P:\/Projects\/Acme\/Skills  http:\/\/localhost:5290\/mcp  no headersHelper/)
-    assert.match(line, /in that directory run: claude mcp remove workstate -s local$/)
+    assert.match(line, /in that directory run: claude mcp remove workman -s local$/)
 })
 
 test('a local entry WITH headersHelper is still reported: it shadows the user entry and its token', () => {
     const line = lineFor(finder([CONFIG]).lines, 'P:/Projects/Other')
     assert.ok(line, 'the Other local entry is reported')
     assert.match(line, /has headersHelper/)
-    assert.match(line, /claude mcp remove workstate -s local$/)
+    assert.match(line, /claude mcp remove workman -s local$/)
 })
 
 test('a project .mcp.json entry is reported as the committed team file, not as a file to delete', () => {
     const line = finder([path.join(FIXTURES, 'none.json'), '--dir', REPO]).lines.find((l) => l.startsWith('project'))
     assert.ok(line, 'the .mcp.json entry is reported')
     assert.ok(line.includes(path.join(REPO, '.mcp.json')))
-    assert.match(line, /mcpServers\.workstate in the committed team file/)
+    assert.match(line, /mcpServers\.workman in the committed team file/)
     assert.match(line, /do not delete the file/)
-    assert.match(line, /claude mcp remove workstate -s project/)
+    assert.match(line, /claude mcp remove workman -s project/)
 })
 
 test('another server name is ignored, and --name selects it instead', () => {
     const { lines } = finder([CONFIG])
-    assert.equal(lines.length, 3)
+    assert.equal(lines.length, 2)
     assert.ok(!lines.some((l) => l.includes('Unrelated')))
-    const staging = finder([CONFIG, '--name', 'workstate-staging']).lines
+    const staging = finder([CONFIG, '--name', 'workman-staging']).lines
     assert.equal(staging.length, 1)
-    assert.match(staging[0], /^local\s+P:\/Projects\/Unrelated .*claude mcp remove workstate-staging -s local$/)
+    assert.match(staging[0], /^local\s+P:\/Projects\/Unrelated .*claude mcp remove workman-staging -s local$/)
 })
 
-test('both names are checked by default: workman, and workstate from before the rename', () => {
+test('only workman is checked by default; a 1.x workstate entry is a name of its own, checked with --name', () => {
     const { lines } = finder([CONFIG])
-    assert.match(lineFor(lines, 'P:/Projects/Renamed') ?? '', /claude mcp remove workman -s local$/)
-    assert.match(lineFor(lines, 'P:/Projects/Acme/Skills') ?? '', /claude mcp remove workstate -s local$/)
-    assert.equal(finder([CONFIG, '--name', 'workman']).lines.length, 1)
-    assert.equal(finder([CONFIG, '--name', 'workstate']).lines.length, 2)
+    assert.equal(lineFor(lines, 'P:/Projects/Renamed'), undefined)
+    assert.match(lineFor(lines, 'P:/Projects/Acme/Skills') ?? '', /claude mcp remove workman -s local$/)
+    assert.equal(finder([CONFIG, '--name', 'workman']).lines.length, 2)
+    assert.match(finder([CONFIG, '--name', 'workstate']).lines[0] ?? '', /Renamed .*claude mcp remove workstate -s local$/)
     assert.equal(finder([CONFIG, '--name', 'workman', '--name', 'workstate']).lines.length, 3)
 })
 
 test('--own skips the local entry the script itself just wrote', () => {
     const { lines } = finder([CONFIG, '--own', 'P:\\Projects\\Acme\\Skills\\'])
-    assert.equal(lines.length, 2)
+    assert.equal(lines.length, 1)
     assert.ok(lines.some((l) => l.includes('P:/Projects/Other')))
     assert.ok(!lines.some((l) => l.includes('P:/Projects/Acme/Skills')))
 })
@@ -83,7 +83,7 @@ test('a malformed or missing config prints one line and exits 0', () => {
 })
 
 test('no header value or token ever reaches stdout or stderr', () => {
-    for (const args of [[CONFIG, '--dir', REPO], [CONFIG, '--name', 'workstate-staging'], [path.join(FIXTURES, 'malformed.json'), '--dir', REPO]]) {
+    for (const args of [[CONFIG, '--dir', REPO], [CONFIG, '--name', 'workman-staging'], [path.join(FIXTURES, 'malformed.json'), '--dir', REPO]]) {
         const r = finder(args)
         assert.ok(r.lines.length > 0, `${args.join(' ')} printed something to check`)
         for (const stream of [r.stdout, r.stderr]) {

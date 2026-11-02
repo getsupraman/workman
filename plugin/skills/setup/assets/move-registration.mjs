@@ -1,15 +1,17 @@
 #!/usr/bin/env node
-// move-registration.mjs — the plan for moving an old `workstate` registration to `workman`, read from the
+// move-registration.mjs — the plan for moving a 1.x `workstate` registration to `workman`, read from the
 // claude config the way find-shadows.mjs reads it:
 //   node move-registration.mjs [<claude config>] [--from workstate] [--to workman] [--scope user|local] [--dir <dir>]
+//                              [--helper <command>]
 // Prints, for the setup script to CAPTURE (line 3 can hold a token; the script never prints it):
 //   none                          no <from> entry in that scope: nothing to move
 //   both                          <from> and <to> are both there: nothing is moved, the user decides
 //   not checked: <why>            the config is missing or unreadable
 //   move                          then two more lines:
 //   <summary>                       safe to show: the url (no credentials or query) and what the entry carries
-//   <entry json>                    the entry for `claude mcp add-json`, same url, headers and headersHelper,
-//                                   each X-WorkState-* header also sent as its X-Workman-* twin
+//   <entry json>                    the entry for `claude mcp add-json`: same url and headers, each X-WorkState-*
+//                                   header renamed X-Workman-* (a 2.0 server reads no other); its headersHelper
+//                                   replaced by --helper when it had one, else kept
 // Exit 0 always. A parse error is not quoted, because it quotes the file.
 // @ts-check
 
@@ -40,22 +42,22 @@ export function serversOf(config, scope, dir) {
 }
 
 /**
- * The entry under its new name: everything kept, and each X-WorkState-* header also sent as X-Workman-*
- * (the server reads the new name first and the old one until 2.0).
- * @param {any} entry
+ * The entry under its new name: everything kept, each X-WorkState-* header renamed X-Workman-*, and a
+ * headersHelper pointed at `helper` (the new home's copy) when one is given.
+ * @param {any} entry @param {string} [helper]
  */
-export function movedEntry(entry) {
+export function movedEntry(entry, helper) {
     const out = { ...entry }
     if (entry?.headers && typeof entry.headers === 'object') {
         /** @type {Record<string, unknown>} */
         const headers = {}
         for (const [k, v] of Object.entries(entry.headers)) {
             const m = /^x-workstate-(.+)$/i.exec(k)
-            if (m) headers[`X-Workman-${m[1]}`] = v
-            headers[k] = v
+            headers[m ? `X-Workman-${m[1]}` : k] = v
         }
         out.headers = headers
     }
+    if (helper && typeof entry?.headersHelper === 'string' && entry.headersHelper.trim()) out.headersHelper = helper
     return out
 }
 
@@ -69,7 +71,7 @@ export function summary(entry) {
 
 /**
  * @param {unknown} config the parsed claude config
- * @param {{from: string, to: string, scope: 'user'|'local', dir?: string}} opt
+ * @param {{from: string, to: string, scope: 'user'|'local', dir?: string, helper?: string}} opt
  * @returns {string[]}
  */
 export function plan(config, opt) {
@@ -77,12 +79,12 @@ export function plan(config, opt) {
     const from = entryOf(servers, opt.from)
     if (from === undefined || from === null || typeof from !== 'object') return ['none']
     if (entryOf(servers, opt.to) !== undefined) return ['both']
-    return ['move', summary(from), JSON.stringify(movedEntry(from))]
+    return ['move', summary(from), JSON.stringify(movedEntry(from, opt.helper))]
 }
 
 /** @param {string[]} argv @returns {string[]} */
 export function moveRegistration(argv) {
-    /** @type {{config?: string, from: string, to: string, scope: 'user'|'local', dir?: string}} */
+    /** @type {{config?: string, from: string, to: string, scope: 'user'|'local', dir?: string, helper?: string}} */
     const opt = { from: LEGACY_NAME, to: NAME, scope: 'user' }
     for (let i = 0; i < argv.length; i++) {
         const a = argv[i]
@@ -90,6 +92,7 @@ export function moveRegistration(argv) {
         else if (a === '--to') opt.to = argv[++i] ?? opt.to
         else if (a === '--scope') opt.scope = argv[++i] === 'local' ? 'local' : 'user'
         else if (a === '--dir') opt.dir = argv[++i]
+        else if (a === '--helper') opt.helper = argv[++i]
         else if (!opt.config) opt.config = a
     }
     const configFile = opt.config ?? path.join(process.env.CLAUDE_CONFIG_DIR || os.homedir(), '.claude.json')

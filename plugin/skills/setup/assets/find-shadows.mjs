@@ -4,8 +4,7 @@
 // project-scope entry in <dir>/.mcp.json. Claude Code resolves local > project > user, so a session in
 // such a directory never sees the user registration or its headersHelper.
 //   node find-shadows.mjs [<claude config>] [--name <server>]... [--dir <dir>] [--own <dir>]
-// Without --name it checks both names the server has had: workman, and workstate (until 2.0). Each
-// --name replaces that pair; repeat it to check several.
+// Without --name it checks workman. Each --name replaces it; repeat it to check several.
 // <claude config> defaults to $CLAUDE_CONFIG_DIR/.claude.json, else ~/.claude.json. --dir also checks
 // that directory's .mcp.json. --own skips the local entry of that directory (the one -Agent wrote).
 // One line per shadowing entry with the command that removes it; nothing when none shadows; exit 0.
@@ -20,8 +19,8 @@ import { fileURLToPath } from 'node:url'
 
 /** @typedef {{scope: 'local' | 'project', dir: string, file: string, url: string, helper: boolean}} Shadow */
 
-/** The registration's name, then the name it had before the rename (accepted until 2.0). */
-export const DEFAULT_NAMES = Object.freeze(['workman', 'workstate'])
+/** The registration's name. */
+export const DEFAULT_NAMES = Object.freeze(['workman'])
 
 /** @param {string} dir */
 export function sameDir(dir) {
