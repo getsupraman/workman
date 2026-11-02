@@ -58,7 +58,7 @@ CREATE TYPE verify_runner   AS ENUM ('worker','orchestrator','ci','human');
 
 ## 2. One global server; a project per repo; parallel runs inside it
 
-**Settled (2026-09-18).** There is **one WorkState deployment**, single-user. A **project** is an
+**Settled (2026-09-18).** There is **one Workman deployment**, single-user. A **project** is an
 item, one per repo. Runs live under projects, and **many orchestrators run in parallel**, each owning
 its own run subtree.
 
@@ -1098,7 +1098,7 @@ row, turned that into a quadratic read: the board read went from 3 ms to 38 ms o
 copy (doc 15 §7).
 
 **Why it is safe here.** `LEAKPROOF` protects a table from a caller who writes their own predicate and
-learns from its errors which rows the policy hid. WorkState has no such caller. Every statement is SQL the
+learns from its errors which rows the policy hid. Workman has no such caller. Every statement is SQL the
 server itself wrote, with values bound as parameters, and no tool, endpoint or argument runs
 caller-supplied SQL. The policies guard against the server's own forgotten filter (above), which is
 unaffected. These functions may now run on a row before the policy does, which is what lets them drive

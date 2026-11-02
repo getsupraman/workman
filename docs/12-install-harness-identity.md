@@ -1,4 +1,4 @@
-# 12 — Install, harness and identity: WorkState from a fresh PC
+# 12 — Install, harness and identity: Workman from a fresh PC
 
 > **Historical record.** The steps below were measured when the plugin was installed from its earlier
 > home. The repository and image names now read `getsupraman/workman`, but the install path changed
@@ -14,7 +14,7 @@ Owner: skills-5d. Written 2026-10-23 for the maintainer, who asked:
 
 Every statement is tagged with how it is known:
 
-- **[measured]** observed on this machine (Claude Code **2.1.309**, Windows 11, WorkState @ `7cd34f7`)
+- **[measured]** observed on this machine (Claude Code **2.1.309**, Windows 11, Workman @ `7cd34f7`)
 - **[code]** read in this repo
 - **[doc]** read in Claude Code docs (`code.claude.com/docs/en/…`) or the MCP specification
   (`modelcontextprotocol.io`), with the page named
@@ -26,13 +26,13 @@ Every statement is tagged with how it is known:
 
 | Question | Answer |
 |---|---|
-| Does the harness keep an MCP session between calls? | **No — not with WorkState.** Claude Code 2.1.309 opens with the **2026-07-28** revision (`server/discover`), which removed `Mcp-Session-Id` and `initialize` altogether **[measured]** **[doc: SEP-2567, SEP-2575]**. WorkState's SDK (C# 2.2.0) is stateless by default **[code]**. Every request stands alone. |
+| Does the harness keep an MCP session between calls? | **No — not with Workman.** Claude Code 2.1.309 opens with the **2026-07-28** revision (`server/discover`), which removed `Mcp-Session-Id` and `initialize` altogether **[measured]** **[doc: SEP-2567, SEP-2575]**. Workman's SDK (C# 2.2.0) is stateless by default **[code]**. Every request stands alone. |
 | Who carries the token? | **The harness, never the model.** Claude Code reads the server entry from config at session start and attaches its `headers` (or the output of a `headersHelper`) to every HTTP request **[doc: mcp.md "headers and headersHelper"]**. The model only calls `work_*` tools. |
 | Then why did agents touch tokens this week? | Because **our setup procedure makes them**: `/workman:setup` has the model *write* `server/.env` with generated tokens, *read* a token back out of it, paste it into `claude mcp add --header "Authorization: Bearer …"`, and `curl` with it **[code: /workman:setup §3, §5, §6]**. The harness then stores it in plaintext in `~/.claude.json` **[measured: the user-scope entry is `{type, url, headers:{Authorization}}`]**. Fixing *that* is part of the proposal below (done for setup 2026-10-26, §7.4). |
 | What can identify a session per request, spec-compliantly? | (1) **the credential** (the token's principal) — the spec's own replacement for session ids; (2) **headers the harness attaches**; (3) `clientInfo` in `_meta` — but it is the same `claude-code 2.1.309` for every session and the spec says not to base decisions on it **[doc + measured]**. |
 | Can a session's **name** reach the server without the model? | **Yes — via `headersHelper`.** Measured today: a `claude --bg` session launched with `--mcp-config` whose server entry has `headersHelper: "<command with the name as an argument>"` sent that header on every request **[measured]**. Environment variables do **not** work for `--bg` sessions (launcher env and the worktree's `settings.local.json` `env` both arrived as unset) **[measured]**. |
 | Can the **role** too? | **Yes, the same way** — the helper prints `Authorization: Bearer <the token for that role>`, reading the token from where the server's tokens already live (`server/.env`). The model never sees it; the helper runs in the harness, not in a tool call. This is "role in the credential", which is what the spec recommends **[doc: authorization, SEP-2567]**. |
-| Recommendation | **A WorkState credential helper** (§7.3): one small script shipped in the plugin, used both by the normal registration and by every nested-agent launch. No token in `~/.claude.json`, none in any per-launch file, none in the model's context; name and role per session; nothing new on the server. |
+| Recommendation | **A Workman credential helper** (§7.3): one small script shipped in the plugin, used both by the normal registration and by every nested-agent launch. No token in `~/.claude.json`, none in any per-launch file, none in the model's context; name and role per session; nothing new on the server. |
 
 ---
 
@@ -42,20 +42,20 @@ Every statement is tagged with how it is known:
 |---|---|---|---|
 | **Marketplace** `supraman` | a git clone of `github.com/getsupraman/workman` | `~/.claude/plugins/marketplaces/supraman/` **[measured]** | `/plugin marketplace add getsupraman/workman` (auto-updates: `autoUpdate: true` in `~/.claude/plugins/known_marketplaces.json`) |
 | **Plugin** `workman` | the skills only: `plugin/` | `~/.claude/plugins/cache/supraman/workman/<version>/` **[measured: `…/1.5.0/skills/controller`]** | `/plugin install workman@supraman`; re-copied only when `plugin.json` `version` changes |
-| **WorkState source** | `.NET 10` API + MCP server + SolidJS dashboard, `server/` in the same repo | **optional since 2026-10-26** — only to develop WorkState or build the image yourself | the user, `git clone` |
-| **WorkState binaries** | the published image `ghcr.io/getsupraman/workman:<version>` (amd64 + arm64), or one built **from a clone**, plus `postgres:17` | Docker's image store | `setup.sh` / `.ps1`: pulled by `~/.workstate/compose.yml`, or built by `<clone>/server/compose.yml` (multi-stage: `node:24-slim` builds the SPA, `dotnet/sdk:10.0` publishes, `aspnet:10.0` runs) **[code: server/Dockerfile]** |
-| **WorkState data** | the Postgres database: every plan, claim, verification, journal | Docker volume `workstate_workstate-db-data` — the same for both composes | created on first `up`; schema applied by the API at startup **[code: SchemaOwner]**; `--backup` / `--restore` |
+| **Workman source** | `.NET 10` API + MCP server + SolidJS dashboard, `server/` in the same repo | **optional since 2026-10-26** — only to develop Workman or build the image yourself | the user, `git clone` |
+| **Workman binaries** | the published image `ghcr.io/getsupraman/workman:<version>` (amd64 + arm64), or one built **from a clone**, plus `postgres:17` | Docker's image store | `setup.sh` / `.ps1`: pulled by `~/.workstate/compose.yml`, or built by `<clone>/server/compose.yml` (multi-stage: `node:24-slim` builds the SPA, `dotnet/sdk:10.0` publishes, `aspnet:10.0` runs) **[code: server/Dockerfile]** |
+| **Workman data** | the Postgres database: every plan, claim, verification, journal | Docker volume `workstate_workstate-db-data` — the same for both composes | created on first `up`; schema applied by the API at startup **[code: SchemaOwner]**; `--backup` / `--restore` |
 | **Server configuration** | tokens, dashboard login, Postgres password, port, bind | `~/.workstate/.env`, or `<clone>/server/.env` (gitignored; template `server/.env.example`) | the setup script, once, with random values; never overwritten |
 | **Client registration** | the `workman` MCP server entry (`workstate` before the rename) | `~/.claude.json` → `mcpServers.workman` (user scope) or `projects["<path>"].mcpServers` (local scope) **[measured]** | `claude mcp add`, run by the setup script (`/workman:setup` §3) |
 | **Running service** | `http://127.0.0.1:5290` — `/mcp`, `/api/v1/*`, dashboard, `/health` | containers `workstate-api-1`, `workstate-db-1`, `restart: unless-stopped` | Docker |
 
-Nothing of WorkState runs inside Claude Code. It is a service **you** run; Claude Code only connects
-(doc 08 §1). The host needs **no .NET SDK and no Node** for WorkState — both live in build stages of
+Nothing of Workman runs inside Claude Code. It is a service **you** run; Claude Code only connects
+(doc 08 §1). The host needs **no .NET SDK and no Node** for Workman — both live in build stages of
 the image. It needs **git** and **Docker**.
 
 Two facts worth knowing:
 
-- **The plugin ships no `.mcp.json`** on purpose (README "WorkState"): a shipped server entry is
+- **The plugin ships no `.mcp.json`** on purpose: a shipped server entry is
   attempted by every session in every project, so every user who installed the plugin
   would get a failed connection forever.
 - **The marketplace clone already contains `server/` once 2.x is pushed.** Today `origin/master` is
@@ -80,11 +80,11 @@ session the skills are listed as `/workman:<name>`.
 
 What is **not** there after step 2:
 
-- no WorkState server, no Docker containers, no `server/.env`
+- no Workman server, no Docker containers, no `server/.env`
 - no `workstate` MCP registration, so no `work_*` tools
 - `/workman:agents` and `/workman:setup` work
   immediately (given their prerequisites — README "Prerequisites and platforms")
-- `/workman:orchestrate` and `/workman:controller` **cannot run**: they require WorkState and have no
+- `/workman:orchestrate` and `/workman:controller` **cannot run**: they require Workman and have no
   markdown fallback since 2.0.0
 
 ---
@@ -136,7 +136,7 @@ approval, and starts launching nested agents (§6).
 
 ---
 
-## 4. The WorkState MCP surface
+## 4. The Workman MCP surface
 
 **[code unless marked]** — full contract in docs 01, 05–07, 10, 11.
 
@@ -222,7 +222,7 @@ with — and inside that config, a `headersHelper` command line.**
 `controller`.
 
 1. The controller makes a **worktree + branch** per unit (`git worktree add -b ws/<unit> …`),
-   claims the unit in WorkState with `tree:` = that worktree.
+   claims the unit in Workman with `tree:` = that worktree.
 2. It writes a **brief file** and runs the launcher: `Start-NestedAgent.ps1` (Windows) or
    `start-nested-agent.sh` (macOS/Linux), which:
    - refuses a `-RepoRoot` that is not a working tree and a `-Controller` without its `[ref]`;
@@ -257,7 +257,7 @@ So today a nested agent is **anonymous and holds the controller role** — the g
 - SEP-2567's stated replacement for session-keyed state: **the authenticated principal**, or an
   explicit state handle passed as a tool argument.
 - Authorization: the server is an OAuth 2.1 resource server; **scopes** are the spec's model for
-  "different principals see different tools". WorkState's one-token-per-role is the degenerate form
+  "different principals see different tools". Workman's one-token-per-role is the degenerate form
   of that (one scope per token) — spec-legal, since custom auth is allowed.
 
 ### 7.2 Options, judged against both constraints
@@ -269,10 +269,10 @@ So today a nested agent is **anonymous and holds the controller role** — the g
 | C | per-launch `--mcp-config` with `${VAR}` | ✓ | ✓ | no | **✗ env not inherited** [measured] |
 | D | worktree `.claude/settings.local.json` `env` + `${VAR}` | ✓ | ✓ | no | **✗ not expanded** [measured] |
 | E | tool argument / state handle (`work_brief(agent:)`, SEP-2567 handle) | label only, model-asserted, lost on compaction | ✗ (never from the model) | no | ✓ |
-| F | OAuth with WorkState as its own authorization server | per server, not per session | ✓ via scopes | no | per registration |
+| F | OAuth with Workman as its own authorization server | per server, not per session | ✓ via scopes | no | per registration |
 | **G** | **per-launch `--mcp-config` with a `headersHelper`** | **✓** | **✓** | **no** | **✓ [measured]** |
 
-### 7.3 Recommendation — a WorkState credential helper (option G)
+### 7.3 Recommendation — a Workman credential helper (option G)
 
 > **Changed 2026-10-26 — a headers helper names sessions; the token stays a static header.**
 > `/workman:setup` copies `assets/session-header.mjs` next to the `.env` and registers with
@@ -329,7 +329,7 @@ What this buys:
 What it does **not** buy, stated plainly:
 
 - **Not a security boundary against a hostile agent.** Any session with shell access can read
-  `server/.env`. It keeps an honest agent honest by construction, which is the threat model WorkState
+  `server/.env`. It keeps an honest agent honest by construction, which is the threat model Workman
   has (doc 07). The classifier's job — stopping the model from *handling* tokens — is satisfied.
 - The helper path is baked into config. A plugin update changes the cache directory
   (`…/workman/<version>/`), so the registration must point at a **stable** copy: `/workman:setup`
@@ -361,9 +361,9 @@ for the human: setup tells them where to read it (`server/.env`), it does not pr
 > first sign-in with it creates the first user (doc 08 §4), and after that the user's own stored hash
 > is what signs in. Editing the `.env` password afterwards does not change the dashboard password.
 
-### 7.5 Later, if WorkState ever leaves localhost
+### 7.5 Later, if Workman ever leaves localhost
 
-Option F — WorkState as an OAuth 2.1 authorization server with **scopes = roles**
+Option F — Workman as an OAuth 2.1 authorization server with **scopes = roles**
 (`scopes_supported` in RFC 9728 metadata, 403 `insufficient_scope` for step-up). Claude Code already
 does discovery, registration and keychain storage. It still gives one identity per registration, so
 names would keep coming from the helper. Not worth building while the server is loopback-only.
@@ -386,7 +386,7 @@ names would keep coming from the helper. Not worth building while the server is 
 | `setup/SKILL.md` | §3 runs `init-env`; §5 registers with `headersHelper` via `claude mcp add-json`, `127.0.0.1`; §6 checks via the helper, no token on a command line; a migration note for existing literal-token registrations | medium |
 | `/workman:agents` launchers (`.ps1` + `.sh`) | per-launch config with the helper, `--role` default `worker`; nothing secret in the file (rework of the deferred `ws/m6-launcher` branch) | medium |
 | `controller` SKILL.md | one sentence: nested agents now write as workers under their own name | tiny |
-| WorkState server | **none** — `X-Workman-*` headers and per-role tokens already exist | — |
+| Workman server | **none** — `X-Workman-*` headers and per-role tokens already exist | — |
 | Measurements before merging | (1) `${CLAUDE_PLUGIN_ROOT}` in a user-scope `headersHelper`; (2) `claude mcp add-json` with `headersHelper` round-trips into `~/.claude.json`; (3) a worker-role nested agent's `work_verify` is recorded as `worker` and cannot close its unit; (4) Git Bash absent → `.ps1` helper path | — |
 
 ---
@@ -397,7 +397,7 @@ names would keep coming from the helper. Not worth building while the server is 
    reopens the deferred `launcher-headers` unit with no token in any file the model writes.
 2. **Setup without the model handling secrets** (§7.4) — in this release, or after?
    **Answered 2026-10-26: yes, this release** — see the "Changed" note in §7.4.
-3. **Where should the WorkState binaries come from?** Today every PC builds the image from a clone
+3. **Where should the Workman binaries come from?** Today every PC builds the image from a clone
    (minutes, needs the source). Alternative: publish `ghcr.io/getsupraman/workman:<version>` and
    ship a `compose.yml` that pulls it — then a PC needs only Docker, `server/.env` and the compose file,
    and the clone becomes optional. Costs a CI pipeline and image versioning.

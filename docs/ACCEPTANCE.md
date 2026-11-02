@@ -6,6 +6,9 @@
 >
 > Prompts pre-registered `ea17ed8`, **before the read side shipped and before any tool name was
 > final** — so the ordering is checkable, not asserted. `docs/04-self-explaining.md`.
+>
+> Recorded when the product was still named `WorkState`. The prose says Workman; commands, prompts
+> and transcript lines are kept exactly as they ran, old name included.
 
 ---
 
@@ -55,7 +58,7 @@ The agent is launched by `/workman:agents`'s `Start-NestedAgent.ps1`, which **pr
 every brief: who its controller is, the `READY` / `BLOCKED` / `DONE` protocol, and *"if you hit a
 permission prompt you cannot clear, send BLOCKED naming the exact operation."*
 
-**It says nothing about WorkState, MCP, tools, or work tracking of any kind.** So it shapes how the
+**It says nothing about Workman, MCP, tools, or work tracking of any kind.** So it shapes how the
 agent *reports*, not what it does about the subject under test. Recorded here because a test whose
 contaminants are listed can be judged; one whose contaminants are unmentioned cannot.
 
@@ -66,7 +69,7 @@ a silent park — so an allow-list gap shows up as data rather than as a hang.
 
 **Run A-0 was void because the agent read this file.** Call 6 of 16 was
 `Read docs/ACCEPTANCE.md` — the purpose, both frozen prompts, the scoring buckets. It was pointed at
-the WorkState checkout, which holds this runbook and all eight design documents.
+the Workman checkout, which holds this runbook and all eight design documents.
 
 The prompt discipline was fine. **The room was not.** And the agent was *right* to read them: told
 to "use workstate", standing in a repo full of workstate documentation, reading the documentation is
@@ -81,7 +84,7 @@ in which the transcript means what it claims to mean.
 
 Two practical notes for whoever re-runs this:
 
-- **MCP registration is per-project.** Registering `workstate` in the WorkState checkout does not
+- **MCP registration is per-project.** Registering `workstate` in the Workman checkout does not
   register it in the neutral tree; run `claude mcp add` from the neutral tree itself.
 - **Check what is reachable before launching, not after.** `find . -name "*.md"` in the tree you are
   about to point an agent at costs one command and is the whole defence.
@@ -96,10 +99,10 @@ Two reasons, and the second is the one that matters:
 1. **Grant all 18, not a subset.** The role is decided by the **token**, so `tools/list` already
    narrows correctly. An allow-list gap would produce a `BLOCKED` that looks like a tool-surface
    defect and is not — a false finding is worse than no finding.
-2. **The subject under test is whether the agent can drive WorkState**, not whether it can do the
+2. **The subject under test is whether the agent can drive Workman**, not whether it can do the
    underlying engineering. Run A says *"take it as far as you can"*; an agent that reaches the point
    of needing to edit an Atlas source file and says so has **succeeded** at the thing being measured.
-   Score the WorkState calls; the code work is out of scope and its absence is not a defect.
+   Score the Workman calls; the code work is out of scope and its absence is not a defect.
 
 ## 5. How a call is scored
 
@@ -127,7 +130,7 @@ one-line README and its own brief.
 
 | | |
 |---|---|
-| WorkState calls | 9 |
+| Workman calls | 9 |
 | correct | **7** |
 | self-corrected from the server's own refusal | **1** |
 | **uncorrected wrong calls by the agent** | **0 — the stated bar is met** |
@@ -148,7 +151,7 @@ one-line README and its own brief.
 
 ### Verdict — the bar is met, and the system is still defective
 
-**Zero uncorrected wrong calls.** Every WorkState call the agent made was either right, or wrong in
+**Zero uncorrected wrong calls.** Every Workman call the agent made was either right, or wrong in
 a way the server's own refusal corrected. On the stated bar, **Run A passes.**
 
 That is not the whole truth, and the transcript is worth more than the score:
@@ -179,7 +182,7 @@ a transcript could have shown it — every one of these defects passes its own u
 | 12 | `work_brief("3.R1-mapper-seed-reconstruct")` | — | resolves unqualified, because that ref is unique |
 | 13 | `Get-ChildItem …` | — | boundary: went looking for the repo. §4b: success. |
 
-**Score: 8 WorkState calls · 7 correct · 1 self-corrected · 0 uncorrected wrong.**
+**Score: 8 Workman calls · 7 correct · 1 self-corrected · 0 uncorrected wrong.**
 
 Two details worth keeping:
 
@@ -202,7 +205,7 @@ to stop lying **in a transcript, not in a test name.**
 
 | | |
 |---|---|
-| WorkState calls | 1 |
+| Workman calls | 1 |
 | correct | **1** |
 | uncorrected wrong | **0** |
 | Writes made | **none** |
@@ -399,7 +402,7 @@ override's cost attached, gets the remedy chosen.**
 ### ⚠ My own error in the steer, recorded
 
 I suggested `curl -fsS http://localhost:5290/health` as the task's `verify_cmd` — and that is
-**WorkState's own health endpoint, which was already green.** It could never have gone red for a
+**Workman's own health endpoint, which was already green.** It could never have gone red for a
 task about adding a health endpoint to a different, empty repo. I handed the agent a decorative
 verification one paragraph after praising the server for refusing exactly that.
 
