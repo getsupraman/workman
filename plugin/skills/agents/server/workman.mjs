@@ -1,4 +1,4 @@
-// workstate.mjs — mint, bind and revoke per-session Workman tokens (docs/14 §2).
+// workman.mjs — mint, bind and revoke per-session Workman tokens (docs/14 §2).
 //
 // The controller token (read from the env FILE) or the OAuth access token (oauth.mjs) goes nowhere
 // but an Authorization header. A minted token goes nowhere but the mcp-<name>.json it is written to.
@@ -9,7 +9,7 @@
 import fs from 'node:fs'
 import { Refusal } from './launch-args.mjs'
 
-const TOKEN_KEYS = ['WORKSTATE_CONTROLLER_TOKEN', 'WORKSTATE_ORCHESTRATOR_TOKEN']
+const TOKEN_KEYS = ['WORKMAN_CONTROLLER_TOKEN', 'WORKMAN_ORCHESTRATOR_TOKEN']
 
 /**
  * KEY=VALUE lines; blank lines and # comments ignored; one layer of matching quotes stripped.
@@ -41,11 +41,11 @@ export function readControllerToken(envFile) {
     try {
         text = fs.readFileSync(envFile, 'utf8')
     } catch (e) {
-        throw new Refusal(`cannot read workstate.env_file ${envFile}: ${/** @type {NodeJS.ErrnoException} */ (e).code ?? 'unreadable'}`)
+        throw new Refusal(`cannot read workman.env_file ${envFile}: ${/** @type {NodeJS.ErrnoException} */ (e).code ?? 'unreadable'}`)
     }
     const env = parseEnvFile(text)
     for (const k of TOKEN_KEYS) if (env[k]) return env[k]
-    throw new Refusal(`workstate.env_file ${envFile} has neither ${TOKEN_KEYS.join(' nor ')}; minting needs one of them`)
+    throw new Refusal(`workman.env_file ${envFile} has neither ${TOKEN_KEYS.join(' nor ')}; minting needs one of them`)
 }
 
 /**

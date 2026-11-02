@@ -1,6 +1,6 @@
 // repo.mjs — the repository identity a Workman project is bound to (docs/02 project_repo).
 //
-// The same rule as RepoKeys in server/WorkState.Core/Domain/Repos.cs; both run the table in
+// The same rule as RepoKeys in server/Workman.Core/Domain/Repos.cs; both run the table in
 // docs/repo-keys.json. The server normalises too, so this only has to compute the keys.
 // @ts-check
 

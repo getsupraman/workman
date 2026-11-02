@@ -1,18 +1,18 @@
 {
     "numStartups": 12,
     "mcpServers": {
-        "workstate": {
+        "workman": {
             "type": "http",
             "url": "http://127.0.0.1:5290/mcp",
             "headers": { "Authorization": "Bearer SENTINEL-TOKEN-user-7f3a91" },
-            "headersHelper": "node \"C:/Users/u/.workstate/session-header.mjs\""
+            "headersHelper": "node \"C:/Users/u/.workman/session-header.mjs\""
         }
     },
     "projects": {
         "P:/Projects/Acme/Skills": {
             "allowedTools": [],
             "mcpServers": {
-                "workstate": {
+                "workman": {
                     "type": "http",
                     "url": "http://localhost:5290/mcp",
                     "headers": { "Authorization": "Bearer SENTINEL-TOKEN-local-2c8e44" }
@@ -21,17 +21,17 @@
         },
         "P:/Projects/Other": {
             "mcpServers": {
-                "workstate": {
+                "workman": {
                     "type": "http",
                     "url": "http://u:SENTINEL-TOKEN-userinfo@127.0.0.1:5290/mcp?token=SENTINEL-TOKEN-query",
-                    "headers": { "Authorization": "Bearer SENTINEL-TOKEN-helper-91d0aa", "X-WorkState-Agent": "SENTINEL-TOKEN-agent" },
-                    "headersHelper": "node \"C:/Users/u/.workstate/session-header.mjs\""
+                    "headers": { "Authorization": "Bearer SENTINEL-TOKEN-helper-91d0aa", "X-Workman-Agent": "SENTINEL-TOKEN-agent" },
+                    "headersHelper": "node \"C:/Users/u/.workman/session-header.mjs\""
                 }
             }
         },
         "P:/Projects/Unrelated": {
             "mcpServers": {
-                "workstate-staging": {
+                "workman-staging": {
                     "type": "http",
                     "url": "http://127.0.0.1:6290/mcp",
                     "headers": { "Authorization": "Bearer SENTINEL-TOKEN-staging" }
@@ -41,7 +41,7 @@
         },
         "P:/Projects/Renamed": {
             "mcpServers": {
-                "workman": {
+                "workstate": {
                     "type": "http",
                     "url": "http://127.0.0.1:5290/mcp",
                     "headers": { "Authorization": "Bearer SENTINEL-TOKEN-renamed-5b17" }

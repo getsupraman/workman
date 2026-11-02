@@ -9,20 +9,20 @@
 
   -Clone <path>          use a clone of github.com/getsupraman/workman: <path>/server/compose.yml (builds the
                          image) and <path>/server/.env. Without it: the Workman home.
-  -HomeDir <dir>         the Workman home (default %USERPROFILE%\.workstate): compose.yml (pulls the
+  -HomeDir <dir>         the Workman home (default %USERPROFILE%\.workman): compose.yml (pulls the
                          published image) and .env
   -Auth <oauth|token>    how the registration authenticates. oauth: no token stored, the user signs in
                          on first use (/mcp -> Authenticate). token: a role's bearer token. Default:
                          oauth when the server offers it (its OAuth metadata answers 200), else token
   -Role <role>           orchestrator (default) | controller | worker - whose token to register
                          (token only: an OAuth sign-in always gets the controller toolset)
-  -Name <name>           registration name (default workman). Without -Name, a registration named
-                         workstate (the name before the rename) in the same scope is moved to workman:
-                         same url, headers and headersHelper; nothing is printed of its token
+  -Name <name>           registration name (default workman). Without -Name, a 1.x registration named
+                         workstate in the same scope is moved to workman: same url and token, its
+                         X-WorkState-* headers renamed X-Workman-*; nothing is printed of its token
   -Agent <session>       register at LOCAL scope (this directory's project only) with the header
                          X-Workman-Agent: <session>, so sessions here are recorded by that name
   -Port <port>           host port, written only into a NEW .env (default 5290)
-  -Project <name>        compose project (default workstate)
+  -Project <name>        compose project (default workman)
   -ImageVersion <tag>    image tag for the pull-only compose (default latest)
   -Update                pull the image again (home) or rebuild it (clone) before starting
   -Force                 replace an existing registration of the same name
@@ -41,7 +41,7 @@ param(
     [string]$Name = 'workman',
     [string]$Agent,
     [ValidateRange(1, 65535)][int]$Port = 5290,
-    [string]$Project = 'workstate',
+    [string]$Project = 'workman',
     [string]$ImageVersion,
     [switch]$Update,
     [switch]$Force,
@@ -92,7 +92,7 @@ if ($Clone) {
     $mode = 'clone'
 }
 else {
-    if (-not $HomeDir) { $HomeDir = Join-Path $HOME '.workstate' }
+    if (-not $HomeDir) { $HomeDir = Join-Path $HOME '.workman' }
     New-Item -ItemType Directory -Force -Path $HomeDir | Out-Null
     $HomeDir = (Resolve-Path -LiteralPath $HomeDir).Path
     $composeFile = Join-Path $HomeDir 'compose.yml'
@@ -108,11 +108,11 @@ if ($Backup -or $Restore) {
     $db = Find-Container 'db'
     if (-not $db) { Die "backup    no running db container in compose project '$Project'" }
     function Save-Dump([string]$File) {
-        & docker exec $db sh -c 'pg_dump -U "$POSTGRES_USER" -d "$POSTGRES_DB" -Fc -f /tmp/workstate.dump' | Out-Null
+        & docker exec $db sh -c 'pg_dump -U "$POSTGRES_USER" -d "$POSTGRES_DB" -Fc -f /tmp/workman.dump' | Out-Null
         if ($LASTEXITCODE -ne 0) { Die "backup    pg_dump failed in container $db" }
-        & docker cp "${db}:/tmp/workstate.dump" $File | Out-Null
+        & docker cp "${db}:/tmp/workman.dump" $File | Out-Null
         if ($LASTEXITCODE -ne 0) { Die "backup    docker cp to $File failed" }
-        & docker exec $db rm -f /tmp/workstate.dump | Out-Null
+        & docker exec $db rm -f /tmp/workman.dump | Out-Null
     }
     if ($Backup) {
         $dir = Split-Path -Parent ([IO.Path]::GetFullPath($Backup))
@@ -131,11 +131,11 @@ if ($Backup -or $Restore) {
     Status 'backup' "safety copy of the current database: $safety"
     $api = Find-Container 'api'
     if ($api) { & docker stop $api | Out-Null }
-    & docker cp $Restore "${db}:/tmp/workstate-restore.dump" | Out-Null
+    & docker cp $Restore "${db}:/tmp/workman-restore.dump" | Out-Null
     $log = Join-Path $backups 'restore.log'
-    & docker exec $db sh -c 'pg_restore -U "$POSTGRES_USER" -d "$POSTGRES_DB" --clean --if-exists --no-owner /tmp/workstate-restore.dump' 2> $log | Out-Null
+    & docker exec $db sh -c 'pg_restore -U "$POSTGRES_USER" -d "$POSTGRES_DB" --clean --if-exists --no-owner /tmp/workman-restore.dump' 2> $log | Out-Null
     $rc = $LASTEXITCODE
-    & docker exec $db rm -f /tmp/workstate-restore.dump | Out-Null
+    & docker exec $db rm -f /tmp/workman-restore.dump | Out-Null
     if ($api) { & docker start $api | Out-Null }
     if ($rc -ne 0) { Die "restore   pg_restore exited $rc - see $log; the safety copy is $safety" }
     Status 'restore' "restored $Restore into project '$Project'; api restarted"
@@ -166,25 +166,25 @@ function New-RandomHex {
 if (Test-Path -LiteralPath $envFile) {
     Status 'env' "kept $envFile (exists; never overwritten)"
 }
-elseif (& docker volume ls -q --filter "name=^$($Project)_workstate-db-data`$") {
+elseif (& docker volume ls -q --filter "name=^$($Project)_workman-db-data`$") {
     Die "env       $envFile is missing but project '$Project' already has a database volume, created with another .env: pass -Clone <path> for that install, or copy its .env here, and run again"
 }
 else {
     $content = @(
         '# Written by /workman:setup. Local-only throwaway credentials for a loopback service; never commit.'
-        "WORKSTATE_WORKER_TOKEN=local-worker-$(New-RandomHex)"
-        "WORKSTATE_ORCHESTRATOR_TOKEN=local-orchestrator-$(New-RandomHex)"
-        "WORKSTATE_CONTROLLER_TOKEN=local-controller-$(New-RandomHex)"
-        'WORKSTATE_READER_TOKEN='
+        "WORKMAN_WORKER_TOKEN=local-worker-$(New-RandomHex)"
+        "WORKMAN_ORCHESTRATOR_TOKEN=local-orchestrator-$(New-RandomHex)"
+        "WORKMAN_CONTROLLER_TOKEN=local-controller-$(New-RandomHex)"
+        'WORKMAN_READER_TOKEN='
         ''
-        'WORKSTATE_DASHBOARD_USERNAME=operator'
-        "WORKSTATE_DASHBOARD_PASSWORD=local-dashboard-$(New-RandomHex)"
+        'WORKMAN_DASHBOARD_USERNAME=operator'
+        "WORKMAN_DASHBOARD_PASSWORD=local-dashboard-$(New-RandomHex)"
         ''
-        "WORKSTATE_API_PORT=$Port"
-        'WORKSTATE_BIND=127.0.0.1'
+        "WORKMAN_API_PORT=$Port"
+        'WORKMAN_BIND=127.0.0.1'
         ''
-        'POSTGRES_DB=workstate'
-        'POSTGRES_USER=workstate'
+        'POSTGRES_DB=workman'
+        'POSTGRES_USER=workman'
         "POSTGRES_PASSWORD=local-$(New-RandomHex)"
     ) -join "`n"
     [IO.File]::WriteAllText($envFile, $content + "`n", (New-Object System.Text.UTF8Encoding $false))
@@ -209,12 +209,12 @@ if (-not (Test-Path -LiteralPath $helperFile) -or (Get-FileHash -LiteralPath $he
 if ($node) { Status 'helper' "$helperFile (names each session; needs node, found)" }
 else { Status 'helper' "$helperFile copied, but node is not on PATH: registering without it, so sessions stay unnamed" }
 
-$portValue = Get-EnvValue 'WORKSTATE_API_PORT'
+$portValue = Get-EnvValue 'WORKMAN_API_PORT'
 if (-not $portValue) { $portValue = '5290' }
 $baseUrl = "http://127.0.0.1:$portValue"
 
 # c. start and wait for /health
-if ($ImageVersion) { $env:WORKSTATE_VERSION = $ImageVersion }
+if ($ImageVersion) { $env:WORKMAN_VERSION = $ImageVersion }
 $upArgs = @()
 if ($Update) {
     if ($mode -eq 'home') {
@@ -285,13 +285,15 @@ if ($Agent) { $scope = 'local' }
 $getOut = ''
 $here = (Get-Location).Path
 
-# the move - a registration from before the rename becomes '$Name' with the same url, scope, headers and
-# headersHelper. The plan's third line is the entry, token included: captured here, never printed.
+# the move - a 1.x registration becomes '$Name' with the same url, scope and token, its X-WorkState-* headers
+# renamed and its headersHelper pointed at this home's copy. The plan's third line is the entry, token
+# included: captured here, never printed.
+$helperCommand = "node `"$($helperFile.Replace('\', '/'))`"\"
 $legacyName = 'workstate'
 $nameGiven = $PSBoundParameters.ContainsKey('Name')
 if (-not $nameGiven -and (Get-Command claude -ErrorAction SilentlyContinue)) {
     if ($node) {
-        $plan = @(& node (Join-Path $scriptDir 'move-registration.mjs') --from $legacyName --to $Name --scope $scope --dir $here 2>$null)
+        $plan = @(& node (Join-Path $scriptDir 'move-registration.mjs') --from $legacyName --to $Name --scope $scope --dir $here --helper $helperCommand 2>$null)
         $verdict = if ($plan.Count -gt 0) { [string]$plan[0] } else { 'not checked: the move check printed nothing' }
         if ($verdict -eq 'move' -and $plan.Count -ge 3) {
             $moveJson = [string]$plan[2]
@@ -316,13 +318,7 @@ if (-not $nameGiven -and (Get-Command claude -ErrorAction SilentlyContinue)) {
         elseif ($verdict -ne 'none') { Status 'move' $verdict }
     }
     else {
-        & claude mcp get $Name *> $null
-        $hasNew = $LASTEXITCODE -eq 0
-        & claude mcp get $legacyName *> $null
-        if ($LASTEXITCODE -eq 0 -and -not $hasNew) {
-            Status 'move' "kept '$legacyName': moving it to '$Name' needs node; it keeps working until server 2.0"
-            $Name = $legacyName
-        }
+        Status 'move' "not checked (needs node): a 1.x '$legacyName' registration is not moved; once '$Name' works, run: claude mcp remove $legacyName -s $scope"
     }
 }
 if (-not (Get-Command claude -ErrorAction SilentlyContinue)) {
@@ -357,13 +353,13 @@ Status 'auth' "${Auth}: $why"
 # -SessionNames on an existing registration keeps the role its token already has.
 if ($Auth -eq 'token' -and $existing -and $SessionNames -and -not $roleGiven) {
     foreach ($candidate in 'controller', 'orchestrator', 'worker') {
-        $candidateToken = Get-EnvValue "WORKSTATE_$($candidate.ToUpperInvariant())_TOKEN"
+        $candidateToken = Get-EnvValue "WORKMAN_$($candidate.ToUpperInvariant())_TOKEN"
         if ($candidateToken -and $getOut.Contains("Bearer $candidateToken")) { $Role = $candidate; break }
     }
 }
 $token = ''
 if ($Auth -eq 'token') {
-    $tokenKey = "WORKSTATE_$($Role.ToUpperInvariant())_TOKEN"
+    $tokenKey = "WORKMAN_$($Role.ToUpperInvariant())_TOKEN"
     $token = Get-EnvValue $tokenKey
     if (-not $token) { Die "env       $envFile has no $tokenKey" }
 }
@@ -371,11 +367,10 @@ if ($Auth -eq 'token') {
 function Get-Registration([string]$Bearer) {
     $headers = [ordered]@{}
     if ($Auth -eq 'token') { $headers['Authorization'] = "Bearer $Bearer" }
-    # Both names: the server reads X-Workman-* first, and one from before the rename reads only X-WorkState-*.
-    if ($Agent) { $headers['X-Workman-Agent'] = $Agent; $headers['X-WorkState-Agent'] = $Agent }
+    if ($Agent) { $headers['X-Workman-Agent'] = $Agent }
     $entry = [ordered]@{ type = 'http'; url = $mcpUrl }
     if ($headers.Count -gt 0) { $entry['headers'] = $headers }
-    if ($node) { $entry['headersHelper'] = "node `"$($helperFile.Replace('\', '/'))`"" }
+    if ($node) { $entry['headersHelper'] = $helperCommand }
     $entry | ConvertTo-Json -Compress
 }
 $shown = "claude mcp add-json --scope $scope $Name '$(Get-Registration '***')'"
@@ -410,7 +405,6 @@ else {
 if ($node) {
     $finderArgs = @((Join-Path $scriptDir 'find-shadows.mjs'), '--name', $Name, '--dir', $here)
     $names = "'$Name'"
-    if (-not $nameGiven -and $Name -ne $legacyName) { $finderArgs += @('--name', $legacyName); $names = "'$Name' or '$legacyName'" }
     if ($scope -eq 'local') { $finderArgs += @('--own', $here) }
     $shadows = @(& node @finderArgs 2>$null | Where-Object { $_ })
     $unchecked = @($shadows | Where-Object { $_.StartsWith('not checked') })
@@ -456,7 +450,7 @@ else {
 }
 
 # f. what the human needs next
-Status 'dashboard' "$baseUrl - sign in with WORKSTATE_DASHBOARD_USERNAME / _PASSWORD from $envFile"
+Status 'dashboard' "$baseUrl - sign in with WORKMAN_DASHBOARD_USERNAME / _PASSWORD from $envFile"
 if ($Auth -eq 'oauth') {
     Status 'next' "start a new Claude Code session, run /mcp, pick '$Name', Authenticate, sign in with that dashboard user and Approve: the work_* tools appear there, not in this one"
 }

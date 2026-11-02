@@ -51,11 +51,11 @@ prepends the same protocol header, grants the same `toolset` profiles, and retur
 | `repo_root` | required | absolute path of a git working tree (refused otherwise); the agent's cwd |
 | `controller` | required | your address from `ListAgents`, ref included: `'name [6-hex]'` |
 | `permission_mode` | `auto` | `--permission-mode`: `acceptEdits` `auto` `bypassPermissions` `manual` `dontAsk` `plan` |
-| `toolset` | `fix` | the §3 profile: `none` `readonly` `fix`; with a `workstate.role` other than `none`, `mcp__workman` is added (the server limits the role's tools) |
-| `allowed_tools` / `disallowed_tools` | `[]` | merged into `--allowedTools` / `--disallowedTools`. To keep an agent off the tracker, pass `workstate: {role: "none"}` and `disallowed_tools: ["mcp__workman"]`. With any other role `mcp__workstate` is always disallowed: the agent's own server is `workman`, and a user registration still named `workstate` (the name before the rename) would let it act as you |
+| `toolset` | `fix` | the §3 profile: `none` `readonly` `fix`; with a `workman.role` other than `none`, `mcp__workman` is added (the server limits the role's tools) |
+| `allowed_tools` / `disallowed_tools` | `[]` | merged into `--allowedTools` / `--disallowedTools`. To keep an agent off the tracker, pass `workman: {role: "none"}` and `disallowed_tools: ["mcp__workman"]` |
 | `add_dirs` | `[]` | `--add-dir` |
 | `model`, `effort`, `settings`, `append_system_prompt` | — | `--model`, `--effort` (`low`…`max`), `--settings` (path or JSON), `--append-system-prompt` |
-| `workstate` | `{role: "worker"}` | `role` (`worker` `orchestrator` `controller` `none`), `env_file` (optional, for headless use: the PATH of the Workman `.env` that `/workman:setup` names: `<home>/.env`, by default `~/.workstate/.env`, or `<clone>/server/.env`; never its contents. Without it the `agent_signin` grant mints — below), `url` (default `http://127.0.0.1:5290`), `ttl_hours` (idle window, default 72: the token lapses after that long unused; every use renews it, no hard cap), `grants` (`["import"]` shows `work_import` to the session — orchestrator or controller role only; see `/workman:import`) |
+| `workman` | `{role: "worker"}` | `role` (`worker` `orchestrator` `controller` `none`), `env_file` (optional, for headless use: the PATH of the Workman `.env` that `/workman:setup` names: `<home>/.env`, by default `~/.workman/.env`, or `<clone>/server/.env`; never its contents. Without it the `agent_signin` grant mints — below), `url` (default `http://127.0.0.1:5290`), `ttl_hours` (idle window, default 72: the token lapses after that long unused; every use renews it, no hard cap), `grants` (`["import"]` shows `work_import` to the session — orchestrator or controller role only; see `/workman:import`) |
 | `dry_run` | `false` | validate and return the argv; mints and spawns nothing (the token shows as `<minted>`) |
 
 An auto-mode worker — the usual case:
@@ -63,7 +63,7 @@ An auto-mode worker — the usual case:
 ```
 agent_launch(name: "fix-B-07", brief: ".claude/briefs/B-07.md", repo_root: "P:/repo.worktrees/b-07",
              controller: "prod-log-triage [9825b9]",
-             workstate: {role: "worker"})
+             workman: {role: "worker"})
 ```
 
 An `acceptEdits` worker, for a unit where auto mode's classifier keeps refusing routine work:
@@ -71,10 +71,10 @@ An `acceptEdits` worker, for a unit where auto mode's classifier keeps refusing 
 ```
 agent_launch(name: "fix-B-08", brief: ".claude/briefs/B-08.md", repo_root: "P:/repo.worktrees/b-08",
              controller: "prod-log-triage [9825b9]", permission_mode: "acceptEdits", toolset: "fix",
-             add_dirs: ["P:/packages/nuget"], workstate: {role: "worker"})
+             add_dirs: ["P:/packages/nuget"], workman: {role: "worker"})
 ```
 
-With `workstate.role` other than `none`, the token goes into `.claude/briefs/mcp-<name>.json` (refused
+With `workman.role` other than `none`, the token goes into `.claude/briefs/mcp-<name>.json` (refused
 unless git says that path is ignored) and reaches the agent through `--mcp-config`. **If minting
 fails the launch is refused** — it never falls back to your own registration. `role: "none"` mints
 nothing and passes no `--mcp-config`. `agent_list` joins `claude agents --json` with what was launched.
@@ -95,23 +95,23 @@ waits up to 5 minutes. The human signs in with the dashboard user and approves; 
 returns that URL at once: the human opens it by hand, and a second `agent_signin` call waits for the
 sign-in to finish.
 
-- **The grant store** is `~/.workstate/grants.json` (`WORKSTATE_GRANTS_FILE` overrides it), one entry
+- **The grant store** is `~/.workman/grants.json` (`WORKMAN_GRANTS_FILE` overrides it), one entry
   per origin: `client_id`, `refresh_token`, `scope`, `obtained_at`. It is written atomically. On macOS
-  and Linux the file is `0600` and a `~/.workstate` the server creates is `0700`; on Windows the
+  and Linux the file is `0600` and a `~/.workman` the server creates is `0700`; on Windows the
   user-profile ACL is the only boundary. No tool result, error, log line, `mcp-<name>.json` or brief
   ever holds it — do not read it into a transcript either.
 - **Refresh.** Each launch or stop trades the grant for an access token (cached in memory until it
-  expires, 1 h) for scope `workstate.sessions`. The server rotates the refresh token on every refresh,
+  expires, 1 h) for scope `workman.sessions`. The server rotates the refresh token on every refresh,
   and the new one replaces the old in the file; concurrent agents servers take turns through a lock
   file. The grant lasts 30 days unused.
-- **Refusals.** No grant for `workstate.url`'s origin, or a refresh refused with `invalid_grant`
+- **Refusals.** No grant for `workman.url`'s origin, or a refresh refused with `invalid_grant`
   (expired, revoked, or the server's database was reset): the launch is refused before anything is
   written, naming `agent_signin {"url": "…"}`. A dead grant is forgotten.
 - **Sign-out.** `agent_signout(url: …)` revokes the refresh token at the server's `/connect/revoke` and
   deletes it from the file (the `client_id` stays for the next sign-in). That revokes the whole
   authorization: **every agent session minted with it is refused on its next request.** Sessions
   minted with an `env_file` are not affected.
-- **The fallback.** `workstate.env_file` still works exactly as before and wins when both exist: the
+- **The fallback.** `workman.env_file` still works exactly as before and wins when both exist: the
   server reads the controller token from that file and the grant is not touched. Use it where no
   human can sign in in a browser (CI, a headless box). An agent launched with it is stopped with it.
 - The token the agent gets is the same per-session `wss_` token either way; only the credential that

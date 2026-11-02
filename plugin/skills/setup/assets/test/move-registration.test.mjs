@@ -28,17 +28,27 @@ test('a user-scope workstate entry moves to workman with the same url, headers a
     assert.deepEqual(JSON.parse(lines[2]), original)
 })
 
-test('a local entry moves from its own directory only, and an X-WorkState-* header gains its X-Workman-* twin', () => {
+test('a local entry moves from its own directory only, and an X-WorkState-* header becomes X-Workman-*', () => {
     const { lines } = mover([MOVE, '--scope', 'local', '--dir', 'P:\\Projects\\Acme\\Skills\\'])
     assert.equal(lines[0], 'move')
     assert.equal(lines[1], 'http://127.0.0.1:5290/mcp, session helper, no token stored')
     const entry = JSON.parse(lines[2])
-    assert.deepEqual(entry.headers, { 'X-Workman-Agent': 'aw-skills', 'X-WorkState-Agent': 'aw-skills' })
+    assert.deepEqual(entry.headers, { 'X-Workman-Agent': 'aw-skills' })
     assert.equal(entry.url, 'http://127.0.0.1:5290/mcp')
     assert.equal(entry.type, 'http')
     assert.equal(entry.headersHelper, 'node "C:/Users/u/.workstate/session-header.mjs"')
 
     assert.deepEqual(mover([MOVE, '--scope', 'local', '--dir', 'P:/Projects/Elsewhere']).lines, ['none'])
+})
+
+test('--helper points a moved headersHelper at the new home, and adds none where there was none', () => {
+    const helper = 'node "C:/Users/u/.workman/session-header.mjs"'
+    const user = JSON.parse(mover([MOVE, '--helper', helper]).lines[2])
+    assert.equal(user.headersHelper, helper)
+    assert.equal(user.headers.Authorization, 'Bearer SENTINEL-TOKEN-move-user-3e1f')
+    const bare = mover([MOVE, '--scope', 'local', '--dir', 'P:/Projects/Bare', '--helper', helper]).lines
+    assert.equal(bare[0], 'move')
+    assert.equal(JSON.parse(bare[2]).headersHelper, undefined)
 })
 
 test('nothing moves without a workstate entry, or when workman is already there beside it', () => {

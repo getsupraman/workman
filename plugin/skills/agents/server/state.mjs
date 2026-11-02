@@ -16,7 +16,7 @@ import path from 'node:path'
  * @property {string|undefined} mcpConfigPath
  * @property {string|undefined} envFile     undefined with a url: minted with the agent_signin grant
  * @property {string|undefined} url
- * @property {{sessionId: string, role: string, expiresAt: string|undefined}|null} workstate
+ * @property {{sessionId: string, role: string, expiresAt: string|undefined}|null} workman
  * @property {string} launchedAt
  */
 
@@ -28,13 +28,9 @@ export function stateDir(env = process.env, tmp = os.tmpdir()) {
     return dir
 }
 
-// Records written before the plugin was renamed from rlarch stay where they are, so
-// agent_list and agent_stop still find the agents launched under the old name.
 /** @param {string} tmp */
 function fallbackBase(tmp) {
-    const current = path.join(tmp, 'workman-agents')
-    const legacy = path.join(tmp, 'rlarch-agents')
-    return !fs.existsSync(current) && fs.existsSync(legacy) ? legacy : current
+    return path.join(tmp, 'workman-agents')
 }
 
 /** @param {string} name */

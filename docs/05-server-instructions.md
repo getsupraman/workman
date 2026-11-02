@@ -1,7 +1,7 @@
 # 05 — `ServerInstructions`: the exact text
 
 > **Measured ([`PROBE.md`](PROBE.md) Q0):** this text reaches the model in full, under
-> `# MCP Server Instructions` / `## workstate`, untruncated, **once per registered server**.
+> `# MCP Server Instructions` / `## workman`, untruncated, **once per registered server**.
 > It is in context for **every turn of every session**. It is the most expensive 40 lines in the
 > product and the only channel that works before the agent has called anything.
 

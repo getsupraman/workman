@@ -6,30 +6,30 @@ import assert from 'node:assert/strict'
 import fs from 'node:fs'
 import path from 'node:path'
 import { startServer, makeRepo, tmp, CONTROLLER, CONTROLLER_TOKEN } from './helpers.mjs'
-import { fakeOAuthWorkstate } from './fake-oauth.mjs'
+import { fakeOAuthWorkman } from './fake-oauth.mjs'
 
 function grantsHome() {
-    const file = path.join(tmp('home'), '.workstate', 'grants.json')
-    return { file, env: { WORKSTATE_GRANTS_FILE: file } }
+    const file = path.join(tmp('home'), '.workman', 'grants.json')
+    return { file, env: { WORKMAN_GRANTS_FILE: file } }
 }
 
 /** @param {string} file @returns {Record<string, any>} */
 const readGrants = (file) => JSON.parse(fs.readFileSync(file, 'utf8'))
 
-/** @param {ReturnType<typeof makeRepo>} repo @param {string} name @param {Record<string, unknown>} workstate */
-const launchArgs = (repo, name, workstate) => ({ name, brief: 'task.md', repo_root: repo.root, controller: CONTROLLER, workstate })
+/** @param {ReturnType<typeof makeRepo>} repo @param {string} name @param {Record<string, unknown>} workman */
+const launchArgs = (repo, name, workman) => ({ name, brief: 'task.md', repo_root: repo.root, controller: CONTROLLER, workman })
 
-/** @param {Awaited<ReturnType<typeof fakeOAuthWorkstate>>} ws @param {string} grantType */
+/** @param {Awaited<ReturnType<typeof fakeOAuthWorkman>>} ws @param {string} grantType */
 const tokenCalls = (ws, grantType) => ws.requests.filter((q) => q.path === '/connect/token' && q.body?.grant_type === grantType)
 
-/** @param {Awaited<ReturnType<typeof fakeOAuthWorkstate>>} ws @param {string} token */
+/** @param {Awaited<ReturnType<typeof fakeOAuthWorkman>>} ws @param {string} token */
 async function mcpAnswers(ws, token) {
     const res = await fetch(`${ws.url}/mcp`, { method: 'POST', headers: { Authorization: `Bearer ${token}` } })
     return res.status
 }
 
 test('agent_signin: discovery, DCR once per origin, PKCE S256, loopback callback; the grant is stored, no token returned', async () => {
-    const ws = await fakeOAuthWorkstate()
+    const ws = await fakeOAuthWorkman()
     const home = grantsHome()
     const s = startServer(home.env)
     try {
@@ -69,7 +69,7 @@ test('agent_signin: discovery, DCR once per origin, PKCE S256, loopback callback
 })
 
 test('agent_launch without env_file mints with the stored grant in a new process; PATCH and agent_stop use it too', async () => {
-    const ws = await fakeOAuthWorkstate()
+    const ws = await fakeOAuthWorkman()
     const repo = makeRepo()
     const home = grantsHome()
     const first = startServer(home.env)
@@ -103,7 +103,7 @@ test('agent_launch without env_file mints with the stored grant in a new process
 })
 
 test('refresh rotation: every refresh stores the rotated token, and the next refresh redeems it', async () => {
-    const ws = await fakeOAuthWorkstate({ expiresIn: 1 })
+    const ws = await fakeOAuthWorkman({ expiresIn: 1 })
     const repo = makeRepo()
     const home = grantsHome()
     const s = startServer(home.env)
@@ -126,7 +126,7 @@ test('refresh rotation: every refresh stores the rotated token, and the next ref
 })
 
 test('no grant, or a refresh refused with invalid_grant, refuses the launch naming agent_signin; nothing spawns', async () => {
-    const ws = await fakeOAuthWorkstate()
+    const ws = await fakeOAuthWorkman()
     const repo = makeRepo()
     const home = grantsHome()
     const s = startServer(home.env)
@@ -161,7 +161,7 @@ test('no grant, or a refresh refused with invalid_grant, refuses the launch nami
 })
 
 test('agent_signout revokes at /connect/revoke, deletes the grant, and the sessions minted with it are refused', async () => {
-    const ws = await fakeOAuthWorkstate()
+    const ws = await fakeOAuthWorkman()
     const repo = makeRepo()
     const home = grantsHome()
     const s = startServer(home.env)
@@ -193,7 +193,7 @@ test('agent_signout revokes at /connect/revoke, deletes the grant, and the sessi
 })
 
 test('env_file wins over a stored grant, and env_file launches work unchanged after sign-out', async () => {
-    const ws = await fakeOAuthWorkstate({ staticToken: CONTROLLER_TOKEN })
+    const ws = await fakeOAuthWorkman({ staticToken: CONTROLLER_TOKEN })
     const repo = makeRepo()
     const home = grantsHome()
     const s = startServer(home.env)
@@ -220,7 +220,7 @@ test('env_file wins over a stored grant, and env_file launches work unchanged af
 })
 
 test('a callback whose state does not match is refused, and nothing is exchanged or stored', async () => {
-    const ws = await fakeOAuthWorkstate({ forgeState: true })
+    const ws = await fakeOAuthWorkman({ forgeState: true })
     const home = grantsHome()
     const s = startServer(home.env)
     try {
@@ -236,7 +236,7 @@ test('a callback whose state does not match is refused, and nothing is exchanged
 })
 
 test('when no browser can be started, agent_signin returns the URL to open by hand at once', async () => {
-    const ws = await fakeOAuthWorkstate()
+    const ws = await fakeOAuthWorkman()
     const home = grantsHome()
     const s = startServer({ ...home.env, AGENTS_BROWSER: JSON.stringify([path.join(tmp('nobrowser'), 'no-such-browser')]) })
     try {

@@ -139,12 +139,12 @@ the agents server is unavailable). Per unit:
 
 - `permission_mode` — `auto` by default; `acceptEdits` for a unit where the classifier keeps refusing
   routine work. It is set per launch, so choose it per unit.
-- `workstate.role: "worker"` for every unit. The agent then writes under its own minted token, its
+- `workman.role: "worker"` for every unit. The agent then writes under its own minted token, its
   evidence is a **worker's**, and it can never close the unit — the close stays yours.
 - No credential to pass once the human has run `agent_signin` for that Workman server
   (`/workman:agents` §1): the launch mints with that grant, and a missing or expired one is
-  refused with the sign-in call to make. Headless, pass `workstate.env_file` — the PATH of the
-  Workman `.env` (`~/.workstate/.env`, or `<clone>/server/.env`), never a value; it wins over the
+  refused with the sign-in call to make. Headless, pass `workman.env_file` — the PATH of the
+  Workman `.env` (`~/.workman/.env`, or `<clone>/server/.env`), never a value; it wins over the
   grant. Either way no token reaches your transcript.
 - `agent_stop` when the unit is done; it revokes the token.
 

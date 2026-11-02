@@ -49,7 +49,7 @@ returns focus where it was. One input filters two groups:
 - Projects are sorted by **last activity** (the newest journal event in the project's subtree, v1
   `lastActivityAt`), newest first, and grouped: **Active** — an open run, or activity within 14 days
   of `asOf`; **Quiet** — the rest; **Archived (n)** — collapsed behind a toggle, closed by default,
-  its state per viewer in `localStorage` (`workstate.archived-open`, guarded for storage that
+  its state per viewer in `localStorage` (`workman.archived-open`, guarded for storage that
   throws).
 - Each project name links to its project page (highlighted while it is open). Under it, its **open
   runs** only, each with a done/total count and a thin progress bar. A run is open unless its status
@@ -76,7 +76,7 @@ returns focus where it was. One input filters two groups:
 `?filter=open|attention` and `?tab=evidence|notes|activity|brief` ride on the run URL, so a
 selection is deep-linkable and back/forward walk it.
 
-**Readable links: `/r/{path}`** (server-side, `WorkState.Api/App/RefLinks.cs`; not an SPA route).
+**Readable links: `/r/{path}`** (server-side, `Workman.Api/App/RefLinks.cs`; not an SPA route).
 `{path}` is any ref form `work_get` accepts — `project`, `project/run`, `project/run/ref`, and the
 shorter unique forms — resolved by the same reader, then a 302 to the page above: a project to
 `/projects/{id}`, a run to `/runs/{id}`, an item in a run to `/runs/{run}/{id}`, anything else to
@@ -143,8 +143,8 @@ live burst like the page's other reads, so a count or an action follows the data
 ### The prompt catalogue
 
 The server builds every prompt, so the dashboard and the skills share one wording:
-`server/WorkState.Core/Rendering/PromptCatalogue.cs` (the entries, their predicates and templates) and
-`server/WorkState.Core/Board/BoardReader.Prompts.cs` (the facts they read). The endpoint returns only the
+`server/Workman.Core/Rendering/PromptCatalogue.cs` (the entries, their predicates and templates) and
+`server/Workman.Core/Board/BoardReader.Prompts.cs` (the facts they read). The endpoint returns only the
 actions that apply, in this order:
 
 | scope | key · label | applies when | count |
@@ -165,7 +165,7 @@ Rules every template keeps (`V1PromptTests` holds each one):
    callable form: bare while unique in the workspace, else the qualified form that resolves to that
    item alone (`run-a/1.2`, never a bare `1.2` that matches two items).
 2. Plain, imperative, short; it names the exact calls with real arguments — `RenderedCallTests`
-   already scans every `work_xxx(` on a code line of WorkState.Core, the catalogue included.
+   already scans every `work_xxx(` on a code line of Workman.Core, the catalogue included.
 3. A prompt that closes, cancels, defers or archives says, verbatim,
    *"Propose first and wait for the human's yes: list every change you intend to make, and write
    nothing until the human answers yes."* (`PromptCatalogue.ProposeAndWait`). It closes only with
@@ -209,7 +209,7 @@ Leaves are the doc 10 rollup kinds: task, followup, subtask, spike, question, in
 ## Theme tokens
 
 `data-theme` on `<html>` (`light` / `dark`), unset = follow `prefers-color-scheme`. The toggle in
-the sidebar footer stores the choice in `localStorage` (`workstate.theme`), guarded for storage
+the sidebar footer stores the choice in `localStorage` (`workman.theme`), guarded for storage
 that throws.
 
 | token | light | dark (VS Code Dark Modern, softened) |

@@ -9,18 +9,18 @@ hot reads seq-scanned `item`; §4 lists what was fixed, and §3 has the before/a
 
 ## 1. How it is measured
 
-`server/WorkState.Tests/Store/QueryPlanTests.cs` is **opt-in**. It is gated on `WORKSTATE_EXPLAIN=1`
+`server/Workman.Tests/Store/QueryPlanTests.cs` is **opt-in**. It is gated on `WORKMAN_EXPLAIN=1`
 through xunit v3's `[Fact(Skip = …, SkipUnless = nameof(Enabled))]`, so a default `dotnet test`
 reports it as skipped and does no work:
 
 ```
-dotnet test server/WorkState.slnx --filter FullyQualifiedName~QueryPlanTests -e WORKSTATE_EXPLAIN=1
+dotnet test server/Workman.slnx --filter FullyQualifiedName~QueryPlanTests -e WORKMAN_EXPLAIN=1
 ```
 
 The test creates a throwaway database in the suite's own `PostgresFixture` container, applies every
 migration, seeds it (§2), and runs `VACUUM ANALYZE`. It then turns on **`auto_explain`** for that
 database (`log_analyze`, `log_buffers`, `log_timing`, json format) and calls the **real query
-methods**: `WorkStateQueries`, `BoardQueries`, `ApiQueries`. The plans are therefore the ones for
+methods**: `WorkmanQueries`, `BoardQueries`, `ApiQueries`. The plans are therefore the ones for
 the statement the server actually sends, with the values it actually binds. Each plan is read back
 from the server log, where a `RAISE LOG` marker before each call labels it. Every query runs 5
 times, and the median run is reported. The full plans go to `explain-5k.txt` beside the test
@@ -99,7 +99,7 @@ and notes.
 ### 3.1 work_search over items, assumptions, rules and notes (search-scope)
 
 Measured 2026-10-27 by aw-m34 (backlog/search-scope), branch `ws/search-scope` off `feat/workstate`
-@ 9fb9afc, same seed and method. `WorkStateQueries.SearchAsync` is now a `UNION ALL` of four
+@ 9fb9afc, same seed and method. `WorkmanQueries.SearchAsync` is now a `UNION ALL` of four
 branches (item, assumption, active constraint_rule, note), ranked by one `ts_rank`. With a scope,
 each branch keeps only rows inside the subtree. `ts_headline` runs after the `LIMIT`.
 
@@ -171,7 +171,7 @@ runs and projects. After the rewrite, only those 28 rows are rolled up.
    is `item p LEFT JOIN item c ON c.ancestors @> ARRAY[p.id] GROUP BY p.id`. `RollupAsync` filters
    it on a constant (`WHERE id = @item`) and is fine. A *join* on `r.id = i.id` cannot be pushed into
    the GROUP BY, so Postgres aggregates all 4,955 items (4,955 GIN probes, about 20 ms) and only then
-   joins. **Rewrite:** `WorkStateQueries.Rollup`, a `CROSS JOIN LATERAL` count over `i`'s own subtree,
+   joins. **Rewrite:** `WorkmanQueries.Rollup`, a `CROSS JOIN LATERAL` count over `i`'s own subtree,
    with the view's five buckets. It is used by SubtreeAsync, ApiQueries.BoardAsync,
    BoardQueries.FactsAsync and DefaultScopeAsync. The view and `RollupAsync` are unchanged.
    **Same results, proven:** the opt-in test runs the fc45f08 SQL of all four queries
@@ -192,8 +192,8 @@ runs and projects. After the rewrite, only those 28 rows are rolled up.
    per-row laterals (document path, rollup, criteria, commit, verification) are cheap in fact but
    estimated at about 200 per row. Any subtree over about 500 rows crosses the threshold and pays
    about 35 ms of LLVM compilation. Board was 27 ms of work plus 35 ms of compile. **Setting:**
-   `WorkStateDataSource.WithSessionSettings` adds `Options=-c jit=off` to every connection the server
-   opens: the Dapper data source *and* the EF context (`UseWorkState`), so it is one setting. It is
+   `WorkmanDataSource.WithSessionSettings` adds `Options=-c jit=off` to every connection the server
+   opens: the Dapper data source *and* the EF context (`UseWorkman`), so it is one setting. It is
    per session, so the Postgres instance's default is unchanged (`SessionSettingsTests` asserts both
    sides). Red-checked: without the option, both assertions fail, and Board goes back to 51–70 ms
    with 37 ms of JIT. Decided by the controller (skills-9a), 2026-10-27.
@@ -222,23 +222,23 @@ exists, not a missing index, and none is near budget:
 
 Run the command in §1. The summary table prints to the test output, and every plan (SQL, then an
 indented node tree with cost, estimated and actual rows, loops, time, buffers and conditions) goes to
-`server/WorkState.Tests/bin/Debug/net10.0/explain-5k.txt`. The test fails if any measured query captured
+`server/Workman.Tests/bin/Debug/net10.0/explain-5k.txt`. The test fails if any measured query captured
 no plan, or if a rewritten query's rows differ from its `item_rollup` form.
 
 ## 7. Row-level security (m54)
 
 Measured 2026-10-28 by ws-tenant-rls, branch `unit/tenant-rls`, postgres:17 in Docker Desktop on Windows.
-Row-level security (doc 02 §15) puts every request-path read under the role `workstate_app` with a
+Row-level security (doc 02 §15) puts every request-path read under the role `workman_app` with a
 policy on each tenant table. This section measures what that costs, and how two changes brought it back.
 
 **Method.** `RlsPerfTests` (opt-in) calls the real query methods against an existing database, as the
 owner and as the tenant role, interleaved call by call, 60 rounds after 3 warm-ups:
 
 ```
-dotnet test server/WorkState.slnx --filter FullyQualifiedName~RlsPerfTests -e WORKSTATE_RLS_PERF="Host=…;Database=…"
+dotnet test server/Workman.slnx --filter FullyQualifiedName~RlsPerfTests -e WORKMAN_RLS_PERF="Host=…;Database=…"
 ```
 
-With `-e WORKSTATE_RLS_PERF_SEED=1` the target must be an empty database: it is migrated and given the
+With `-e WORKMAN_RLS_PERF_SEED=1` the target must be an empty database: it is migrated and given the
 §2 seed first. Two numbers per read:
 
 - **server** — mean execution time per statement from `pg_stat_statements`, one row per role. A read
@@ -319,7 +319,7 @@ The wall deltas are the 0.7 ms round trip.
 
 ### 7.2 The §2 seed (4,955 items), same method
 
-Measured with `WORKSTATE_RLS_PERF_SEED=1` into an empty database, so each statement is compared within
+Measured with `WORKMAN_RLS_PERF_SEED=1` into an empty database, so each statement is compared within
 one database. Server mean in ms, owner → tenant role, shipped migration:
 
 | read | server | Δ | wall median | Δ |
@@ -353,7 +353,7 @@ do not. Each is under 2.2 ms at this size, and each is listed as an open item:
 - **Search.** The item and note branches use their indexes again. What is left is the per-branch policy
   filter and the joins to `item` for the scope of each assumption, rule and note.
 
-`QueryPlanTests` measures as the tenant role with `-e WORKSTATE_EXPLAIN_RLS=1`, and drops the
+`QueryPlanTests` measures as the tenant role with `-e WORKMAN_EXPLAIN_RLS=1`, and drops the
 `set_config` statements from its plans. Its run-to-run noise between two containers is too large for a
 20% comparison: board/run measured +19% in one pair of runs and +28% in the next. Use it for plans, not
 for deltas. Under the role, its rollup equivalence check still found every row identical: 9,662
@@ -373,7 +373,7 @@ role with no user) and as a member (the tenant role as the user who is a member 
 pass of its own, with `pg_stat_statements` reset before it and read after it:
 
 ```
-dotnet test server/WorkState.slnx --filter FullyQualifiedName~ProjectAccessPerfTests -e WORKSTATE_PROJECT_ACCESS_PERF="Host=…;Database=…"
+dotnet test server/Workman.slnx --filter FullyQualifiedName~ProjectAccessPerfTests -e WORKMAN_PROJECT_ACCESS_PERF="Host=…;Database=…"
 ```
 
 The 1.0.1 baseline is the same database with the twelve `project_access` policies dropped, so reads run
@@ -392,7 +392,7 @@ Server mean in ms, member, 1.0.1 → design:
 | subtree | 1.62 → 2.25 (+39%) | flat | **2.08 → 1.79 (−14%)** |
 
 1. **The caller's hidden projects from a function, once per statement.** `(SELECT
-   workstate_hidden_projects())` is an InitPlan, but every table a statement reads carries its own, and a
+   workman_hidden_projects())` is an InitPlan, but every table a statement reads carries its own, and a
    PL/pgSQL or SQL function call costs 0.1–0.2 ms of its own (a SQL function's body is planned per call).
    The rollup reads `item` twice and paid two calls; the board paid dozens. A PL/pgSQL version, whose plan
    is cached per session, brought the board to +38%.
@@ -432,7 +432,7 @@ the machine's load moved between runs — the owner's board ranged 6.97–9.30 m
 **Verdict on server time: passes.** Every read is within 20% for the member and the static token, and the
 gate's three are −1% (board), −9% (frontier) and +10% (rollup). The owner's own numbers moved by up to
 ±15% between runs, so a single run's delta below that says little. Besides the reads, a transaction whose
-request has a user runs `workstate_project_access` inside the `set_config` statement the tenant helper
+request has a user runs `workman_project_access` inside the `set_config` statement the tenant helper
 already sends: 0.15 ms of server time per transaction, and no round trip.
 
 **What it does not measure.** A non-member — a user with a project hidden from them — still pays the

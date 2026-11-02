@@ -7,8 +7,12 @@ All notable changes to the Workman server and the `workman` plugin are recorded 
 
 ## [Unreleased]
 
-- Plugin 1.2.0 (wording only): the skills, the agents MCP and the setup scripts say Workman instead of WorkState in their prose and printed messages, and so do the docs; no machine-facing name changes.
-- Server source: the .NET projects, namespaces and types are `Workman.*` (`server/Workman.slnx`, `Workman.Api.dll` in the image). No behaviour, setting or stored name changes.
+## [2.0.0] — 2026-11-02
+
+Server 2.0.0 and plugin 2.0.0 ship together: the rename to Workman is complete. Also in this release:
+
+- The .NET projects, namespaces and types are `Workman.*` (`server/Workman.slnx`; the image runs `Workman.Api.dll`).
+- The skills, the agents MCP, the setup scripts and the docs say Workman in their prose and messages.
 
 ### Server 2.0.0 — every machine-facing and stored name says workman
 
@@ -49,6 +53,45 @@ session **signs in again**; that is expected. The OAuth signing and encryption k
 unprotected, so the server replaces them on its first start instead of failing every request. Clients that still send `X-WorkState-*` headers must send
 `X-Workman-*`. The image `ghcr.io/getsupraman/workman`, the `work_*` tools, `work://` URIs, `/api/v1/*`,
 `/api/stream`, `/mcp`, the well-known paths and the agent-session mint and its body are unchanged.
+
+### Plugin 2.0.0 — every machine-facing name is `workman`
+
+Plugin 2.0.0 goes with server 2.0.0 and needs it: it sends only the 2.0 names. The 1.x `workstate` names
+that 1.2.0 still accepted are gone, with one exception, the OAuth scope aliases (below).
+
+- **`/workman:setup`** (`setup.sh` / `setup.ps1`): the home is `~/.workman` (`%USERPROFILE%\.workman`),
+  the compose project and volume are `workman` / `workman-db-data`, the `.env` it writes has `WORKMAN_*`
+  keys and `POSTGRES_DB` / `POSTGRES_USER` `workman`, and the registration is `workman`. A `workstate`
+  registration is still moved to `workman`, now with its `X-WorkState-*` headers renamed `X-Workman-*`
+  and its `headersHelper` pointed at the new home.
+- **The pull-only `compose.yml`**: project `workman`, `Workman__*` settings, `ConnectionStrings__Workman`,
+  `WORKMAN_*` variables, database and user `workman` by default.
+- **`session-header.mjs`** sends `X-Workman-*` only; **`find-shadows.mjs`** checks `workman` only.
+- **The agents MCP**: `agent_launch`'s parameter is `workman: {role, env_file, url, ttl_hours, grants}`
+  (was `workstate`); an `env_file` is read for `WORKMAN_CONTROLLER_TOKEN` / `WORKMAN_ORCHESTRATOR_TOKEN`;
+  the structured results carry `workman` instead of `workstate`; the OAuth sign-in asks for
+  `workman.sessions offline_access`; the grant store is `~/.workman/grants.json` (`WORKMAN_GRANTS_FILE`);
+  the state directory is `workman-agents` only (an old `rlarch-agents` is no longer read); a launched
+  agent gets `mcp__workman` and no special handling of `mcp__workstate`.
+- **`server/deploy/multi-deploy`**: project, volume and Traefik router/service/middleware names
+  `workman`; `WORKMAN_*` keys in `compose.yml` and `gen-env.sh` (default version 2.0.0); `backup.sh`
+  dumps with the container's own `POSTGRES_USER` / `POSTGRES_DB`; the systemd units are
+  `workman-backup.service` / `.timer`.
+- Skills and docs use the 2.0 names in every instruction and example.
+
+### Upgrading from 1.x to 2.0
+
+Server 2.0 reads none of the 1.x `workstate` names. For clients, scripts and deployments:
+
+- Environment: every `WORKSTATE_<X>` is `WORKMAN_<X>` (`WORKMAN_PUBLIC_URLS`, `WORKMAN_HOSTS` unchanged);
+  settings `WorkState:*` / `WorkState__*` are `Workman:*` / `Workman__*`, and `ConnectionStrings:WorkState`
+  is `ConnectionStrings:Workman`.
+- The home is `~/.workman`, the compose project and volume `workman`, the registration `workman`.
+- Headers: send `X-Workman-*`; `X-WorkState-*` is ignored, and `X-WorkState-Api` is no longer sent.
+- OAuth scopes are `workman.read` and `workman.sessions`; **`workstate.read` and `workstate.sessions`
+  stay accepted as aliases** until Supraman has switched.
+- **Everyone signs in again**: the key ring is new, so 1.x cookies, OAuth grants and refresh tokens no
+  longer open the server (`/mcp` → Authenticate; `agent_signin` again for the agents MCP).
 
 ## [1.2.0] — 2026-11-02
 

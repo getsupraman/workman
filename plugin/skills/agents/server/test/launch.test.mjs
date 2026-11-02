@@ -3,9 +3,9 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import fs from 'node:fs'
 import path from 'node:path'
-import { startServer, makeRepo, fakeWorkstate, CONTROLLER, CONTROLLER_TOKEN, MINTED_TOKEN, tmp } from './helpers.mjs'
+import { startServer, makeRepo, fakeWorkman, CONTROLLER, CONTROLLER_TOKEN, MINTED_TOKEN, tmp } from './helpers.mjs'
 import { FIX_TOOLS, READONLY_TOOLS } from '../header.mjs'
-import { WORKSTATE_TOOLS, LEGACY_TOOLS } from '../launch-args.mjs'
+import { WORKMAN_TOOLS } from '../launch-args.mjs'
 import { normaliseRoot } from '../repo.mjs'
 
 /** @param {ReturnType<typeof startServer>} s */
@@ -20,7 +20,7 @@ const prompt = (briefs, name) => `Read the file ${path.join(briefs, `brief-${nam
 
 test('every parameter maps to its flag, variadics closed in order, prompt last', async () => {
     const repo = makeRepo()
-    const ws = await fakeWorkstate()
+    const ws = await fakeWorkman()
     const settings = path.join(repo.root, 'settings.json')
     fs.writeFileSync(settings, '{}')
     const s = startServer()
@@ -39,15 +39,15 @@ test('every parameter maps to its flag, variadics closed in order, prompt last',
             effort: 'high',
             settings: 'settings.json',
             append_system_prompt: 'Be brief.',
-            workstate: { role: 'orchestrator', env_file: repo.envFile, url: ws.url, ttl_hours: 24 },
+            workman: { role: 'orchestrator', env_file: repo.envFile, url: ws.url, ttl_hours: 24 },
         })
         assert.equal(r.isError, false, r.content[0].text)
         const { argv, cwd } = bgArgv(s)
         const mcp = path.join(repo.briefs, 'mcp-unit-1.json')
         assert.deepEqual(argv, [
             '--bg', '--name', 'unit-1',
-            '--allowedTools', ...READONLY_TOOLS, WORKSTATE_TOOLS, 'Bash(node --test:*)',
-            '--disallowedTools', 'Bash(git push:*)', 'WebFetch', LEGACY_TOOLS,
+            '--allowedTools', ...READONLY_TOOLS, WORKMAN_TOOLS, 'Bash(node --test:*)',
+            '--disallowedTools', 'Bash(git push:*)', 'WebFetch',
             '--add-dir', 'P:\\packages\\nuget', '/opt/cache',
             '--mcp-config', mcp,
             '--model', 'claude-opus-5-5',
@@ -74,7 +74,7 @@ test('every parameter maps to its flag, variadics closed in order, prompt last',
 
         assert.equal(r.structuredContent.id, 'abc12345')
         assert.equal(r.structuredContent.sessionId, '11111111-2222-3333-4444-555555555555')
-        assert.deepEqual(r.structuredContent.workstate, { session: 'ws-42', role: 'orchestrator', expiresAt: '2026-10-27T00:00:00Z' })
+        assert.deepEqual(r.structuredContent.workman, { session: 'ws-42', role: 'orchestrator', expiresAt: '2026-10-27T00:00:00Z' })
 
         const brief = fs.readFileSync(path.join(repo.briefs, 'brief-unit-1.txt'), 'utf8')
         assert.ok(brief.startsWith(`Your controller is the Claude Code session '${CONTROLLER}'.`))
@@ -87,19 +87,18 @@ test('every parameter maps to its flag, variadics closed in order, prompt last',
 
 test('defaults: auto, fix profile, worker role; --permission-mode closes the last variadic', async () => {
     const repo = makeRepo()
-    const ws = await fakeWorkstate()
+    const ws = await fakeWorkman()
     const s = startServer()
     try {
         const r = await s.call('agent_launch', {
             name: 'unit-2', brief: path.join(repo.root, 'task.md'), repo_root: repo.root, controller: CONTROLLER,
-            workstate: { env_file: repo.envFile, url: ws.url },
+            workman: { env_file: repo.envFile, url: ws.url },
         })
         assert.equal(r.isError, false, r.content[0].text)
         const { argv } = bgArgv(s)
         assert.deepEqual(argv, [
             '--bg', '--name', 'unit-2',
-            '--allowedTools', ...FIX_TOOLS, WORKSTATE_TOOLS,
-            '--disallowedTools', LEGACY_TOOLS,
+            '--allowedTools', ...FIX_TOOLS, WORKMAN_TOOLS,
             '--mcp-config', path.join(repo.briefs, 'mcp-unit-2.json'),
             '--permission-mode', 'auto',
             prompt(repo.briefs, 'unit-2'),
@@ -119,7 +118,7 @@ test('the token before the prompt is always a single-value flag', async () => {
     try {
         await s.call('agent_launch', {
             name: 'unit-3', brief: 'task.md', repo_root: repo.root, controller: CONTROLLER,
-            add_dirs: ['/x'], workstate: { role: 'none' },
+            add_dirs: ['/x'], workman: { role: 'none' },
         })
         const { argv } = bgArgv(s)
         const variadic = ['--allowedTools', '--disallowedTools', '--add-dir', '--mcp-config']
@@ -134,12 +133,12 @@ test('the token before the prompt is always a single-value flag', async () => {
 
 test('role none: no mint, no --mcp-config, no config file', async () => {
     const repo = makeRepo()
-    const ws = await fakeWorkstate()
+    const ws = await fakeWorkman()
     const s = startServer()
     try {
         const r = await s.call('agent_launch', {
             name: 'unit-4', brief: 'task.md', repo_root: repo.root, controller: CONTROLLER, toolset: 'none',
-            workstate: { role: 'none', url: ws.url },
+            workman: { role: 'none', url: ws.url },
         })
         assert.equal(r.isError, false, r.content[0].text)
         const { argv } = bgArgv(s)
@@ -147,7 +146,7 @@ test('role none: no mint, no --mcp-config, no config file', async () => {
         assert.ok(!argv.includes('--allowedTools'))
         assert.equal(ws.requests.length, 0)
         assert.ok(!fs.existsSync(path.join(repo.briefs, 'mcp-unit-4.json')))
-        assert.equal(r.structuredContent.workstate, null)
+        assert.equal(r.structuredContent.workman, null)
     } finally {
         await s.close()
         await ws.close()
@@ -156,22 +155,22 @@ test('role none: no mint, no --mcp-config, no config file', async () => {
 
 test('a minted session may call its Workman tools without a prompt; without Workman it may not', async () => {
     const repo = makeRepo()
-    const ws = await fakeWorkstate()
+    const ws = await fakeWorkman()
     const s = startServer()
     try {
         const minted = await s.call('agent_launch', {
             name: 'unit-ws', brief: 'task.md', repo_root: repo.root, controller: CONTROLLER, toolset: 'none',
-            permission_mode: 'acceptEdits', workstate: { env_file: repo.envFile, url: ws.url },
+            permission_mode: 'acceptEdits', workman: { env_file: repo.envFile, url: ws.url },
         })
         assert.equal(minted.isError, false, minted.content[0].text)
         const plain = await s.call('agent_launch', {
             name: 'unit-plain', brief: 'task.md', repo_root: repo.root, controller: CONTROLLER, toolset: 'readonly',
-            workstate: { role: 'none' },
+            workman: { role: 'none' },
         })
         assert.equal(plain.isError, false, plain.content[0].text)
         const calls = s.claudeCalls().filter((c) => c.argv.includes('--bg'))
         const allowed = (/** @type {string[]} */ argv) => argv.slice(argv.indexOf('--allowedTools') + 1, argv.findIndex((x, i) => i > argv.indexOf('--allowedTools') && x.startsWith('--')))
-        assert.deepEqual(allowed(calls[0].argv), [WORKSTATE_TOOLS])
+        assert.deepEqual(allowed(calls[0].argv), [WORKMAN_TOOLS])
         assert.deepEqual(allowed(calls[1].argv), READONLY_TOOLS)
     } finally {
         await s.close()
@@ -181,21 +180,21 @@ test('a minted session may call its Workman tools without a prompt; without Work
 
 test('mint failure (4xx, server down, no env file, no token key) refuses and spawns nothing', async () => {
     const repo = makeRepo()
-    const ws = await fakeWorkstate({ mintStatus: 403 })
+    const ws = await fakeWorkman({ mintStatus: 403 })
     const noKey = path.join(tmp('env'), '.env')
     fs.writeFileSync(noKey, '# empty\nOTHER=1\n')
     const s = startServer()
     try {
         const base = { brief: 'task.md', repo_root: repo.root, controller: CONTROLLER }
         const cases = [
-            { name: 'm-403', workstate: { env_file: repo.envFile, url: ws.url }, says: /HTTP 403/ },
-            { name: 'm-down', workstate: { env_file: repo.envFile, url: 'http://127.0.0.1:9' }, says: /unreachable/ },
-            { name: 'm-nofile', workstate: { env_file: path.join(repo.root, 'missing.env'), url: ws.url }, says: /cannot read workstate.env_file/ },
-            { name: 'm-nokey', workstate: { env_file: noKey, url: ws.url }, says: /WORKSTATE_CONTROLLER_TOKEN/ },
-            { name: 'm-noenv', workstate: { role: 'worker', url: ws.url }, says: /needs workstate.env_file/ },
+            { name: 'm-403', workman: { env_file: repo.envFile, url: ws.url }, says: /HTTP 403/ },
+            { name: 'm-down', workman: { env_file: repo.envFile, url: 'http://127.0.0.1:9' }, says: /unreachable/ },
+            { name: 'm-nofile', workman: { env_file: path.join(repo.root, 'missing.env'), url: ws.url }, says: /cannot read workman.env_file/ },
+            { name: 'm-nokey', workman: { env_file: noKey, url: ws.url }, says: /WORKMAN_CONTROLLER_TOKEN/ },
+            { name: 'm-noenv', workman: { role: 'worker', url: ws.url }, says: /needs workman.env_file/ },
         ]
         for (const c of cases) {
-            const r = await s.call('agent_launch', { ...base, name: c.name, workstate: c.workstate })
+            const r = await s.call('agent_launch', { ...base, name: c.name, workman: c.workman })
             assert.equal(r.isError, true, c.name)
             assert.match(r.content[0].text, c.says, c.name)
             assert.ok(!fs.existsSync(path.join(repo.briefs, `mcp-${c.name}.json`)), c.name)
@@ -209,12 +208,12 @@ test('mint failure (4xx, server down, no env file, no token key) refuses and spa
 
 test('a failed claude --bg revokes the minted token and deletes its config', async () => {
     const repo = makeRepo()
-    const ws = await fakeWorkstate()
+    const ws = await fakeWorkman()
     const s = startServer({ FAKE_CLAUDE_BG_FAIL: '1' })
     try {
         const r = await s.call('agent_launch', {
             name: 'unit-5', brief: 'task.md', repo_root: repo.root, controller: CONTROLLER,
-            workstate: { env_file: repo.envFile, url: ws.url },
+            workman: { env_file: repo.envFile, url: ws.url },
         })
         assert.equal(r.isError, true)
         assert.match(r.content[0].text, /could not read the background id[\s\S]*fake launch failure[\s\S]*revoked/)
@@ -235,7 +234,7 @@ test('validation refusals', async () => {
     const unignored = makeRepo({ ignoreBriefs: false })
     const s = startServer()
     try {
-        const ok = { name: 'v', brief: 'task.md', repo_root: repo.root, controller: CONTROLLER, workstate: { role: 'none' } }
+        const ok = { name: 'v', brief: 'task.md', repo_root: repo.root, controller: CONTROLLER, workman: { role: 'none' } }
         /** @type {[string, Record<string, unknown>, RegExp][]} */
         const cases = [
             ['missing name', { ...ok, name: undefined }, /name is required/],
@@ -251,14 +250,14 @@ test('validation refusals', async () => {
             ['bad permission_mode', { ...ok, permission_mode: 'yolo' }, /permission_mode must be one of/],
             ['bad toolset', { ...ok, toolset: 'all' }, /toolset must be one of/],
             ['bad effort', { ...ok, effort: 'extreme' }, /effort must be one of/],
-            ['bad role', { ...ok, workstate: { role: 'admin' } }, /workstate.role must be one of/],
+            ['bad role', { ...ok, workman: { role: 'admin' } }, /workman.role must be one of/],
             ['flag-like add_dir', { ...ok, add_dirs: ['--evil'] }, /starts with "-"/],
             ['non-array allowed_tools', { ...ok, allowed_tools: 'Read' }, /must be an array/],
             ['bad settings JSON', { ...ok, settings: '{nope' }, /does not parse/],
             ['missing settings file', { ...ok, settings: 'nope.json' }, /settings file not found/],
-            ['ttl out of range', { ...ok, workstate: { role: 'none', ttl_hours: 721 } }, /ttl_hours/],
+            ['ttl out of range', { ...ok, workman: { role: 'none', ttl_hours: 721 } }, /ttl_hours/],
             ['unknown parameter', { ...ok, permissionMode: 'auto' }, /unknown parameter/],
-            ['config not gitignored', { ...ok, repo_root: unignored.root, workstate: { env_file: unignored.envFile } }, /not gitignored/],
+            ['config not gitignored', { ...ok, repo_root: unignored.root, workman: { env_file: unignored.envFile } }, /not gitignored/],
         ]
         for (const [label, args, says] of cases) {
             const r = await s.call('agent_launch', args)
@@ -273,12 +272,12 @@ test('validation refusals', async () => {
 
 test('dry_run: argv returned with the token as <minted>; nothing minted, spawned or recorded', async () => {
     const repo = makeRepo()
-    const ws = await fakeWorkstate()
+    const ws = await fakeWorkman()
     const s = startServer()
     try {
         const r = await s.call('agent_launch', {
             name: 'unit-6', brief: 'task.md', repo_root: repo.root, controller: CONTROLLER, dry_run: true,
-            workstate: { env_file: repo.envFile, url: ws.url },
+            workman: { env_file: repo.envFile, url: ws.url },
         })
         assert.equal(r.isError, false, r.content[0].text)
         const sc = r.structuredContent
@@ -301,12 +300,12 @@ test('dry_run: argv returned with the token as <minted>; nothing minted, spawned
 
 test('a session id that never appears is a warning, not a failure', async () => {
     const repo = makeRepo()
-    const ws = await fakeWorkstate()
+    const ws = await fakeWorkman()
     const s = startServer({ FAKE_CLAUDE_AGENTS: '[]', AGENTS_SESSION_WAIT_MS: '600' })
     try {
         const r = await s.call('agent_launch', {
             name: 'unit-8', brief: 'task.md', repo_root: repo.root, controller: CONTROLLER,
-            workstate: { env_file: repo.envFile, url: ws.url },
+            workman: { env_file: repo.envFile, url: ws.url },
         })
         assert.equal(r.isError, false)
         assert.equal(r.structuredContent.sessionId, null)
