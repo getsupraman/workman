@@ -8,7 +8,7 @@ read it too if an agent does the work.
 
 | Path | What it is | Built with |
 |---|---|---|
-| `server/` | the Workman server (`WorkState.slnx`) and its tests | .NET 10, Docker for the tests |
+| `server/` | the Workman server (`Workman.slnx`) and its tests | .NET 10, Docker for the tests |
 | `server/frontend/` | the dashboard | Node 24, pnpm 9 |
 | `plugin/` | the `workman` Claude Code plugin: skills, the agents MCP server, the setup assets | Node 24, no dependencies |
 | `.claude-plugin/marketplace.json` | the `supraman` marketplace | Claude Code |
@@ -22,8 +22,8 @@ with CI green.
 **Server.** The tests start Postgres 17 through Testcontainers, so Docker must be running.
 
 ```sh
-dotnet build server/WorkState.slnx
-dotnet test server/WorkState.Tests/WorkState.Tests.csproj --no-build
+dotnet build server/Workman.slnx
+dotnet test server/Workman.Tests/Workman.Tests.csproj --no-build
 ```
 
 `ImportVisibilityTests` pins the bytes of `tools/list`. A change to any tool's name, description or

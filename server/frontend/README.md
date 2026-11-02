@@ -8,12 +8,12 @@ dashboard cookie, and never `/mcp`.
 ## The one command that builds and serves it
 
 ```
-dotnet build server/WorkState.Api/WorkState.Api.csproj -p:BuildSpa=true
-dotnet run   --project server/WorkState.Api/WorkState.Api.csproj
+dotnet build server/Workman.Api/Workman.Api.csproj -p:BuildSpa=true
+dotnet run   --project server/Workman.Api/Workman.Api.csproj
 ```
 
 The first runs `pnpm install --frozen-lockfile` and `pnpm run build`, and Vite writes straight into
-`WorkState.Api/wwwroot` — its `outDir`, so there is nothing to copy. The second serves it at
+`Workman.Api/wwwroot` — its `outDir`, so there is nothing to copy. The second serves it at
 <http://127.0.0.1:5290>. **`-p:BuildSpa=true` is opt-in**: a plain `dotnet build` never needs Node.
 
 `wwwroot/` is gitignored build output. Nothing under it is committed.
@@ -21,7 +21,7 @@ The first runs `pnpm install --frozen-lockfile` and `pnpm run build`, and Vite w
 ## Developing against a running API
 
 ```
-dotnet run --project server/WorkState.Api/WorkState.Api.csproj    # port 5290, IPv4 loopback only
+dotnet run --project server/Workman.Api/Workman.Api.csproj    # port 5290, IPv4 loopback only
 pnpm --dir server/frontend dev                                    # port 5173, proxies /api to 127.0.0.1:5290
 ```
 
@@ -40,7 +40,7 @@ one auth story, not two.
 
 The live scripts sign in with the dashboard credential from `WORKSTATE_USER` /
 `WORKSTATE_PASSWORD`, else `server/.env` (`WORKSTATE_DASHBOARD_USERNAME` / `_PASSWORD`, what
-`compose.yml` passes the container), else `WorkState.Api/appsettings.Development.json`. No
+`compose.yml` passes the container), else `Workman.Api/appsettings.Development.json`. No
 credential is written into any file here. Base defaults to `http://127.0.0.1:5290`.
 
 ## Layout
