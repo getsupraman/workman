@@ -7,6 +7,17 @@ All notable changes to the Workman server and the `workman` plugin are recorded 
 
 ## [Unreleased]
 
+### Server — the dashboard's prompts state the goal
+
+- The copy-paste prompts (`PromptCatalogue`, doc 13) no longer spell out `work_*` calls. Each states its goal
+  in the words of the new [docs/language.md](docs/language.md), starts from the brief of the scope it was
+  copied from, and still proposes first and waits for a yes before it closes, cancels, defers, merges, moves
+  or archives.
+- New prompts: *Plan a feature*, *Clean up* (replaces *Housekeeping*; its count is the project's open items),
+  and *Step back* on a project; *Finalize run*, *Step back* and *What's blocking* on a run; *Still needed?* on
+  an item. *Status report* reads *Where are we*, and the run's *Audit* reads *Did we cheat?*.
+- `docs/language.md`: the vocabulary for talking to an AI that uses Workman, with example conversations.
+
 ### Plugin 2.0.1
 
 - `agent_launch` accepts `workstate: {…}` as the 1.x name of `workman: {…}` (one or the other, not both), so a

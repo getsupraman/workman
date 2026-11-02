@@ -404,8 +404,8 @@ Read-only like every v1 route: it neither sweeps lapsed claims nor consumes note
 400 without `scope`, 404 for an unknown id.
 ```jsonc
 { "asOf": "…", "seq": 1234, "scope": ItemRef,
-  "prompts": [{ "key": "housekeeping", "label": "Housekeeping", "count": 7,
-                "text": "Housekeeping for Workman project …" }] }
+  "prompts": [{ "key": "cleanup", "label": "Clean up", "count": 7,
+                "text": "Clean up and reorganize Workman project `…` …" }] }
 ```
 
 ### `GET /api/stream`

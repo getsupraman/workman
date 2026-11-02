@@ -17,9 +17,9 @@ namespace Workman.Tests.App.V1;
 
 /// <summary>
 /// doc 13 "Prompt actions" and doc 10's <c>GET /api/v1/prompts</c>: each action is present exactly
-/// when it applies, its count is the number the agent it starts will see, every prompt opens with a
-/// <c>work_brief</c> on a ref that resolves to the scope alone, and every prompt that closes,
-/// cancels, defers or archives says to propose first and wait.
+/// when it applies, its count is the number the agent it starts will see, every prompt starts from
+/// the brief of a ref that resolves to the scope alone and names no tool, and every prompt that
+/// closes, cancels, defers, merges, moves or archives says to propose first and wait.
 /// </summary>
 [Collection(StoreCollection.Name)]
 public sealed partial class V1PromptTests(PostgresFixture fixture)
@@ -27,8 +27,15 @@ public sealed partial class V1PromptTests(PostgresFixture fixture)
     [GeneratedRegex(@"\bwork_[a-z_]+\(")]
     private static partial Regex Call();
 
-    [GeneratedRegex(@"^work_brief\(scope:""([^""]+)""")]
-    private static partial Regex BriefCall();
+    [GeneratedRegex(@"`([^`]+)`")]
+    private static partial Regex FirstRef();
+
+    [GeneratedRegex(@"Start from the (?:worker )?brief for `([^`]+)`")]
+    private static partial Regex StartFrom();
+
+    /// <summary>The verbs of docs/language.md that reshape the board, as a prompt would say them.</summary>
+    [GeneratedRegex(@"\b(close|cancel|defer|merge|move|archive)\b", RegexOptions.IgnoreCase)]
+    private static partial Regex Reshapes();
 
     /// <summary>
     /// run-a: 1.1 open task, 1.2 blocked, 1.3 in_progress with an expired claim, 1.4 open with a note
@@ -88,19 +95,20 @@ public sealed partial class V1PromptTests(PostgresFixture fixture)
     private static IReadOnlyList<string> Keys(IEnumerable<PromptAction> prompts) => [.. prompts.Select(p => p.Key)];
 
     [Fact]
-    public async Task A_project_with_open_work_offers_continue_status_housekeeping_and_triage_but_not_finalize()
+    public async Task A_project_with_open_work_offers_cleanup_step_back_and_triage_but_not_finalize()
     {
         var w = await CreateAsync();
 
         var prompts = await PromptsAsync(w.World, w.World.ProjectId);
 
-        Assert.Equal(["continue", "status", "housekeeping", "triage"], Keys(prompts));
+        Assert.Equal(["continue", "status", "plan", "cleanup", "stepback", "triage"], Keys(prompts));
         Assert.Null(prompts[0].Count);
         Assert.Null(prompts[1].Count);
+        Assert.Null(prompts[2].Count);
     }
 
     [Fact]
-    public async Task The_housekeeping_count_is_every_work_threads_row_plus_the_expired_claims_attention_names()
+    public async Task The_cleanup_count_is_the_open_leaves_and_its_loose_ends_every_work_threads_row_plus_the_expired_claims()
     {
         var w = await CreateAsync();
         var scope = await ScopeAsync(w.World, w.World.ProjectId);
@@ -113,9 +121,10 @@ public sealed partial class V1PromptTests(PostgresFixture fixture)
         Assert.Contains(threads, l => l.Contains("note", StringComparison.Ordinal) && l.StartsWith("1.4", StringComparison.Ordinal));
         Assert.Equal(1, expired);
 
-        var housekeeping = Assert.Single(await PromptsAsync(w.World, w.World.ProjectId), p => p.Key == "housekeeping");
-        Assert.Equal(rows + expired, housekeeping.Count);
-        Assert.Contains($"{rows + expired} unclosed thread(s)", housekeeping.Text, StringComparison.Ordinal);
+        // Open leaves: run-a's 1.1 to 1.4 and the backlog's B1 and B2; run-done's are closed.
+        var cleanup = Assert.Single(await PromptsAsync(w.World, w.World.ProjectId), p => p.Key == "cleanup");
+        Assert.Equal(6, cleanup.Count);
+        Assert.Contains($"6 open item(s) and {rows + expired} loose end(s)", cleanup.Text, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -153,12 +162,8 @@ public sealed partial class V1PromptTests(PostgresFixture fixture)
         }
 
         var prompts = await PromptsAsync(world, world.ProjectId);
-        Assert.Equal(["continue", "status", "housekeeping", "triage", "finalize"], Keys(prompts));
-        var projectRef = (await ScopeAsync(world, world.ProjectId)).Item.Ref;
-        Assert.Contains(
-            $"work_update(ref:\"{projectRef}\", archived:true)",
-            Assert.Single(prompts, p => p.Key == "finalize").Text,
-            StringComparison.Ordinal);
+        Assert.Equal(["continue", "status", "plan", "cleanup", "stepback", "triage", "finalize"], Keys(prompts));
+        Assert.Contains("archive the project", Assert.Single(prompts, p => p.Key == "finalize").Text, StringComparison.Ordinal);
 
         await using (var db = fixture.NewContext())
         {
@@ -170,35 +175,44 @@ public sealed partial class V1PromptTests(PostgresFixture fixture)
     }
 
     [Fact]
-    public async Task A_run_offers_resume_while_open_and_audit_once_it_has_done_work()
+    public async Task A_run_offers_resume_step_back_and_blocking_while_open_and_finalize_and_audit_once_it_has_done_work()
     {
         var w = await CreateAsync();
 
-        Assert.Equal(["resume"], Keys(await PromptsAsync(w.World, w.World.RunId)));
+        var open = await PromptsAsync(w.World, w.World.RunId);
+        Assert.Equal(["resume", "stepback", "blocking"], Keys(open));
+        Assert.Equal(1, Assert.Single(open, p => p.Key == "blocking").Count);
         Assert.Equal(["audit"], Keys(await PromptsAsync(w.World, w.DoneRun)));
 
         await WriteSeed.StatusAsync(w.World, w.World.TaskId, ItemStatus.Done);
-        Assert.Equal(["resume", "audit"], Keys(await PromptsAsync(w.World, w.World.RunId)));
+        var started = await PromptsAsync(w.World, w.World.RunId);
+        Assert.Equal(["resume", "finalize-run", "stepback", "blocking", "audit"], Keys(started));
+        var finalize = Assert.Single(started, p => p.Key == "finalize-run");
+        Assert.Equal(3, finalize.Count);
+        Assert.Contains("3 open item(s) left", finalize.Text, StringComparison.Ordinal);
+
+        await WriteSeed.StatusAsync(w.World, w.Blocked, ItemStatus.Open);
+        Assert.DoesNotContain("blocking", Keys(await PromptsAsync(w.World, w.World.RunId)));
     }
 
     [Fact]
-    public async Task An_item_offers_work_when_open_or_ready_and_unblock_when_blocked()
+    public async Task An_item_offers_work_when_open_or_ready_unblock_when_blocked_and_step_back_on_both()
     {
         var w = await CreateAsync();
 
-        Assert.Equal(["work"], Keys(await PromptsAsync(w.World, w.Ready)));
-        Assert.Equal(["work"], Keys(await PromptsAsync(w.World, w.World.TaskId)));
-        Assert.Equal(["unblock"], Keys(await PromptsAsync(w.World, w.Blocked)));
+        Assert.Equal(["work", "stepback"], Keys(await PromptsAsync(w.World, w.Ready)));
+        Assert.Equal(["work", "stepback"], Keys(await PromptsAsync(w.World, w.World.TaskId)));
+        Assert.Equal(["unblock", "stepback"], Keys(await PromptsAsync(w.World, w.Blocked)));
         Assert.Empty(await PromptsAsync(w.World, w.Claimed));
         Assert.Empty(await PromptsAsync(w.World, w.DoneTask));
         Assert.Empty(await PromptsAsync(w.World, w.World.PhaseId));
 
         await WriteSeed.StatusAsync(w.World, w.Ready, ItemStatus.Ready);
-        Assert.Equal(["work"], Keys(await PromptsAsync(w.World, w.Ready)));
+        Assert.Equal(["work", "stepback"], Keys(await PromptsAsync(w.World, w.Ready)));
     }
 
     [Fact]
-    public async Task Every_prompt_opens_with_work_brief_on_a_ref_that_resolves_to_its_scope_alone()
+    public async Task Every_prompt_starts_from_the_brief_of_a_ref_that_resolves_to_its_scope_alone_and_names_no_tool()
     {
         var w = await CreateAsync();
         var board = new BoardQueries(fixture.DataSource);
@@ -208,10 +222,16 @@ public sealed partial class V1PromptTests(PostgresFixture fixture)
         {
             foreach (var prompt in await PromptsAsync(w.World, id))
             {
-                var first = Call().Match(prompt.Text);
-                Assert.True(first.Success, $"{prompt.Key}: no call at all");
-                var brief = BriefCall().Match(prompt.Text[first.Index..]);
-                Assert.True(brief.Success, $"{prompt.Key}: the first call is not work_brief(scope:…):\n{prompt.Text}");
+                Assert.False(Call().IsMatch(prompt.Text), $"{prompt.Key}: names a tool:\n{prompt.Text}");
+
+                var first = FirstRef().Match(prompt.Text);
+                Assert.True(first.Success, $"{prompt.Key}: names no ref at all");
+                var brief = StartFrom().Match(prompt.Text);
+                Assert.True(brief.Success, $"{prompt.Key}: does not start from a brief:\n{prompt.Text}");
+                Assert.Equal(first.Groups[1].Value, brief.Groups[1].Value);
+                Assert.True(
+                    prompt.Text.Split('\n').Take(2).Any(l => l.Contains(brief.Value, StringComparison.Ordinal)),
+                    $"{prompt.Key}: the brief is not in its first two lines:\n{prompt.Text}");
 
                 var matches = await board.ResolveAsync(w.World.WorkspaceId, brief.Groups[1].Value, Ct);
                 Assert.True(matches is [var only] && only.Id == id, $"{prompt.Key}: {brief.Groups[1].Value} does not resolve to its scope alone");
@@ -219,7 +239,7 @@ public sealed partial class V1PromptTests(PostgresFixture fixture)
             }
         }
 
-        Assert.True(seen >= 9, $"only {seen} prompts were checked");
+        Assert.True(seen >= 15, $"only {seen} prompts were checked");
     }
 
     [Fact]
@@ -227,15 +247,16 @@ public sealed partial class V1PromptTests(PostgresFixture fixture)
     {
         var w = await CreateAsync();
 
-        var unblock = Assert.Single(await PromptsAsync(w.World, w.Blocked));
+        var unblock = Assert.Single(await PromptsAsync(w.World, w.Blocked), p => p.Key == "unblock");
 
-        Assert.Contains("work_brief(scope:\"run-a/1.2\")", unblock.Text, StringComparison.Ordinal);
-        Assert.DoesNotContain("scope:\"1.2\"", unblock.Text, StringComparison.Ordinal);
+        Assert.Contains("Start from the brief for `run-a/1.2`", unblock.Text, StringComparison.Ordinal);
+        Assert.DoesNotContain("`1.2`", unblock.Text, StringComparison.Ordinal);
     }
 
     /// <summary>
     /// The rule is about what the text tells an agent to do, so it is judged on the text: any prompt
-    /// naming a close, cancel, deferral or archive carries the sentence, whatever its entry declares.
+    /// telling the agent to close, cancel, defer, merge, move or archive carries the sentence, whatever
+    /// its entry declares, and one that says to make no writes says none of those verbs.
     /// </summary>
     [Fact]
     public async Task Every_prompt_that_closes_cancels_defers_or_archives_says_propose_first_and_wait()
@@ -245,18 +266,23 @@ public sealed partial class V1PromptTests(PostgresFixture fixture)
         await WriteSeed.StatusAsync(finalizable, finalizable.TaskId, ItemStatus.Done);
 
         var prompts = new List<PromptAction>();
-        foreach (var id in (Guid[])[w.World.ProjectId, w.World.RunId, w.DoneRun, w.World.TaskId, w.Blocked])
+        await WriteSeed.StatusAsync(w.World, w.World.TaskId, ItemStatus.Done);
+        foreach (var id in (Guid[])[w.World.ProjectId, w.World.RunId, w.DoneRun, w.Ready, w.Blocked])
         {
             prompts.AddRange(await PromptsAsync(w.World, id));
         }
 
         prompts.AddRange(await PromptsAsync(finalizable, finalizable.ProjectId));
 
-        string[] writes = ["to:\"done\"", "to:\"cancelled\"", "to:\"deferred\"", "archived:true"];
-        var writing = prompts.Where(p => writes.Any(x => p.Text.Contains(x, StringComparison.Ordinal))).ToList();
+        var writing = prompts.Where(p => Reshapes().IsMatch(p.Text)).ToList();
 
-        Assert.Equal(["finalize", "housekeeping"], writing.Select(p => p.Key).Distinct().Order(StringComparer.Ordinal));
+        Assert.Equal(
+            ["cleanup", "finalize", "finalize-run", "stepback", "triage"],
+            writing.Select(p => p.Key).Distinct().Order(StringComparer.Ordinal));
         Assert.All(writing, p => Assert.Contains(PromptCatalogue.ProposeAndWait, p.Text, StringComparison.Ordinal));
+        Assert.All(
+            prompts.Where(p => p.Text.Contains(PromptCatalogue.NoWrites, StringComparison.Ordinal)),
+            p => Assert.False(Reshapes().IsMatch(p.Text), $"{p.Key} makes no writes, yet says {Reshapes().Match(p.Text).Value}"));
         Assert.Contains(PromptCatalogue.ProposeAndWait, Assert.Single(prompts, p => p.Key == "triage").Text, StringComparison.Ordinal);
         Assert.All(
             PromptCatalogue.Entries.Where(e => e.Writes),
