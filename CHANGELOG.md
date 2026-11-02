@@ -7,6 +7,8 @@ All notable changes to the Workman server and the `workman` plugin are recorded 
 
 ## [Unreleased]
 
+- Plugin 1.2.0 (wording only): the skills, the agents MCP and the setup scripts say Workman instead of WorkState in their prose and printed messages, and so do the docs; no machine-facing name changes.
+
 ## [1.2.0] — 2026-11-02
 
 Server 1.2.0, plugin 1.1.0. No database migration since 1.1.4.
