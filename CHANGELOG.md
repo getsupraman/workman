@@ -7,6 +7,11 @@ All notable changes to the Workman server and the `workman` plugin are recorded 
 
 ## [Unreleased]
 
+### Plugin 2.0.1
+
+- `agent_launch` accepts `workstate: {…}` as the 1.x name of `workman: {…}` (one or the other, not both), so a
+  Supraman 0.1.2 repo-controller can still launch units. It goes when Supraman has switched.
+
 ## [2.0.0] — 2026-11-02
 
 Server 2.0.0 and plugin 2.0.0 ship together: the rename to Workman is complete. Also in this release:

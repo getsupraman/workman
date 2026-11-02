@@ -316,3 +316,21 @@ test('a session id that never appears is a warning, not a failure', async () => 
         await ws.close()
     }
 })
+
+test('workstate is the 1.x name of workman: accepted alone, refused beside workman', async () => {
+    const repo = makeRepo()
+    const ws = await fakeWorkman()
+    const s = startServer()
+    try {
+        const base = { name: 'unit-7', brief: 'task.md', repo_root: repo.root, controller: CONTROLLER, dry_run: true }
+        const old = await s.call('agent_launch', { ...base, workstate: { env_file: repo.envFile, url: ws.url } })
+        assert.equal(old.isError, false, old.content[0].text)
+        assert.equal(old.structuredContent.mcpConfig.content.mcpServers.workman.headers.Authorization, 'Bearer <minted>')
+        const both = await s.call('agent_launch', { ...base, workman: { role: 'none' }, workstate: { role: 'none' } })
+        assert.equal(both.isError, true)
+        assert.match(both.content[0].text, /not both/)
+    } finally {
+        await s.close()
+        await ws.close()
+    }
+})
