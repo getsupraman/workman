@@ -407,6 +407,32 @@ public sealed partial class BoardQueries(NpgsqlDataSource dataSource)
             cancellationToken);
     }
 
+    /// <summary>
+    /// The active rules a review of this scope reads: <see cref="ConstraintsAsync"/>'s, plus every
+    /// rule scoped to an item beneath it.
+    /// </summary>
+    public async Task<int> RulesInScopeCountAsync(
+        Guid workspaceId,
+        Guid scopeItemId,
+        CancellationToken cancellationToken = default)
+    {
+        const string sql =
+            """
+            SELECT count(*)::int
+            FROM   constraint_rule c
+            CROSS  JOIN (SELECT id, ancestors FROM item WHERE id = @scope) x
+            LEFT   JOIN item s ON s.id = c.scope_item_id
+            WHERE  c.workspace_id = @workspace
+              AND  c.active
+              AND  (c.scope_item_id IS NULL
+                    OR c.scope_item_id = x.id
+                    OR c.scope_item_id = ANY(x.ancestors)
+                    OR s.ancestors @> ARRAY[x.id]::uuid[]);
+            """;
+
+        return await SingleAsync<int>(sql, new { workspace = workspaceId, scope = scopeItemId }, cancellationToken);
+    }
+
     public async Task<IReadOnlyList<AssumptionRow>> AssumptionsAsync(
         Guid workspaceId,
         Guid? scopeItemId,

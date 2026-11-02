@@ -144,33 +144,45 @@ live burst like the page's other reads, so a count or an action follows the data
 
 The server builds every prompt, so the dashboard and the skills share one wording:
 `server/Workman.Core/Rendering/PromptCatalogue.cs` (the entries, their predicates and templates) and
-`server/Workman.Core/Board/BoardReader.Prompts.cs` (the facts they read). The endpoint returns only the
-actions that apply, in this order:
+`server/Workman.Core/Board/BoardReader.Prompts.cs` (the facts they read). A prompt states the goal in
+the words of [language.md](language.md) and leaves the tools to the AI: the server instructions and
+the brief already teach them. *Open leaves* below are the leaves (task, follow-up, subtask, spike,
+question, incident) not done, cancelled or superseded. The endpoint returns only the actions that
+apply, in this order:
 
-| scope | key · label | applies when | count |
-|---|---|---|---|
-| project | `continue` · Continue | always | — |
-| project | `status` · Status report | always; makes no writes | — |
-| project | `housekeeping` · Housekeeping | n &gt; 0 | every row `work_threads(scope:project)` lists (assumptions, findings, follow-ups, addressed notes, unclosed dependencies, stale `in_progress`) plus the expired claims its attention block names that no stale row covers — `BoardReader.UnclosedCountAsync`, the same rows the prompt's agent will read |
-| project | `triage` · Triage backlog | n &gt; 0 | the project brief's backlog: open leaves of the backlog run, and open follow-ups anywhere under the project |
-| project | `finalize` · Finalize | not archived, at least one run besides the backlog, and no such run has an unclosed leaf | — |
-| run | `resume` · Resume | the run is not closed | — |
-| run | `audit` · Audit | a leaf under the run is done; makes no writes | — |
-| item | `work` · Work on this | a task, follow-up or subtask that is open or ready | — |
-| item | `unblock` · Investigate block | the item is blocked; makes no writes | — |
+| scope | key · label | goal | applies when | count |
+|---|---|---|---|---|
+| project | `continue` · Continue | pick up where we left off and work the loop | always | — |
+| project | `status` · Where are we | what landed, what is open, what needs the human; makes no writes | always | — |
+| project | `plan` · Plan a feature | check the code, write a run, stop for approval (the human fills in the feature) | always | — |
+| project | `cleanup` · Clean up | read every open item and loose end, check each against the code, then close, cancel, defer, merge, update and restructure into clear runs | open leaves or loose ends | the project's open leaves; the text also names the loose ends: every row `work_threads(scope:project)` lists plus the expired claims its attention block names that no stale row covers (`BoardReader.UnclosedCountAsync`) |
+| project | `stepback` · Step back | question every open item against the current code and the project's goal | open leaves | — |
+| project | `rules` · Review rules | read every active binding rule in scope, check each against the current code and later decisions, propose keep, reword, retire or rescope and the missing ones; never retire a red line without the human's yes for it | an active rule in scope | the active rules: workspace-wide, on the project, and on anything under it (`BoardQueries.RulesInScopeCountAsync`) |
+| project | `triage` · Triage backlog | do now, later, drop or needs a decision, then a queue | n &gt; 0 | the project brief's backlog: open leaves of the backlog run, and open follow-ups anywhere under the project |
+| project | `finalize` · Finalize | carry leftovers to the backlog, close the runs, archive | not archived, at least one run besides the backlog, and no such run has an unclosed leaf | — |
+| run | `resume` · Resume | pick up the run where it stopped and work the loop | the run is not closed | — |
+| run | `finalize-run` · Finalize run | clean up and reorder what is left, explain what the done guard still wants, offer to start the rest | not closed, and a leaf under it is done | the run's open leaves |
+| run | `stepback` · Step back | question every open item against the current code and the run's goal | not closed, with open leaves | — |
+| run | `rules` · Review rules | the same, for the run | not closed, with an active rule in scope | the active rules: workspace-wide, on the run and its project, and on anything under the run |
+| run | `blocking` · What's blocking | every blocked item, what it waits on, who could free it; makes no writes | not closed, with a blocked leaf | the run's blocked leaves |
+| run | `audit` · Did we cheat? | reported against verified, weak verify commands, forced closes, quiet deferrals; makes no writes | a leaf under the run is done | — |
+| item | `work` · Work on this | do it from the worker brief and hand it back with a report | a task, follow-up or subtask that is open or ready | — |
+| item | `unblock` · Investigate block | what it waits on and who could free it; makes no writes | the item is blocked | — |
+| item | `stepback` · Still needed? | check it against the current code and its run's goal: keep, rewrite, merge, move, defer or cancel | a task, follow-up or subtask that is open, ready or blocked | — |
 
 Rules every template keeps (`V1PromptTests` holds each one):
 
-1. The first call a prompt names is `work_brief(scope:"<ref>")` on its own scope, and the ref is the
-   callable form: bare while unique in the workspace, else the qualified form that resolves to that
-   item alone (`run-a/1.2`, never a bare `1.2` that matches two items).
-2. Plain, imperative, short; it names the exact calls with real arguments — `RenderedCallTests`
-   already scans every `work_xxx(` on a code line of Workman.Core, the catalogue included.
-3. A prompt that closes, cancels, defers or archives says, verbatim,
+1. A prompt starts from the brief of its own scope: in its first two lines it says
+   ``Start from the brief for `<ref>` `` (``the worker brief`` for `work`), and that ref is the first
+   it names. The ref is the callable form: bare while unique in the workspace, else the qualified form
+   that resolves to that item alone (`run-a/1.2`, never a bare `1.2` that matches two items).
+2. Plain, short, and a goal rather than a recipe: it names no `work_*` tool and says what to achieve
+   in the Workman words (brief, the loop, done guard, defer to the backlog, binding rule, evidence).
+3. A prompt that tells the agent to close, cancel, defer, merge, move, archive or retire says, verbatim,
    *"Propose first and wait for the human's yes: list every change you intend to make, and write
    nothing until the human answers yes."* (`PromptCatalogue.ProposeAndWait`). It closes only with
-   evidence (`work_verify` then `work_status(to:"done")`), defers as a move (`target:` and `reason:`),
-   cancels with a reason, and never forces.
+   evidence it ran itself, defers as a move with a reason, cancels with a reason, and never forces
+   past the done guard. A prompt that makes no writes says *"Make no writes."* and none of those verbs.
 4. The noclip rule (doc 06): the text is whole — never shortened, on the server or in the panel.
 
 A **project is named** by its title's head — the text before the first ` — `, or the whole title —

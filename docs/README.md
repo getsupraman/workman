@@ -11,6 +11,7 @@ further.
 |---|---|
 | [install.md](install.md) | Connecting to the hosted server, installing the plugin, self-hosting with `/workman:setup` (update, backup, restore), one server for a team, several public URLs with `WORKMAN_PUBLIC_URLS`, running from source |
 | [concepts.md](concepts.md) | Projects, runs and items; refs and links; criteria and verification; claims; rules, assumptions and notes; roles; the loop; the dashboard |
+| [language.md](language.md) | **The Workman language.** The words to use with an AI that runs on Workman — run, backlog, binding rule, defer, done guard, brief and the rest — each with a sentence you would say, what the AI does when it hears it, and short example conversations |
 | [../CONTRIBUTING.md](../CONTRIBUTING.md) | Building and testing the server, the dashboard and the plugin; pull requests and the CLA |
 
 ## Reference

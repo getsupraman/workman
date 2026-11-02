@@ -1,4 +1,5 @@
 using Workman.Core.Domain;
+using Workman.Core.Queries;
 using Workman.Core.Rendering;
 using Workman.Core.Writing;
 
@@ -20,16 +21,25 @@ public sealed partial class BoardReader
         return item.Kind switch
         {
             "project" => await ProjectPromptFactsAsync(scope, callable, cancellationToken),
-            "run" => new PromptFacts(
-                PromptScope.Run,
-                callable,
-                item.Kind,
-                Glyph.Flat(item.Title),
-                item.Status,
-                DoneLeaves: (await queries.SubtreeAsync(item.Id, cancellationToken))
-                    .Count(n => Leaf(n.Kind) && n.Status == ItemStatus.Done)),
+            "run" => await RunPromptFactsAsync(scope, callable, cancellationToken),
             _ => new PromptFacts(PromptScope.Item, callable, item.Kind, Glyph.Flat(item.Title), item.Status),
         };
+    }
+
+    private async Task<PromptFacts> RunPromptFactsAsync(ScopeResult.Found scope, string callable, CancellationToken cancellationToken)
+    {
+        var item = scope.Item;
+        var leaves = (await queries.SubtreeAsync(item.Id, cancellationToken)).Where(n => Leaf(n.Kind)).ToList();
+        return new PromptFacts(
+            PromptScope.Run,
+            callable,
+            item.Kind,
+            Glyph.Flat(item.Title),
+            item.Status,
+            DoneLeaves: leaves.Count(n => n.Status == ItemStatus.Done),
+            Open: leaves.Count(n => !PromptCatalogue.Closed(n.Status)),
+            Blocked: leaves.Count(n => n.Status == ItemStatus.Blocked),
+            Rules: await board.RulesInScopeCountAsync(scope.WorkspaceId, item.Id, cancellationToken));
     }
 
     private async Task<PromptFacts> ProjectPromptFactsAsync(
@@ -61,7 +71,10 @@ public sealed partial class BoardReader
             Unclosed: await UnclosedCountAsync(scope, cancellationToken),
             Backlog: backlog.Count,
             BacklogRef: backlogRun is null ? null : await CallableAsync(backlogRun.Scope, cancellationToken),
-            Finalizable: finalizable);
+            Finalizable: finalizable,
+            Open: (await queries.SubtreeAsync(project.Id, cancellationToken))
+                .Count(n => Leaf(n.Kind) && !PromptCatalogue.Closed(n.Status)),
+            Rules: await board.RulesInScopeCountAsync(scope.WorkspaceId, project.Id, cancellationToken));
     }
 
     /// <summary>The leaf kinds of doc 10's Rollup.</summary>

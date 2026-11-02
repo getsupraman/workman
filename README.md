@@ -329,6 +329,7 @@ self-hosting and serving one server on several hosts; to run the server from sou
 | [docs/README.md](docs/README.md) | The index of every document, grouped |
 | [docs/install.md](docs/install.md) | Install and self-hosting: hosted, `/workman:setup`, several public URLs |
 | [docs/concepts.md](docs/concepts.md) | Projects, runs, items, criteria, verification, claims, notes, the loop |
+| [docs/language.md](docs/language.md) | The Workman language: what to say to the AI, and what it does when you say it |
 | [docs/01-mcp-surface.md](docs/01-mcp-surface.md) | The MCP tools, their output contract and the attention channel |
 | [docs/07-guards.md](docs/07-guards.md) | Forced closure: the transition table and the conditions for `done` |
 | [docs/13-dashboard.md](docs/13-dashboard.md) | The dashboard: pages, the detail panel, the state vocabulary |
