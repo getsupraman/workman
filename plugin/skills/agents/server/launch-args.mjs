@@ -20,7 +20,7 @@ export const GRANTS = ['import']
 const LAUNCH_KEYS = [
     'name', 'brief', 'repo_root', 'controller', 'permission_mode', 'toolset', 'allowed_tools',
     'disallowed_tools', 'add_dirs', 'model', 'effort', 'settings', 'append_system_prompt',
-    'workman', 'dry_run',
+    'workman', 'workstate', 'dry_run',
 ]
 const WORKMAN_KEYS = ['role', 'env_file', 'url', 'ttl_hours', 'grants']
 
@@ -168,7 +168,9 @@ export function validateLaunch(input) {
 
     const permissionMode = /** @type {string} */ (oneOf(a.permission_mode, PERMISSION_MODES, 'permission_mode', 'auto'))
     const toolset = /** @type {'none'|'readonly'|'fix'} */ (oneOf(a.toolset, TOOLSETS, 'toolset', 'fix'))
-    const workman = validateWorkman(a.workman, repoRoot)
+    // `workstate` is the 1.x name of `workman`: Supraman 0.1.2's repo-controller skill still passes it.
+    if (a.workman !== undefined && a.workstate !== undefined) throw new Refusal('pass workman or its 1.x name workstate, not both')
+    const workman = validateWorkman(a.workman ?? a.workstate, repoRoot)
     // A minted session must reach its own server without a prompt: under acceptEdits an MCP call
     // parks the agent. The server, not this list, limits which work_* tools the role sees.
     const workmanTools = workman.role === 'none' ? [] : [WORKMAN_TOOLS]
