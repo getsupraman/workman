@@ -7,6 +7,11 @@ All notable changes to the Workman server and the `workman` plugin are recorded 
 
 ## [Unreleased]
 
+### Plugin 2.1.1
+
+- Removed: `agent_launch` no longer accepts `workstate: {…}`, the 1.x name of `workman: {…}`; it is refused as an
+  unknown parameter.
+
 ## [2.1.0] — 2026-11-03
 
 Server 2.1.0 and plugin 2.1.0: the 1.x rename workarounds go. No migration.
