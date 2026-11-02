@@ -5,8 +5,8 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import fs from 'node:fs'
 import path from 'node:path'
-import { startServer, makeRepo, fakeWorkstate, walk, tmp, CONTROLLER, CONTROLLER_TOKEN, MINTED_TOKEN } from './helpers.mjs'
-import { fakeOAuthWorkstate } from './fake-oauth.mjs'
+import { startServer, makeRepo, fakeWorkman, walk, tmp, CONTROLLER, CONTROLLER_TOKEN, MINTED_TOKEN } from './helpers.mjs'
+import { fakeOAuthWorkman } from './fake-oauth.mjs'
 
 /** @param {string} where @param {string} text */
 function assertClean(where, text) {
@@ -16,12 +16,12 @@ function assertClean(where, text) {
 
 test('launch, list, failed launch and stop leak no token anywhere but mcp-<name>.json', async () => {
     const repo = makeRepo()
-    const ws = await fakeWorkstate()
+    const ws = await fakeWorkman()
     const s = startServer()
     const failing = startServer({ FAKE_CLAUDE_BG_FAIL: '1' })
     try {
         const results = []
-        const args = { brief: 'task.md', repo_root: repo.root, controller: CONTROLLER, workstate: { env_file: repo.envFile, url: ws.url } }
+        const args = { brief: 'task.md', repo_root: repo.root, controller: CONTROLLER, workman: { env_file: repo.envFile, url: ws.url } }
         results.push(await s.call('agent_launch', { ...args, name: 'leak-1' }))
         results.push(await s.call('agent_launch', { ...args, name: 'leak-dry', dry_run: true }))
         results.push(await failing.call('agent_launch', { ...args, name: 'leak-fail' }))
@@ -51,17 +51,17 @@ test('launch, list, failed launch and stop leak no token anywhere but mcp-<name>
 
 test('sign-in, launch, list, failed launch, stop and sign-out leak no OAuth token, code, verifier or minted token', async () => {
     const repo = makeRepo()
-    const ws = await fakeOAuthWorkstate()
-    const grants = path.join(tmp('home'), '.workstate', 'grants.json')
-    const s = startServer({ WORKSTATE_GRANTS_FILE: grants })
-    const failing = startServer({ WORKSTATE_GRANTS_FILE: grants, FAKE_CLAUDE_BG_FAIL: '1' })
+    const ws = await fakeOAuthWorkman()
+    const grants = path.join(tmp('home'), '.workman', 'grants.json')
+    const s = startServer({ WORKMAN_GRANTS_FILE: grants })
+    const failing = startServer({ WORKMAN_GRANTS_FILE: grants, FAKE_CLAUDE_BG_FAIL: '1' })
     /** @param {string} where @param {string} text @param {string[]} [allowed] */
     const clean = (where, text, allowed = []) => {
         for (const x of ws.secrets) if (!allowed.includes(x)) assert.ok(!text.includes(x), `${x.slice(0, 14)}... found in ${where}`)
     }
     try {
         const results = []
-        const args = { brief: 'task.md', repo_root: repo.root, controller: CONTROLLER, workstate: { url: ws.url } }
+        const args = { brief: 'task.md', repo_root: repo.root, controller: CONTROLLER, workman: { url: ws.url } }
         results.push(await s.call('agent_signin', { url: ws.url }))
         results.push(await s.call('agent_launch', { ...args, name: 'oleak-1' }))
         results.push(await s.call('agent_launch', { ...args, name: 'oleak-dry', dry_run: true }))

@@ -41,11 +41,11 @@ internal sealed class ReadServer : IAsyncDisposable
             builder.WebHost.UseUrls("http://127.0.0.1:0");
             builder.Configuration.AddInMemoryCollection(new Dictionary<string, string?>
             {
-                ["ConnectionStrings:WorkState"] = connectionString,
-                ["WorkState:Workspace"] = workspaceSlug,
-                ["WorkState:Auth:WorkerToken"] = WorkerToken,
-                ["WorkState:Auth:OrchestratorToken"] = OrchestratorToken,
-                ["WorkState:Auth:ControllerToken"] = ControllerToken,
+                ["ConnectionStrings:Workman"] = connectionString,
+                ["Workman:Workspace"] = workspaceSlug,
+                ["Workman:Auth:WorkerToken"] = WorkerToken,
+                ["Workman:Auth:OrchestratorToken"] = OrchestratorToken,
+                ["Workman:Auth:ControllerToken"] = ControllerToken,
             });
         });
 

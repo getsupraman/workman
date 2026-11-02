@@ -177,7 +177,7 @@ internal sealed class ProjectWorld
     {
         var cookie = await CookieAsync(user);
         var mcp = await OAuthAsync(cookie, $"{Server.BaseAddress}/mcp", "mcp offline_access");
-        var api = await OAuthAsync(cookie, $"{Server.BaseAddress}/api", "workstate.read workstate.sessions offline_access");
+        var api = await OAuthAsync(cookie, $"{Server.BaseAddress}/api", "workman.read workman.sessions offline_access");
         var minted = await TenantWorld.MintAsync(Bearer(api), $"pa-{Guid.CreateVersion7():n}"[..20], "controller");
 
         return

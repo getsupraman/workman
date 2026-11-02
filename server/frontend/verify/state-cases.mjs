@@ -11,6 +11,7 @@ import { boardHref, copyValue, itemHref, pathCrumbs, routeReads } from '../src/n
 import { appIconHref, consentForm, consentStep, consentView, hiddenFields, iconStep, initials, isConnectPath, returnTarget, scopeLines, signInHref, signInStart, signInStep } from '../src/connect.ts'
 import { formerName, isReleased, releasable, tokenLabel } from '../src/sessions.ts'
 import { arrange, chordLabel, commands, entryHref, isPaletteChord, isSlash, matchCommands } from '../src/palette.ts'
+import { adoptOldKey } from '../src/storage.ts'
 import { HANDLE, LIST_MIN, PANEL_MIN, PANEL_SHARE, WIDTH_KEY, clampWidth, docks, panelWidth, rememberWidth, rememberedWidth } from '../src/split.ts'
 import { MEMBERS_ANCHOR, memberLine, membersHref, projectOnPath, shareMarker } from '../src/sharing.ts'
 import { PHONE_QUERY, closesOnMove, pageName } from '../src/menu.ts'
@@ -219,15 +220,15 @@ check('child list, cancelled shown', withoutCancelled(kids, true).shown.length, 
 check('child list, count either way', [withoutCancelled(kids, false).count, withoutCancelled(kids, true).count], [1, 1])
 
 console.log('\n── copy puts the full path on the clipboard ────────────────────────────────')
-const shared = { id: 'S', ref: 'shared-server', qualifiedRef: 'shared-server', kind: 'followup', title: 't', status: 'open', fullRef: 'workstate/backlog/shared-server' }
-check('copyValue() is fullRef, not qualifiedRef', copyValue(shared), 'workstate/backlog/shared-server')
-const pj = { id: 'PJ', ref: 'workstate', qualifiedRef: 'workstate', kind: 'project', title: 'WorkState', status: 'open', fullRef: 'workstate' }
-const bl = { id: 'BL', ref: 'backlog', qualifiedRef: 'backlog', kind: 'run', title: 'Backlog', status: 'open', fullRef: 'workstate/backlog' }
-const ph = { id: 'PH', ref: '1', qualifiedRef: 'backlog/1', kind: 'phase', title: 'P', status: 'open', fullRef: 'workstate/backlog/1' }
+const shared = { id: 'S', ref: 'shared-server', qualifiedRef: 'shared-server', kind: 'followup', title: 't', status: 'open', fullRef: 'workman/backlog/shared-server' }
+check('copyValue() is fullRef, not qualifiedRef', copyValue(shared), 'workman/backlog/shared-server')
+const pj = { id: 'PJ', ref: 'workman', qualifiedRef: 'workman', kind: 'project', title: 'Workman', status: 'open', fullRef: 'workman' }
+const bl = { id: 'BL', ref: 'backlog', qualifiedRef: 'backlog', kind: 'run', title: 'Backlog', status: 'open', fullRef: 'workman/backlog' }
+const ph = { id: 'PH', ref: '1', qualifiedRef: 'backlog/1', kind: 'phase', title: 'P', status: 'open', fullRef: 'workman/backlog/1' }
 const crumbs = (item, path) => pathCrumbs(item, path).map((c) => [c.text, c.item?.id ?? null])
-check('item crumbs: the full path, each segment linked', crumbs(shared, [pj, bl, ph]), [['workstate', 'PJ'], ['backlog', 'BL'], ['shared-server', null]])
-check('run crumbs', crumbs(bl, [pj]), [['workstate', 'PJ'], ['backlog', null]])
-check('project crumbs', crumbs(pj, []), [['workstate', null]])
+check('item crumbs: the full path, each segment linked', crumbs(shared, [pj, bl, ph]), [['workman', 'PJ'], ['backlog', 'BL'], ['shared-server', null]])
+check('run crumbs', crumbs(bl, [pj]), [['workman', 'PJ'], ['backlog', null]])
+check('project crumbs', crumbs(pj, []), [['workman', null]])
 check('a project and run of one name link in order', crumbs({ ...shared, fullRef: 'x/x/shared-server' }, [{ ...pj, ref: 'x' }, { ...bl, ref: 'x' }]), [['x', 'PJ'], ['x', 'BL'], ['shared-server', null]])
 
 console.log('\n── itemHref() / routeReads(): every link has a page ─────────────────────────')
@@ -286,6 +287,24 @@ let threw = false
 try { rememberWidth(400, () => throwing) } catch { threw = true }
 check('storing into throwing storage does not throw', threw, false)
 
+console.log('\n── remembered choices: the 1.x keys move once ──────────────────────────────')
+const store = (entries) => {
+  const map = new Map(entries)
+  return { getItem: (k) => map.get(k) ?? null, setItem: (k, v) => map.set(k, v), removeItem: (k) => map.delete(k), map }
+}
+const oldWidth = store([['workstate.run-panel-width', '512']])
+check('a width stored under the 1.x key is read', rememberedWidth(() => oldWidth), 512)
+check('and now lives under the workman key only', [...oldWidth.map.entries()], [[WIDTH_KEY, '512']])
+const both = store([['workstate.theme', 'dark'], ['workman.theme', 'light']])
+adoptOldKey('workman.theme', () => both)
+check('a value already under the new key wins; the old key goes', [...both.map.entries()], [['workman.theme', 'light']])
+const none = store([])
+adoptOldKey('workman.theme', () => none)
+check('nothing stored moves nothing', none.map.size, 0)
+threw = false
+try { adoptOldKey('workman.theme', () => throwing) } catch { threw = true }
+check('throwing storage moves nothing and does not throw', threw, false)
+
 console.log('\n── the consent page: loading, client shown, approve, deny, error ────────────')
 const search = '?response_type=code&client_id=c1&redirect_uri=http%3A%2F%2F127.0.0.1%3A7777%2Fcallback&scope=openid+mcp+offline_access&state=s&resource=r1&resource=r2'
 const info = { clientName: 'Claude Code', clientHost: null, redirectHost: '127.0.0.1', loopbackOnly: true }
@@ -332,8 +351,8 @@ check('a switch to the current tenant changes nothing', consentStep(inA, { t: 's
 check('a switch to a tenant not offered changes nothing', consentStep(inA, { t: 'switch', to: 't-elsewhere' }), inA)
 check('a switch during an answer changes nothing', consentStep(consentStep(inA, { t: 'answer', answer: 'granted' }), { t: 'switch', to: 't-b' }).k, 'answering')
 check('a refused switch shows the server\'s words', consentView(consentStep(moving, { t: 'switch-failed', message: 'nope' })).error, 'nope')
-check('approve: the tenant shown goes with the answer', consentForm(search, 'granted', 't-a').slice(-2), [['workstate_tenant', 't-a'], ['consent', 'granted']])
-check('a stale tenant field is never forwarded twice', hiddenFields('?client_id=c1&workstate_tenant=t-a'), [['client_id', 'c1']])
+check('approve: the tenant shown goes with the answer', consentForm(search, 'granted', 't-a').slice(-2), [['workman_tenant', 't-a'], ['consent', 'granted']])
+check('a stale tenant field is never forwarded twice', hiddenFields('?client_id=c1&workman_tenant=t-a'), [['client_id', 'c1']])
 
 console.log('\n── the consent page: the client\'s icon, or its initials ────────────────────')
 check('the icon is asked of this origin, for this client', appIconHref('?client_id=https%3A%2F%2Fclaude.ai%2Foauth%2Fm&x=1'), '/connect/app-icon?client_id=https%3A%2F%2Fclaude.ai%2Foauth%2Fm')
@@ -347,10 +366,14 @@ check('initials: three words take the first two', initials('  my mcp   client ')
 check('initials: never empty', initials('   '), '?')
 check('initials: a surrogate pair stays whole', initials('🦀 rust'), '🦀R')
 check('an unknown scope is shown by name', scopeLines('?scope=mystery').map((l) => [l.scope, l.label]), [['mystery', 'mystery']])
-check('the /api scopes in plain words', scopeLines('?scope=workstate.read%20workstate.sessions%20offline_access').map((l) => [l.scope, l.label]), [
+check('the /api scopes in plain words', scopeLines('?scope=workman.read%20workman.sessions%20offline_access').map((l) => [l.scope, l.label]), [
+  ['workman.read', 'Read your board and its live updates'],
+  ['workman.sessions', 'Start agent sessions on your behalf'],
+  ['offline_access', 'Stay connected'],
+])
+check('the 1.x /api scope names read as the new ones', scopeLines('?scope=workstate.read%20workstate.sessions').map((l) => [l.scope, l.label]), [
   ['workstate.read', 'Read your board and its live updates'],
   ['workstate.sessions', 'Start agent sessions on your behalf'],
-  ['offline_access', 'Stay connected'],
 ])
 check('a lapsed session goes back through sign-in', signInHref('?client_id=c1&state=s'), '/connect/signin?returnUrl=%2Fconnect%2Fauthorize%3Fclient_id%3Dc1%26state%3Ds')
 
@@ -394,21 +417,21 @@ check('the hint on a Mac', chordLabel('Mozilla/5.0 (Macintosh; Intel Mac OS X 14
 check('the hint elsewhere', chordLabel('Mozilla/5.0 (Windows NT 10.0; Win64; x64)'), 'Ctrl P')
 
 const projects = [
-  { item: { id: 'p1', ref: 'workstate', title: 'WorkState — the tracker', kind: 'project' } },
+  { item: { id: 'p1', ref: 'workman', title: 'Workman — the tracker', kind: 'project' } },
   { item: { id: 'p2', ref: 'aw', title: 'Autowork', kind: 'project' } },
 ]
 const all = commands(projects)
 const labels = (cs) => cs.map((c) => c.label)
 check('every command, in order', labels(all), [
   'Go to Overview', 'Go to Needs you', 'Go to Activity', 'Go to Sessions',
-  'Open project WorkState', 'Open WorkState backlog', 'Open project Autowork', 'Open Autowork backlog',
+  'Open project Workman', 'Open Workman backlog', 'Open project Autowork', 'Open Autowork backlog',
   'Toggle theme',
 ])
 check('a project and its backlog link through nav', all.slice(4, 6).map((c) => c.href), ['/projects/p1', '/projects/p1/backlog'])
 check('empty query keeps them all', matchCommands(all, '  ').length, all.length)
 check('a page by name', labels(matchCommands(all, 'activity')), ['Go to Activity'])
-check('a label that starts with the query leads', labels(matchCommands(all, 'open project')), ['Open project WorkState', 'Open project Autowork'])
-check('every word must appear', labels(matchCommands(all, 'workstate backlog')), ['Open WorkState backlog'])
+check('a label that starts with the query leads', labels(matchCommands(all, 'open project')), ['Open project Workman', 'Open project Autowork'])
+check('every word must appear', labels(matchCommands(all, 'workman backlog')), ['Open Workman backlog'])
 check('a project by its ref', labels(matchCommands(all, 'AW')), ['Open project Autowork', 'Open Autowork backlog'])
 check('the theme by a keyword', labels(matchCommands(all, 'dark')), ['Toggle theme'])
 check('a ref matches no command', labels(matchCommands(all, 'm/12')), [])
@@ -470,7 +493,7 @@ const reachable = [{ id: 'a', slug: 'default', current: true }, { id: 'b', slug:
 check('a member gets no admin command', withAccount({ administers: false, systemAdmin: false, tenants: reachable.slice(0, 1) }), labels(all))
 check('an admin of several gets Admin and each switch', withAccount({ administers: true, systemAdmin: false, tenants: reachable }), [
   'Go to Overview', 'Go to Needs you', 'Go to Activity', 'Go to Sessions', 'Go to Admin',
-  'Open project WorkState', 'Open WorkState backlog', 'Open project Autowork', 'Open Autowork backlog',
+  'Open project Workman', 'Open Workman backlog', 'Open project Autowork', 'Open Autowork backlog',
   'Switch to workspace team-two', 'Toggle theme',
 ])
 const sys = commands(projects, { administers: true, systemAdmin: true, tenants: reachable })

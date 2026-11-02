@@ -37,7 +37,7 @@ WORKDIR /app
 COPY --from=build /app .
 
 ENV ASPNETCORE_HTTP_PORTS=8080 \
-    WORKSTATE_HEALTHCHECK_URL=http://127.0.0.1:8080/health
+    WORKMAN_HEALTHCHECK_URL=http://127.0.0.1:8080/health
 EXPOSE 8080
 
 # The app probes itself, so the runtime image needs no curl and the build needs no apt.

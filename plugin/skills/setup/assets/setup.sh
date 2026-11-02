@@ -14,20 +14,20 @@ usage: setup.sh [options]
 
   --clone <path>          use a clone of github.com/getsupraman/workman: <path>/server/compose.yml (builds
                           the image) and <path>/server/.env. Without it: the Workman home.
-  --home-dir <dir>        the Workman home (default ~/.workstate): compose.yml (pulls the
+  --home-dir <dir>        the Workman home (default ~/.workman): compose.yml (pulls the
                           published image) and .env
   --auth <oauth|token>    how the registration authenticates. oauth: no token stored, the user signs
                           in on first use (/mcp -> Authenticate). token: a role's bearer token. Default:
                           oauth when the server offers it (its OAuth metadata answers 200), else token
   --role <role>           orchestrator (default) | controller | worker - whose token to register
                           (token only: an OAuth sign-in always gets the controller toolset)
-  --name <name>           registration name (default workman). Without --name, a registration named
-                          workstate (the name before the rename) in the same scope is moved to workman:
-                          same url, headers and headersHelper; nothing is printed of its token
+  --name <name>           registration name (default workman). Without --name, a 1.x registration named
+                          workstate in the same scope is moved to workman: same url and token, its
+                          X-WorkState-* headers renamed X-Workman-*; nothing is printed of its token
   --agent <session>       register at LOCAL scope (this directory's project only) with the header
                           X-Workman-Agent: <session>, so sessions here are recorded by that name
   --port <port>           host port, written only into a NEW .env (default 5290)
-  --project <name>        compose project (default workstate)
+  --project <name>        compose project (default workman)
   --image-version <tag>   image tag for the pull-only compose (default latest)
   --update                pull the image again (home) or rebuild it (clone) before starting
   --force                 replace an existing registration of the same name
@@ -43,7 +43,7 @@ die() { printf '%s\n' "$1" >&2; exit 1; }
 status() { printf '%-10s%s\n' "$1" "$2"; }
 
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-clone=""; home_dir=""; role="orchestrator"; name="workman"; agent=""; port="5290"; project="workstate"
+clone=""; home_dir=""; role="orchestrator"; name="workman"; agent=""; port="5290"; project="workman"
 name_given=0
 image_version=""; update=0; force=0; session_names=0; role_given=0; dry_run=0; backup=""; restore=""
 auth=""
@@ -98,7 +98,7 @@ if [ -n "$clone" ]; then
     fi
     mode="clone"
 else
-    [ -n "$home_dir" ] || home_dir="$HOME/.workstate"
+    [ -n "$home_dir" ] || home_dir="$HOME/.workman"
     mkdir -p "$home_dir"
     home_dir="$(cd "$home_dir" && pwd)"
     compose_file="$home_dir/compose.yml"
@@ -114,9 +114,9 @@ if [ -n "$backup" ] || [ -n "$restore" ]; then
     db="$(find_container db)"
     [ -n "$db" ] || die "backup    no running db container in compose project '$project'"
     dump_to() { # $1 = host file
-        docker exec "$db" sh -c 'pg_dump -U "$POSTGRES_USER" -d "$POSTGRES_DB" -Fc -f /tmp/workstate.dump' >/dev/null
-        docker cp "$db:/tmp/workstate.dump" "$1" >/dev/null
-        docker exec "$db" rm -f /tmp/workstate.dump
+        docker exec "$db" sh -c 'pg_dump -U "$POSTGRES_USER" -d "$POSTGRES_DB" -Fc -f /tmp/workman.dump' >/dev/null
+        docker cp "$db:/tmp/workman.dump" "$1" >/dev/null
+        docker exec "$db" rm -f /tmp/workman.dump
     }
     if [ -n "$backup" ]; then
         mkdir -p "$(dirname "$backup")"
@@ -131,10 +131,10 @@ if [ -n "$backup" ] || [ -n "$restore" ]; then
     status "backup" "safety copy of the current database: $safety"
     api="$(find_container api)"
     [ -n "$api" ] && docker stop "$api" >/dev/null
-    docker cp "$restore" "$db:/tmp/workstate-restore.dump" >/dev/null
+    docker cp "$restore" "$db:/tmp/workman-restore.dump" >/dev/null
     rc=0
-    docker exec "$db" sh -c 'pg_restore -U "$POSTGRES_USER" -d "$POSTGRES_DB" --clean --if-exists --no-owner /tmp/workstate-restore.dump' >/dev/null 2>"$base_dir/backups/restore.log" || rc=$?
-    docker exec "$db" rm -f /tmp/workstate-restore.dump
+    docker exec "$db" sh -c 'pg_restore -U "$POSTGRES_USER" -d "$POSTGRES_DB" --clean --if-exists --no-owner /tmp/workman-restore.dump' >/dev/null 2>"$base_dir/backups/restore.log" || rc=$?
+    docker exec "$db" rm -f /tmp/workman-restore.dump
     [ -n "$api" ] && docker start "$api" >/dev/null
     [ "$rc" -eq 0 ] || die "restore   pg_restore exited $rc - see $base_dir/backups/restore.log; the safety copy is $safety"
     status "restore" "restored $restore into project '$project'; api restarted"
@@ -159,26 +159,26 @@ fi
 random_hex() { od -An -N32 -tx1 /dev/urandom | tr -d ' \n'; }
 if [ -f "$env_file" ]; then
     status "env" "kept $env_file (exists; never overwritten)"
-elif [ -n "$(docker volume ls -q --filter "name=^${project}_workstate-db-data\$")" ]; then
+elif [ -n "$(docker volume ls -q --filter "name=^${project}_workman-db-data\$")" ]; then
     die "env       $env_file is missing but project '$project' already has a database volume, created with another .env: pass --clone <path> for that install, or copy its .env here, and run again"
 else
     (
         umask 077
         cat >"$env_file" <<EOF
 # Written by /workman:setup. Local-only throwaway credentials for a loopback service; never commit.
-WORKSTATE_WORKER_TOKEN=local-worker-$(random_hex)
-WORKSTATE_ORCHESTRATOR_TOKEN=local-orchestrator-$(random_hex)
-WORKSTATE_CONTROLLER_TOKEN=local-controller-$(random_hex)
-WORKSTATE_READER_TOKEN=
+WORKMAN_WORKER_TOKEN=local-worker-$(random_hex)
+WORKMAN_ORCHESTRATOR_TOKEN=local-orchestrator-$(random_hex)
+WORKMAN_CONTROLLER_TOKEN=local-controller-$(random_hex)
+WORKMAN_READER_TOKEN=
 
-WORKSTATE_DASHBOARD_USERNAME=operator
-WORKSTATE_DASHBOARD_PASSWORD=local-dashboard-$(random_hex)
+WORKMAN_DASHBOARD_USERNAME=operator
+WORKMAN_DASHBOARD_PASSWORD=local-dashboard-$(random_hex)
 
-WORKSTATE_API_PORT=$port
-WORKSTATE_BIND=127.0.0.1
+WORKMAN_API_PORT=$port
+WORKMAN_BIND=127.0.0.1
 
-POSTGRES_DB=workstate
-POSTGRES_USER=workstate
+POSTGRES_DB=workman
+POSTGRES_USER=workman
 POSTGRES_PASSWORD=local-$(random_hex)
 EOF
     )
@@ -197,11 +197,11 @@ else
     status "helper" "$helper_file copied, but node is not on PATH: registering without it, so sessions stay unnamed"
 fi
 
-port="$(env_value WORKSTATE_API_PORT)"; port="${port:-5290}"
+port="$(env_value WORKMAN_API_PORT)"; port="${port:-5290}"
 base_url="http://127.0.0.1:$port"
 
 # c. start and wait for /health
-[ -n "$image_version" ] && export WORKSTATE_VERSION="$image_version"
+[ -n "$image_version" ] && export WORKMAN_VERSION="$image_version"
 up_log="$(mktemp)"
 trap 'rm -f "$up_log"' EXIT
 if [ "$update" -eq 1 ]; then
@@ -239,13 +239,16 @@ scope="user"
 get_out=""
 here="$PWD"
 command -v cygpath >/dev/null 2>&1 && here="$(cygpath -m "$PWD")"
+helper_path="$helper_file"
+command -v cygpath >/dev/null 2>&1 && helper_path="$(cygpath -m "$helper_file")"
 
-# the move - a registration from before the rename becomes '$name' with the same url, scope, headers and
-# headersHelper. The plan's third line is the entry, token included: captured here, never printed.
+# the move - a 1.x registration becomes '$name' with the same url, scope and token, its X-WorkState-* headers
+# renamed and its headersHelper pointed at this home's copy. The plan's third line is the entry, token
+# included: captured here, never printed.
 legacy_name="workstate"
 if [ "$name_given" -eq 0 ] && command -v claude >/dev/null 2>&1; then
     if [ "$has_node" -eq 1 ]; then
-        plan="$(node "$script_dir/move-registration.mjs" --from "$legacy_name" --to "$name" --scope "$scope" --dir "$here" 2>/dev/null || true)"
+        plan="$(node "$script_dir/move-registration.mjs" --from "$legacy_name" --to "$name" --scope "$scope" --dir "$here" --helper "node \"$helper_path\"" 2>/dev/null || true)"
         verdict="$(printf '%s\n' "$plan" | sed -n 1p)"
         move_summary="$(printf '%s\n' "$plan" | sed -n 2p)"
         if [ "$verdict" = "move" ]; then
@@ -266,9 +269,8 @@ if [ "$name_given" -eq 0 ] && command -v claude >/dev/null 2>&1; then
             status "move" "${verdict:-not checked: the move check printed nothing}"
         fi
         plan=""
-    elif ! claude mcp get "$name" >/dev/null 2>&1 && claude mcp get "$legacy_name" >/dev/null 2>&1; then
-        status "move" "kept '$legacy_name': moving it to '$name' needs node; it keeps working until server 2.0"
-        name="$legacy_name"
+    else
+        status "move" "not checked (needs node): a 1.x '$legacy_name' registration is not moved; once '$name' works, run: claude mcp remove $legacy_name -s $scope"
     fi
 fi
 
@@ -305,24 +307,21 @@ upper() { printf '%s' "$1" | tr '[:lower:]' '[:upper:]'; }
 # --session-names on an existing registration keeps the role its token already has.
 if [ "$auth" = "token" ] && [ "$existing" -eq 1 ] && [ "$session_names" -eq 1 ] && [ "$role_given" -eq 0 ]; then
     for candidate in controller orchestrator worker; do
-        candidate_token="$(env_value "WORKSTATE_$(upper "$candidate")_TOKEN")"
+        candidate_token="$(env_value "WORKMAN_$(upper "$candidate")_TOKEN")"
         if [ -n "$candidate_token" ] && printf '%s' "$get_out" | grep -qF "Bearer $candidate_token"; then role="$candidate"; break; fi
     done
 fi
 token=""
 if [ "$auth" = "token" ]; then
-    token="$(env_value "WORKSTATE_$(upper "$role")_TOKEN")"
-    [ -n "$token" ] || die "env       $env_file has no WORKSTATE_$(upper "$role")_TOKEN"
+    token="$(env_value "WORKMAN_$(upper "$role")_TOKEN")"
+    [ -n "$token" ] || die "env       $env_file has no WORKMAN_$(upper "$role")_TOKEN"
 fi
 
 json_str() { printf '"%s"' "$(printf '%s' "$1" | sed 's/\\/\\\\/g; s/"/\\"/g')"; }
-helper_path="$helper_file"
-command -v cygpath >/dev/null 2>&1 && helper_path="$(cygpath -m "$helper_file")"
 registration() { # $1 = the bearer token, or *** for display; oauth stores none and ignores it
     local headers=""
     [ "$auth" = "token" ] && headers="\"Authorization\":$(json_str "Bearer $1")"
-    # Both names: the server reads X-Workman-* first, and one from before the rename reads only X-WorkState-*.
-    [ -n "$agent" ] && headers="$headers${headers:+,}\"X-Workman-Agent\":$(json_str "$agent"),\"X-WorkState-Agent\":$(json_str "$agent")"
+    [ -n "$agent" ] && headers="$headers${headers:+,}\"X-Workman-Agent\":$(json_str "$agent")"
     local entry="{\"type\":\"http\",\"url\":$(json_str "$mcp_url")"
     [ -n "$headers" ] && entry="$entry,\"headers\":{$headers}"
     [ "$has_node" -eq 1 ] && entry="$entry,\"headersHelper\":$(json_str "node \"$helper_path\"")"
@@ -352,7 +351,6 @@ fi
 if [ "$has_node" -eq 1 ]; then
     finder_args=("$script_dir/find-shadows.mjs" --name "$name" --dir "$here")
     names="'$name'"
-    if [ "$name_given" -eq 0 ] && [ "$name" != "$legacy_name" ]; then finder_args+=(--name "$legacy_name"); names="'$name' or '$legacy_name'"; fi
     [ "$scope" = "local" ] && finder_args+=(--own "$here")
     shadows="$(node "${finder_args[@]}" 2>/dev/null || true)"
     found=(); unchecked=0
@@ -397,7 +395,7 @@ else
 fi
 
 # f. what the human needs next
-status "dashboard" "$base_url - sign in with WORKSTATE_DASHBOARD_USERNAME / _PASSWORD from $env_file"
+status "dashboard" "$base_url - sign in with WORKMAN_DASHBOARD_USERNAME / _PASSWORD from $env_file"
 if [ "$auth" = "oauth" ]; then
     status "next" "start a new Claude Code session, run /mcp, pick '$name', Authenticate, sign in with that dashboard user and Approve: the work_* tools appear there, not in this one"
 else

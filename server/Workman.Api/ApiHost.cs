@@ -26,7 +26,7 @@ namespace Workman.Api;
 /// </summary>
 public static class ApiHost
 {
-    public const string ConnectionStringName = "WorkState";
+    public const string ConnectionStringName = "Workman";
 
     /// <summary>
     /// The DataProtection application discriminator, fixed rather than derived. Left to itself the
@@ -34,7 +34,7 @@ public static class ApiHost
     /// (<c>/app</c>) and from a published build on the host would yield two different purpose
     /// chains — a ring in the database that neither party could use.
     /// </summary>
-    public const string DataProtectionApplicationName = "workstate";
+    public const string DataProtectionApplicationName = "workman";
 
     public static WebApplication Build(string[] args, Action<WebApplicationBuilder>? configure = null)
     {
@@ -54,10 +54,10 @@ public static class ApiHost
             .AddAuthentication(StaticTokenHandler.SchemeName)
             .AddScheme<StaticTokenOptions, StaticTokenHandler>(StaticTokenHandler.SchemeName, options =>
             {
-                options.WorkerToken = builder.Configuration["WorkState:Auth:WorkerToken"];
-                options.OrchestratorToken = builder.Configuration["WorkState:Auth:OrchestratorToken"];
-                options.ControllerToken = builder.Configuration["WorkState:Auth:ControllerToken"];
-                options.ReaderToken = builder.Configuration["WorkState:Auth:ReaderToken"];
+                options.WorkerToken = builder.Configuration["Workman:Auth:WorkerToken"];
+                options.OrchestratorToken = builder.Configuration["Workman:Auth:OrchestratorToken"];
+                options.ControllerToken = builder.Configuration["Workman:Auth:ControllerToken"];
+                options.ReaderToken = builder.Configuration["Workman:Auth:ReaderToken"];
             })
             .AddCookie(DashboardAuth.SchemeName, options => DashboardAuth.Configure(options, publicUrls))
 
@@ -141,7 +141,7 @@ public static class ApiHost
                 {
                     Name = "workman",
                     Title = "Workman",
-                    Version = "1.2.0",
+                    Version = "2.0.0",
                 };
                 options.ServerInstructions = WorkmanServerInstructions.Text;
             })
@@ -224,7 +224,7 @@ public static class ApiHost
     {
         var connectionString =
             builder.Configuration.GetConnectionString(ConnectionStringName)
-            ?? builder.Configuration["WorkState:ConnectionString"];
+            ?? builder.Configuration["Workman:ConnectionString"];
 
         if (string.IsNullOrWhiteSpace(connectionString))
         {
@@ -232,9 +232,9 @@ public static class ApiHost
         }
 
         // FINDINGS-live F-L6: until now the only thing that created the schema was the corpus
-        // importer, so a first run of WorkState meant pointing an ingest tool at markdown you may
+        // importer, so a first run of Workman meant pointing an ingest tool at markdown you may
         // not have. The service owns this database outright, so it brings it up itself.
-        if (builder.Configuration.GetValue("WorkState:Migrate", true))
+        if (builder.Configuration.GetValue("Workman:Migrate", true))
         {
             builder.Services.AddSingleton(sp => new SchemaOwner(connectionString, sp.GetRequiredService<ILogger<SchemaOwner>>()));
         }
@@ -274,8 +274,8 @@ public static class ApiHost
         builder.Services.AddSingleton(sp => new UserLinkStore(sp.GetRequiredService<NpgsqlDataSource>()));
         builder.Services.AddScoped<RequestTenant>();
 
-        // The static tokens' configured binding (doc 08 §4), the one reader of WorkState:Workspace.
-        var slug = builder.Configuration["WorkState:Workspace"];
+        // The static tokens' configured binding (doc 08 §4), the one reader of Workman:Workspace.
+        var slug = builder.Configuration["Workman:Workspace"];
         builder.Services.AddSingleton(sp => new StaticTokenTenant(
             new WorkspaceOptions { Slug = string.IsNullOrWhiteSpace(slug) ? null : slug.Trim() },
             sp.GetRequiredService<BoardQueries>(),

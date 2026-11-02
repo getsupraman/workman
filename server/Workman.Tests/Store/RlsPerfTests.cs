@@ -14,26 +14,26 @@ namespace Workman.Tests.Store;
 /// <summary>
 /// doc 15 §7: the hot reads with and without row-level security, against a database that already holds data — the
 /// live-data copy, not a seed. Opt-in, and pointed at that database explicitly:
-/// <c>dotnet test server/Workman.slnx --filter FullyQualifiedName~RlsPerfTests -e WORKSTATE_RLS_PERF="Host=…"</c>.
+/// <c>dotnet test server/Workman.slnx --filter FullyQualifiedName~RlsPerfTests -e WORKMAN_RLS_PERF="Host=…"</c>.
 /// The same real query methods run as the owner (no policy applies) and as the tenant role in the largest
 /// workspace, interleaved call by call. Wall time per call includes the tenant transaction's extra round trip;
 /// the server's own execution time per statement comes from <c>pg_stat_statements</c> when the server loads it.
-/// With <c>-e WORKSTATE_RLS_PERF_SEED=1</c> the target must be an empty database: it is migrated and given doc 15's
+/// With <c>-e WORKMAN_RLS_PERF_SEED=1</c> the target must be an empty database: it is migrated and given doc 15's
 /// 5,000-item seed first, so the seed is measured the same way, interleaved in one database.
 /// </summary>
 public sealed class RlsPerfTests
 {
     private const int Rounds = 60;
 
-    private static string? Target => Environment.GetEnvironmentVariable("WORKSTATE_RLS_PERF");
+    private static string? Target => Environment.GetEnvironmentVariable("WORKMAN_RLS_PERF");
 
     public static bool Enabled => !string.IsNullOrWhiteSpace(Target);
 
-    [Fact(Skip = "opt-in: set WORKSTATE_RLS_PERF to the live-data copy's connection string", SkipUnless = nameof(Enabled))]
+    [Fact(Skip = "opt-in: set WORKMAN_RLS_PERF to the live-data copy's connection string", SkipUnless = nameof(Enabled))]
     public async Task Rls_the_hot_reads_cost_the_same_with_and_without_row_level_security()
     {
         CultureInfo.CurrentCulture = CultureInfo.InvariantCulture;
-        if (Environment.GetEnvironmentVariable("WORKSTATE_RLS_PERF_SEED") == "1")
+        if (Environment.GetEnvironmentVariable("WORKMAN_RLS_PERF_SEED") == "1")
         {
             await using (var context = new WorkmanDbContext(WorkmanDbContextOptions.Build(Target!)))
             {

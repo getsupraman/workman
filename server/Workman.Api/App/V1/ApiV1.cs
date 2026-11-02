@@ -15,9 +15,6 @@ public static partial class ApiV1
 
     public const string Header = WorkmanHeaders.Api;
 
-    /// <summary>The same value under the old name, sent until server 2.0: Supraman reads it.</summary>
-    public static string LegacyHeader => WorkmanHeaders.Legacy(Header);
-
     public const string Version = "1";
 
     private const int JournalDefaultLimit = 50;

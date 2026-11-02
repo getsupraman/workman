@@ -46,10 +46,23 @@ public static class OAuthServer
     public const string McpPath = "/mcp";
 
     /// <summary>GET <c>/api/v1/*</c> and <c>/api/stream</c>.</summary>
-    public const string ReadScope = "workstate.read";
+    public const string ReadScope = "workman.read";
 
     /// <summary>The <c>/api/agent-sessions</c> group: mint, rename and revoke.</summary>
-    public const string SessionsScope = "workstate.sessions";
+    public const string SessionsScope = "workman.sessions";
+
+    /// <summary>
+    /// The 1.x names of the two <c>/api</c> scopes. Still accepted in an authorize, token or refresh request and
+    /// granting the same access, until Supraman has switched to the new ones; never advertised.
+    /// </summary>
+    public static readonly IReadOnlyDictionary<string, string> ScopeAliases = new Dictionary<string, string>(StringComparer.Ordinal)
+    {
+        ["workstate.read"] = ReadScope,
+        ["workstate.sessions"] = SessionsScope,
+    };
+
+    /// <summary>The scope a granted one stands for: an alias its current name, any other itself.</summary>
+    public static string Canonical(string scope) => ScopeAliases.TryGetValue(scope, out var current) ? current : scope;
 
     public const string ApiPath = "/api";
 
@@ -109,7 +122,8 @@ public static class OAuthServer
                 // take it. With plain gone, a request naming it or naming no method is refused.
                 server.Configure(options => options.CodeChallengeMethods.Remove(CodeChallengeMethods.Plain));
 
-                server.RegisterScopes(Scopes.OpenId, Scopes.Profile, Scopes.OfflineAccess, McpScope, ReadScope, SessionsScope);
+                server.RegisterScopes(
+                    [Scopes.OpenId, Scopes.Profile, Scopes.OfflineAccess, McpScope, ReadScope, SessionsScope, .. ScopeAliases.Keys]);
 
                 // RegisterResources takes a fixed list and the resource here follows the request's origin;
                 // RequireKnownResource below is the same check against that origin.
@@ -285,6 +299,14 @@ public static class OAuthServer
                 var issuer = ((string?)context.Response[Metadata.Issuer])?.TrimEnd('/');
                 context.Response["registration_endpoint"] = issuer + RegisterPath;
                 context.Response[ClientIdMetadataSupported] = true;
+
+                // Registered so a request naming one validates, but the old names are not offered to new clients.
+                var scopes = (StringValues)context.Response[Metadata.ScopesSupported];
+                if (scopes.Any(scope => scope is not null && ScopeAliases.ContainsKey(scope)))
+                {
+                    context.Response[Metadata.ScopesSupported] =
+                        new StringValues(scopes.Where(scope => scope is not null && !ScopeAliases.ContainsKey(scope)).ToArray());
+                }
 
                 var methods = (StringValues)context.Response[Metadata.TokenEndpointAuthMethodsSupported];
                 if (!methods.Contains(ClientAuthenticationMethods.None))

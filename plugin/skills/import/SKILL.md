@@ -24,7 +24,7 @@ describes the past, or a future the code has already reached, it is dropped.
    `/workman:setup`."* Stop.
 2. **`work_import` present.** It is shown only to a session minted with the `import` grant. Absent →
    say so in one line and stop: *"this session cannot import; the controller launches one with
-   `agent_launch(workstate: {role: "orchestrator", grants: ["import"], …})`."* Do not work around it
+   `agent_launch(workman: {role: "orchestrator", grants: ["import"], …})`."* Do not work around it
    with `work_create` — provenance and idempotency live only in `work_import`.
 3. **The repo's project.** Call `work_brief(repo: {remote, root})` — `remote` is
    `git remote get-url origin` (omit with no origin), `root` the parent of
@@ -107,6 +107,6 @@ skipped (with refs and sources), and the **dropped material with a reason for ea
 ## 7. Large repos
 
 One nested agent per area (a service, a docs tree, an orchestration folder): `agent_launch` each with
-`workstate: {role: "orchestrator", grants: ["import"], …}` and a brief naming its area and this
+`workman: {role: "orchestrator", grants: ["import"], …}` and a brief naming its area and this
 skill. Each agent proposes, gets the human's yes through you, and imports its area. You check each
 area's `work_tree` against its plan before the next starts.

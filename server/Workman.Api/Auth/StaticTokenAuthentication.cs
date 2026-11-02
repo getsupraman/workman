@@ -13,7 +13,7 @@ using Workman.Mcp;
 namespace Workman.Api.Auth;
 
 /// <summary>
-/// <c>WorkState:Workspace</c>: the workspace the static role tokens and the reader token are bound to. It is
+/// <c>Workman:Workspace</c>: the workspace the static role tokens and the reader token are bound to. It is
 /// those credentials' own configured binding, read only by <see cref="StaticTokenTenant"/> — never a default
 /// for any other credential. It goes when static tokens do.
 /// </summary>
@@ -72,7 +72,7 @@ public sealed class StaticTokenHandler(
     UrlEncoder encoder)
     : AuthenticationHandler<StaticTokenOptions>(options, logger, encoder)
 {
-    public const string SchemeName = "WorkStateStaticToken";
+    public const string SchemeName = "WorkmanStaticToken";
     private const string BearerPrefix = "Bearer ";
 
     protected override async Task<AuthenticateResult> HandleAuthenticateAsync()

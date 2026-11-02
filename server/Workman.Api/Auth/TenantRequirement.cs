@@ -12,7 +12,7 @@ namespace Workman.Api.Auth;
 public sealed class TenantRequirement : AuthorizationHandler<TenantRequirement>, IAuthorizationRequirement
 {
     /// <summary>Why a handler that authenticated the credential could not name its tenant.</summary>
-    public const string RefusalClaim = "workstate:tenant-refusal";
+    public const string RefusalClaim = "workman:tenant-refusal";
 
     protected override Task HandleRequirementAsync(AuthorizationHandlerContext context, TenantRequirement requirement)
     {

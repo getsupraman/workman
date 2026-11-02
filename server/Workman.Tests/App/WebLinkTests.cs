@@ -151,14 +151,14 @@ public sealed class WebLinkTests(PostgresFixture fixture)
         var project = await ProjectRefAsync(world);
 
         await using var server = await AppServer.StartAsync(
-            fixture.ConnectionString, world.Slug, Ct, publicUrl: "https://workstate.example.test/");
+            fixture.ConnectionString, world.Slug, Ct, publicUrl: "https://workman.example.test/");
         await using var mcp = await server.ConnectAsync(ReadServer.ControllerToken, Ct);
 
         var brief = await Call(mcp, "work_brief", new() { ["scope"] = "1.1" });
-        Assert.Equal($"web      https://workstate.example.test/r/{project}/run-a/1.1", WebLine(brief, "web      "));
+        Assert.Equal($"web      https://workman.example.test/r/{project}/run-a/1.1", WebLine(brief, "web      "));
 
         var got = await Call(mcp, "work_get", new() { ["refs"] = new[] { "1.1" } });
-        Assert.Equal($"  web       https://workstate.example.test/r/{project}/run-a/1.1", WebLine(got, "  web       "));
+        Assert.Equal($"  web       https://workman.example.test/r/{project}/run-a/1.1", WebLine(got, "  web       "));
     }
 
     [Fact]

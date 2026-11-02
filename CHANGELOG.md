@@ -7,8 +7,91 @@ All notable changes to the Workman server and the `workman` plugin are recorded 
 
 ## [Unreleased]
 
-- Plugin 1.2.0 (wording only): the skills, the agents MCP and the setup scripts say Workman instead of WorkState in their prose and printed messages, and so do the docs; no machine-facing name changes.
-- Server source: the .NET projects, namespaces and types are `Workman.*` (`server/Workman.slnx`, `Workman.Api.dll` in the image). No behaviour, setting or stored name changes.
+## [2.0.0] — 2026-11-02
+
+Server 2.0.0 and plugin 2.0.0 ship together: the rename to Workman is complete. Also in this release:
+
+- The .NET projects, namespaces and types are `Workman.*` (`server/Workman.slnx`; the image runs `Workman.Api.dll`).
+- The skills, the agents MCP, the setup scripts and the docs say Workman in their prose and messages.
+
+### Server 2.0.0 — every machine-facing and stored name says workman
+
+The compatibility window 1.2.0 opened closes here: the old names below are **no longer read**, except the
+two OAuth scopes.
+
+| What | 1.x | 2.0 |
+|---|---|---|
+| settings section | `WorkState:*` (`WorkState__*`) | `Workman:*` (`Workman__*`) |
+| connection string | `ConnectionStrings:WorkState` | `ConnectionStrings:Workman` |
+| environment | `WORKSTATE_<X>` (`_PUBLIC_URL`, `_TRUSTED_PROXIES`, `_HEALTHCHECK_URL`, the compose ones…) | `WORKMAN_<X>`, same suffix; `WORKMAN_PUBLIC_URLS` unchanged |
+| compose defaults (`server/compose.yml`, `compose.dev.yml`) | project `workstate`, volume `workstate-db-data`, `POSTGRES_DB`/`POSTGRES_USER` `workstate` | `workman`, `workman-db-data`, `workman` (dev: `workman-dev`, `workman-dev-db-data`) |
+| request headers | `X-WorkState-*` read beside `X-Workman-*` | `X-Workman-*` only |
+| response header on `/api/v1/*`, `/api/stream` | `X-WorkState-Api` and `X-Workman-Api` | `X-Workman-Api` only |
+| dashboard cookie | `workstate.dashboard` | `workman.dashboard` |
+| auth schemes, claim types | `WorkState*`, `workstate:*`, `workstate_*` | `Workman*`, `workman:*`, `workman_*` |
+| data protection | application `workstate`, key-ring purpose `WorkState.OAuth.Keys` | `workman`, `Workman.OAuth.Keys` |
+| OAuth scopes for `/api` | `workstate.read`, `workstate.sessions` | `workman.read`, `workman.sessions` advertised; **the old two stay accepted** in authorize, token and refresh requests, granting the same access, until Supraman has switched |
+| consent form field | `workstate_tenant` | `workman_tenant` |
+| MCP resources | `workstate_*`, titled "WorkState: …" | `workman_*`, titled "Workman: …" (`work://` URIs unchanged) |
+| server instructions, prompts | "WorkState is the work tracker…", "WorkState project …" | "Workman …" |
+| dashboard storage | `workstate.*` | `workman.*`; a 1.x value is moved once on first read |
+| `server/plugin.mcp.json` | server `workstate`, `WORKSTATE_TOKEN` | `workman`, `WORKMAN_TOKEN` |
+
+**Database migration `WorkmanNames`.** The request path's role `workstate_app` is replaced by `workman_app`:
+created if missing, given this database's grants and default privileges as TenantRls gave them, and the old
+role loses them here and is dropped once no database of the cluster grants it anything (a role is the
+cluster's, so it is not renamed under another 1.x database). The functions `workstate_hidden_projects`,
+`workstate_project_access` and `workstate_bump_access_seq` become `workman_*` (the policies and triggers hold
+them by oid and are unchanged); `doc_block_revise` reads `workman.actor`; the journal notifies on channel
+`workman`. A client registered under 1.x gains the `workman.*` scope permissions beside its old ones. Earlier
+migrations are unchanged and still create the 1.x names, so a fresh database and a 1.2.0 one take the same
+path. Down restores the 1.x names.
+
+**What you do.** Rename every `WORKSTATE_*` variable in your `.env` to `WORKMAN_*` and every `WorkState__*`
+override to `Workman__*`. The data-protection keys change purpose, so every OAuth client and dashboard
+session **signs in again**; that is expected. The OAuth signing and encryption keys a 1.x server stored can no longer be
+unprotected, so the server replaces them on its first start instead of failing every request. Clients that still send `X-WorkState-*` headers must send
+`X-Workman-*`. The image `ghcr.io/getsupraman/workman`, the `work_*` tools, `work://` URIs, `/api/v1/*`,
+`/api/stream`, `/mcp`, the well-known paths and the agent-session mint and its body are unchanged.
+
+### Plugin 2.0.0 — every machine-facing name is `workman`
+
+Plugin 2.0.0 goes with server 2.0.0 and needs it: it sends only the 2.0 names. The 1.x `workstate` names
+that 1.2.0 still accepted are gone, with one exception, the OAuth scope aliases (below).
+
+- **`/workman:setup`** (`setup.sh` / `setup.ps1`): the home is `~/.workman` (`%USERPROFILE%\.workman`),
+  the compose project and volume are `workman` / `workman-db-data`, the `.env` it writes has `WORKMAN_*`
+  keys and `POSTGRES_DB` / `POSTGRES_USER` `workman`, and the registration is `workman`. A `workstate`
+  registration is still moved to `workman`, now with its `X-WorkState-*` headers renamed `X-Workman-*`
+  and its `headersHelper` pointed at the new home.
+- **The pull-only `compose.yml`**: project `workman`, `Workman__*` settings, `ConnectionStrings__Workman`,
+  `WORKMAN_*` variables, database and user `workman` by default.
+- **`session-header.mjs`** sends `X-Workman-*` only; **`find-shadows.mjs`** checks `workman` only.
+- **The agents MCP**: `agent_launch`'s parameter is `workman: {role, env_file, url, ttl_hours, grants}`
+  (was `workstate`); an `env_file` is read for `WORKMAN_CONTROLLER_TOKEN` / `WORKMAN_ORCHESTRATOR_TOKEN`;
+  the structured results carry `workman` instead of `workstate`; the OAuth sign-in asks for
+  `workman.sessions offline_access`; the grant store is `~/.workman/grants.json` (`WORKMAN_GRANTS_FILE`);
+  the state directory is `workman-agents` only (an old `rlarch-agents` is no longer read); a launched
+  agent gets `mcp__workman` and no special handling of `mcp__workstate`.
+- **`server/deploy/multi-deploy`**: project, volume and Traefik router/service/middleware names
+  `workman`; `WORKMAN_*` keys in `compose.yml` and `gen-env.sh` (default version 2.0.0); `backup.sh`
+  dumps with the container's own `POSTGRES_USER` / `POSTGRES_DB`; the systemd units are
+  `workman-backup.service` / `.timer`.
+- Skills and docs use the 2.0 names in every instruction and example.
+
+### Upgrading from 1.x to 2.0
+
+Server 2.0 reads none of the 1.x `workstate` names. For clients, scripts and deployments:
+
+- Environment: every `WORKSTATE_<X>` is `WORKMAN_<X>` (`WORKMAN_PUBLIC_URLS`, `WORKMAN_HOSTS` unchanged);
+  settings `WorkState:*` / `WorkState__*` are `Workman:*` / `Workman__*`, and `ConnectionStrings:WorkState`
+  is `ConnectionStrings:Workman`.
+- The home is `~/.workman`, the compose project and volume `workman`, the registration `workman`.
+- Headers: send `X-Workman-*`; `X-WorkState-*` is ignored, and `X-WorkState-Api` is no longer sent.
+- OAuth scopes are `workman.read` and `workman.sessions`; **`workstate.read` and `workstate.sessions`
+  stay accepted as aliases** until Supraman has switched.
+- **Everyone signs in again**: the key ring is new, so 1.x cookies, OAuth grants and refresh tokens no
+  longer open the server (`/mcp` → Authenticate; `agent_signin` again for the agents MCP).
 
 ## [1.2.0] — 2026-11-02
 

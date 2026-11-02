@@ -14,16 +14,16 @@ internal sealed record StreamEvent(long Seq, string Kind, Guid Workspace, Guid? 
 /// <summary>doc 10: an event means "re-read"; the ids say what to re-read. Additive over seq and kind.</summary>
 internal sealed record StreamFrame(long Seq, Guid? RunId, Guid? ItemId, string Kind);
 
-/// <summary><c>WorkState:Stream</c>. The heartbeat keeps an idle SSE connection open through a proxy.</summary>
+/// <summary><c>Workman:Stream</c>. The heartbeat keeps an idle SSE connection open through a proxy.</summary>
 public sealed class StreamOptions
 {
-    public const string Section = "WorkState:Stream";
+    public const string Section = "Workman:Stream";
 
     public TimeSpan Heartbeat { get; set; } = TimeSpan.FromSeconds(20);
 }
 
 /// <summary>
-/// The live board, fed by the <c>pg_notify('workstate', …)</c> trigger that already exists on
+/// The live board, fed by the <c>pg_notify('workman', …)</c> trigger that already exists on
 /// <c>event</c> (doc 02 §11). One <c>LISTEN</c> per process on a connection of its own, fanned out
 /// to every connected dashboard.
 /// <para>
@@ -36,7 +36,7 @@ public sealed class StreamOptions
 public sealed class EventStream(NpgsqlDataSource dataSource, StreamOptions options, ILogger<EventStream> logger)
     : BackgroundService
 {
-    private const string Channel = "workstate";
+    private const string Channel = "workman";
     private static readonly TimeSpan RetryDelay = TimeSpan.FromSeconds(5);
 
     /// <summary>

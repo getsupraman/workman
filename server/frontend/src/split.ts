@@ -3,6 +3,7 @@
  * the right. Every input is a measured width of the run area, never the window: the sidebar, a
  * zoom and a narrow browser all change how much room there really is.
  */
+import { adoptOldKey } from './storage.ts'
 
 /** The centre column, page gutters included: below this the list stops being readable. */
 export const LIST_MIN = 440
@@ -22,7 +23,7 @@ export const PANEL_SHARE = 0.55
 /** A sheet is never wider than this, however wide the run area. */
 export const SHEET_MAX = 640
 
-export const WIDTH_KEY = 'workstate.run-panel-width'
+export const WIDTH_KEY = 'workman.run-panel-width'
 
 /** Docked when the list, the handle and the panel all fit at their minimum; otherwise a sheet. */
 export const docks = (width: number): boolean => width >= LIST_MIN + HANDLE + PANEL_MIN
@@ -44,6 +45,7 @@ const local = (): Store => localStorage
 
 /** The remembered width, or `undefined` for "no preference" when nothing usable is stored. */
 export function rememberedWidth(store: () => Store = local): number | undefined {
+  adoptOldKey(WIDTH_KEY, store)
   try {
     const raw = store().getItem(WIDTH_KEY)
     const value = raw === null ? NaN : Number(raw)

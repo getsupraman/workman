@@ -78,11 +78,11 @@ public static class PromptCatalogue
 
     private static string Continue(PromptFacts f)
         => Lines(
-            $"Continue in WorkState project {f.Ref} ({f.Title}): call work_brief(scope:\"{f.Ref}\") first, then do what its NEXT line says - resume the run it names, or start a run under the project.");
+            $"Continue in Workman project {f.Ref} ({f.Title}): call work_brief(scope:\"{f.Ref}\") first, then do what its NEXT line says - resume the run it names, or start a run under the project.");
 
     private static string Status(PromptFacts f)
         => Lines(
-            $"Report on WorkState project {f.Ref} ({f.Title}). {NoWrites}",
+            $"Report on Workman project {f.Ref} ({f.Title}). {NoWrites}",
             $"Call work_brief(scope:\"{f.Ref}\") first, then work_tree(scope:\"{f.Ref}\") and work_threads(scope:\"{f.Ref}\").",
             "Report in three short parts:",
             "- what landed: what is done, with the evidence recorded for it;",
@@ -91,7 +91,7 @@ public static class PromptCatalogue
 
     private static string Housekeeping(PromptFacts f)
         => Lines(
-            $"Housekeeping for WorkState project {f.Ref} ({f.Title}): {f.Unclosed} unclosed thread(s) to settle.",
+            $"Housekeeping for Workman project {f.Ref} ({f.Title}): {f.Unclosed} unclosed thread(s) to settle.",
             $"Call work_brief(scope:\"{f.Ref}\") first, then work_threads(scope:\"{f.Ref}\"). It lists every thread with the call that settles it; the attention block names expired claims.",
             "Go through each one and decide:",
             "- close only with evidence: run the check yourself, work_verify(ref:\"…\", result_line:\"…\", run_by:\"orchestrator\"), then work_status(ref:\"…\", to:\"done\");",
@@ -106,7 +106,7 @@ public static class PromptCatalogue
     {
         var tree = f.BacklogRef is { } backlog ? $"work_tree(scope:\"{backlog}\") for the backlog run, " : string.Empty;
         return Lines(
-            $"Triage the backlog of WorkState project {f.Ref} ({f.Title}): {f.Backlog} open item(s) - the backlog run's open work and every open follow-up under the project.",
+            $"Triage the backlog of Workman project {f.Ref} ({f.Title}): {f.Backlog} open item(s) - the backlog run's open work and every open follow-up under the project.",
             $"Call work_brief(scope:\"{f.Ref}\") first, then {tree}work_threads(scope:\"{f.Ref}\", include:\"followups\") for the follow-ups, and work_get(refs:[\"…\"]) on each item.",
             "Classify each item as do-now, later, drop or needs-a-decision.",
             "Check each against the CURRENT code before you classify it: read the files it names. What is already done or no longer applies is a drop, with the evidence (a file and line, or a commit sha).",
@@ -117,7 +117,7 @@ public static class PromptCatalogue
 
     private static string Finalize(PromptFacts f)
         => Lines(
-            $"Finalize WorkState project {f.Ref} ({f.Title}): no run in it has open work left.",
+            $"Finalize Workman project {f.Ref} ({f.Title}): no run in it has open work left.",
             $"Call work_brief(scope:\"{f.Ref}\") first, then work_tree(scope:\"{f.Ref}\") and work_threads(scope:\"{f.Ref}\"), and confirm nothing open is left.",
             "- carry any leftover to the backlog: work_status(ref:\"…\", to:\"deferred\", target:\"backlog\", reason:\"…\");",
             "- close each run still open with evidence: run its check yourself, work_verify(ref:\"…\", result_line:\"…\", run_by:\"orchestrator\"), then work_status(ref:\"…\", to:\"done\");",
@@ -127,24 +127,24 @@ public static class PromptCatalogue
 
     private static string Resume(PromptFacts f)
         => Lines(
-            $"Resume WorkState run {f.Ref} ({f.Title}): call work_brief(scope:\"{f.Ref}\") first, then do what its NEXT line says.");
+            $"Resume Workman run {f.Ref} ({f.Title}): call work_brief(scope:\"{f.Ref}\") first, then do what its NEXT line says.");
 
     private static string Audit(PromptFacts f)
         => Lines(
-            $"Audit WorkState run {f.Ref} ({f.Title}). {NoWrites}",
+            $"Audit Workman run {f.Ref} ({f.Title}). {NoWrites}",
             $"Call work_brief(scope:\"{f.Ref}\") first, then work_audit(scope:\"{f.Ref}\").",
             "Compare what the agents reported with what was verified: work_get(refs:[\"…\"]) on a done item shows its reports and its verifications side by side.",
             "List the gaps, each with its ref and the call that would close it: done with no orchestrator verification, a verification whose command is not the item's verify command, a report that claims more than the evidence shows.");
 
     private static string Work(PromptFacts f)
         => Lines(
-            $"Work on WorkState {f.Kind} {f.Ref} ({f.Title}): call work_brief(scope:\"{f.Ref}\", for:\"worker\") first - it holds the criteria, the verify command and the report format.",
+            $"Work on Workman {f.Kind} {f.Ref} ({f.Title}): call work_brief(scope:\"{f.Ref}\", for:\"worker\") first - it holds the criteria, the verify command and the report format.",
             $"Do the work, run the verify command yourself, then hand it back with work_report(ref:\"{f.Ref}\", status:\"done\", files:[…], verify:\"…\").",
             "Never close it yourself unless you hold the orchestrator role.");
 
     private static string Unblock(PromptFacts f)
         => Lines(
-            $"Find out why WorkState {f.Kind} {f.Ref} ({f.Title}) is blocked. {NoWrites}",
+            $"Find out why Workman {f.Kind} {f.Ref} ({f.Title}) is blocked. {NoWrites}",
             $"Call work_brief(scope:\"{f.Ref}\") first, then work_get(refs:[\"{f.Ref}\"], include:\"deps\") and work_threads(scope:\"{f.Ref}\", include:\"deps\").",
             "Report what it waits on, who or what could unblock it, and the exact call that would - but make none of them.");
 }

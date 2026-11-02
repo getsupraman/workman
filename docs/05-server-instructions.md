@@ -1,7 +1,7 @@
 # 05 — `ServerInstructions`: the exact text
 
 > **Measured ([`PROBE.md`](PROBE.md) Q0):** this text reaches the model in full, under
-> `# MCP Server Instructions` / `## workstate`, untruncated, **once per registered server**.
+> `# MCP Server Instructions` / `## workman`, untruncated, **once per registered server**.
 > It is in context for **every turn of every session**. It is the most expensive 40 lines in the
 > product and the only channel that works before the agent has called anything.
 
@@ -23,7 +23,7 @@ Two rules, both learned the hard way in this repo:
 ## The text
 
 ```text
-WorkState is the work tracker for this session. It holds projects, runs, phases, tasks,
+Workman is the work tracker for this session. It holds projects, runs, phases, tasks,
 findings, follow-ups and assumptions, with their dependencies, evidence and history. It
 replaces PLAN.md / LEDGER.md files: do not write those, write here.
 

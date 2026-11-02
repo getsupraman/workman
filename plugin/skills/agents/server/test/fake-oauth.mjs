@@ -15,7 +15,7 @@ const rand = (n) => crypto.randomBytes(n).toString('hex')
  * @typedef {{forgeState?: boolean, expiresIn?: number, staticToken?: string, subject?: string}} Options
  * @param {Options} [opts]
  */
-export async function fakeOAuthWorkstate(opts = {}) {
+export async function fakeOAuthWorkman(opts = {}) {
     /** @type {Recorded[]} */
     const requests = []
     /** @type {string[]} every token, code and verifier this server issued or saw */
@@ -40,7 +40,7 @@ export async function fakeOAuthWorkstate(opts = {}) {
         accessTokens.set(access, authz)
         refreshTokens.set(refresh, authz)
         secrets.push(access, refresh)
-        return { access_token: access, token_type: 'Bearer', expires_in: opts.expiresIn ?? 3600, refresh_token: refresh, scope: 'workstate.sessions offline_access' }
+        return { access_token: access, token_type: 'Bearer', expires_in: opts.expiresIn ?? 3600, refresh_token: refresh, scope: 'workman.sessions offline_access' }
     }
 
     /** @param {string} authz */
@@ -93,7 +93,7 @@ export async function fakeOAuthWorkstate(opts = {}) {
                         : !clients.has(q.client_id) ? 'client_id'
                             : q.code_challenge_method !== 'S256' || !q.code_challenge ? 'pkce'
                                 : u.searchParams.getAll('resource').length !== 1 || q.resource !== `${origin}/api` ? 'invalid_target'
-                                    : q.scope !== 'workstate.sessions offline_access' ? 'scope'
+                                    : q.scope !== 'workman.sessions offline_access' ? 'scope'
                                         : redirect.protocol !== 'http:' || redirect.hostname !== '127.0.0.1' || redirect.pathname !== '/callback' ? 'redirect_uri'
                                             : ''
                 if (bad) return json(400, { error: bad })

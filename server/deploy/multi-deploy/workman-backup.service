@@ -5,4 +5,4 @@ After=docker.service
 
 [Service]
 Type=oneshot
-ExecStart=/opt/multi-deploy/apps/workstate/backup.sh
+ExecStart=/opt/multi-deploy/apps/workman/backup.sh

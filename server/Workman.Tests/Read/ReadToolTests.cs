@@ -83,7 +83,7 @@ public sealed class ReadToolTests(PostgresFixture fixture)
 
     /// <summary>
     /// The title is what a person reads; the name is the server's own. A client still registers it under any
-    /// name it likes, <c>workstate</c> included: nothing here reads the name a client gave it.
+    /// name it likes, <c>workman</c> included: nothing here reads the name a client gave it.
     /// </summary>
     [Fact]
     public async Task ServerInfo_shows_Workman_to_a_person_and_names_itself_workman()

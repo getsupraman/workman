@@ -44,8 +44,8 @@ export function makeRepo(opts = {}) {
     fs.writeFileSync(envFile, [
         '# Workman local secrets',
         '',
-        'WORKSTATE_ORCHESTRATOR_TOKEN=orchestrator-not-this-one',
-        `WORKSTATE_CONTROLLER_TOKEN="${CONTROLLER_TOKEN}"`,
+        'WORKMAN_ORCHESTRATOR_TOKEN=orchestrator-not-this-one',
+        `WORKMAN_CONTROLLER_TOKEN="${CONTROLLER_TOKEN}"`,
         '',
     ].join('\n'))
     return { root, envFile, briefs: path.join(root, '.claude', 'briefs') }
@@ -55,7 +55,7 @@ export function makeRepo(opts = {}) {
  * @typedef {{method: string, url: string, auth: string|undefined, body: any}} Recorded
  * @param {{mintStatus?: number}} [opts]
  */
-export async function fakeWorkstate(opts = {}) {
+export async function fakeWorkman(opts = {}) {
     /** @type {Recorded[]} */
     const requests = []
     const server = http.createServer((req, res) => {
@@ -104,7 +104,7 @@ export function startServer(env = {}) {
             FAKE_CLAUDE_LOG: claudeLog,
             CLAUDE_PLUGIN_DATA: data,
             AGENTS_SESSION_WAIT_MS: '1500',
-            WORKSTATE_GRANTS_FILE: path.join(data, 'home', '.workstate', 'grants.json'),
+            WORKMAN_GRANTS_FILE: path.join(data, 'home', '.workman', 'grants.json'),
             AGENTS_BROWSER: JSON.stringify([process.execPath, FAKE_BROWSER]),
             ...env,
         },

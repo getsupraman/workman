@@ -22,7 +22,7 @@ public sealed class OAuthKeyRing(NpgsqlDataSource dataSource, IDataProtectionPro
 {
     private readonly WorkmanConnections _connections = new(dataSource);
 
-    public const string ProtectorPurpose = "WorkState.OAuth.Keys";
+    public const string ProtectorPurpose = "Workman.OAuth.Keys";
 
     private const int KeySize = 2048;
 
@@ -37,8 +37,6 @@ public sealed class OAuthKeyRing(NpgsqlDataSource dataSource, IDataProtectionPro
 
         if (row is null)
         {
-            using var generated = RSA.Create(KeySize);
-
             // Two hosts starting on an empty database both get here; the primary key keeps the first
             // insert and both read back that one.
             connection.Execute(
@@ -47,20 +45,58 @@ public sealed class OAuthKeyRing(NpgsqlDataSource dataSource, IDataProtectionPro
                 VALUES (@purpose, @keyId, @protectedKey)
                 ON CONFLICT (purpose) DO NOTHING;
                 """,
-                new
-                {
-                    purpose,
-                    keyId = Base64UrlEncoder.Encode(RandomNumberGenerator.GetBytes(16)),
-                    protectedKey = Convert.ToBase64String(protector.Protect(generated.ExportPkcs8PrivateKey())),
-                });
+                Generate(protector, purpose));
 
             row = Read(connection, purpose)
                   ?? throw new InvalidOperationException($"The {purpose} key was written but cannot be read back.");
         }
 
+        if (TryUnprotect(protector, row) is not { } key)
+        {
+            // Stored under another purpose or ring: a 1.x server's, whose purpose had the old name, or a ring that was
+            // lost. Every token it signed is unreadable either way, so the key is replaced, not fatal to every
+            // request; the clients sign in again. Two hosts racing here both read back the one that won.
+            var replacement = new DynamicParameters(Generate(protector, purpose));
+            replacement.Add("stale", row.ProtectedKey);
+            connection.Execute(
+                """
+                UPDATE oauth_key SET key_id = @keyId, protected_key = @protectedKey
+                WHERE  purpose = @purpose AND protected_key = @stale;
+                """,
+                replacement);
+
+            row = Read(connection, purpose)
+                  ?? throw new InvalidOperationException($"The {purpose} key was replaced but cannot be read back.");
+            key = TryUnprotect(protector, row)
+                  ?? throw new InvalidOperationException($"The {purpose} key was replaced but cannot be unprotected.");
+        }
+
         var rsa = RSA.Create();
-        rsa.ImportPkcs8PrivateKey(protector.Unprotect(Convert.FromBase64String(row.ProtectedKey)), out _);
+        rsa.ImportPkcs8PrivateKey(key, out _);
         return new RsaSecurityKey(rsa) { KeyId = row.KeyId };
+    }
+
+    private static object Generate(IDataProtector protector, string purpose)
+    {
+        using var generated = RSA.Create(KeySize);
+        return new
+        {
+            purpose,
+            keyId = Base64UrlEncoder.Encode(RandomNumberGenerator.GetBytes(16)),
+            protectedKey = Convert.ToBase64String(protector.Protect(generated.ExportPkcs8PrivateKey())),
+        };
+    }
+
+    private static byte[]? TryUnprotect(IDataProtector protector, Row row)
+    {
+        try
+        {
+            return protector.Unprotect(Convert.FromBase64String(row.ProtectedKey));
+        }
+        catch (CryptographicException)
+        {
+            return null;
+        }
     }
 
     private static Row? Read(NpgsqlConnection connection, string purpose)

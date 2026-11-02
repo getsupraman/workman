@@ -30,16 +30,16 @@ public sealed class OAuthTokenHandler(
     IAuthenticationSchemeProvider schemes)
     : AuthenticationHandler<AuthenticationSchemeOptions>(options, logger, encoder)
 {
-    public const string SchemeName = "WorkStateOAuth";
+    public const string SchemeName = "WorkmanOAuth";
 
     /// <summary>One claim per granted scope, read by <see cref="OAuthScopeRequirement"/>.</summary>
-    public const string ScopeClaim = "workstate_scope";
+    public const string ScopeClaim = "workman_scope";
 
     /// <summary>The OpenIddict authorization the token was issued under; a mint records it (doc 14 §2).</summary>
-    public const string AuthorizationClaim = "workstate_authorization";
+    public const string AuthorizationClaim = "workman_authorization";
 
     /// <summary>The token's user's name, as a mint records it in <c>minted_by_subject</c>.</summary>
-    public const string UserNameClaim = "workstate_user_name";
+    public const string UserNameClaim = "workman_user_name";
 
     private const string BearerPrefix = "Bearer ";
 
@@ -64,7 +64,8 @@ public sealed class OAuthTokenHandler(
 
         var identity = StaticTokenHandler.Identity(StaticTokenHandler.Nested(ActorRole.Controller), SchemeName);
         await UserAsync(identity, principal.GetClaim(OpenIddictConstants.Claims.Subject) ?? string.Empty, principal);
-        foreach (var scope in principal.GetScopes())
+        // A token granted under a 1.x scope name grants what its current name does.
+        foreach (var scope in principal.GetScopes().Select(OAuthServer.Canonical).Distinct(StringComparer.Ordinal))
         {
             identity.AddClaim(new Claim(ScopeClaim, scope));
         }

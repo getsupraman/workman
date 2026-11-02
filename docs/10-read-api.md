@@ -169,19 +169,21 @@ characters. A used, replaced, expired or unknown token is `404 {error}` on both.
 5. **Auth — any of:** the dashboard cookie; `Authorization: Bearer <token>` with any agent token
    (controller/orchestrator/worker); a **reader** token — a token kind that can call nothing but
    `GET /api/v1/*` and `/api/stream` (no MCP tools at all); or an **OAuth access token for the
-   resource `<origin>/api`** with scope `workstate.read`. Foreman signs in with OAuth only (below).
+   resource `<origin>/api`** with scope `workman.read`. Foreman signs in with OAuth only (below).
 
    **OAuth on `/api`** (foreman-oauth). `/api` is a second protected resource beside `/mcp`
    (RFC 8707), with its own audience: a token for `<origin>/mcp` is `401` here, and a token for
    `<origin>/api` is `401` on `/mcp`. Authorize refuses a request naming both resources
    (`invalid_target`); ask for one. Its metadata is
    `GET /.well-known/oauth-protected-resource/api` → `{resource: "<origin>/api",
-   authorization_servers: ["<origin>"], scopes_supported: ["workstate.read", "workstate.sessions",
+   authorization_servers: ["<origin>"], scopes_supported: ["workman.read", "workman.sessions",
    "offline_access"]}`, and an unauthenticated request to `/api/v1/*`, `/api/stream` or
    `/api/agent-sessions` is the usual `401` with an empty body plus
    `WWW-Authenticate: Bearer resource_metadata="<origin>/.well-known/oauth-protected-resource/api"`
-   (a wrong static or `wss_` token still gets the bare `401`). Scopes: `workstate.read` for
-   `GET /api/v1/*` and `/api/stream`, `workstate.sessions` for the agent-session group (doc 14 §2);
+   (a wrong static or `wss_` token still gets the bare `401`). Scopes: `workman.read` for
+   `GET /api/v1/*` and `/api/stream`, `workman.sessions` for the agent-session group (doc 14 §2).
+   The 1.x scope names `workstate.read` and `workstate.sessions` are accepted as aliases of those two
+   in authorize, token and refresh requests, until Supraman has switched;
    a valid `/api` token without the route's scope is `403`. The scopes bind the OAuth principal only:
    the cookie, static tokens and `wss_` tokens need no scope. The user behind the token is the
    signed-in dashboard user, in the one tenant they approved it in (doc 08 §4), mapped to the
@@ -201,7 +203,7 @@ characters. A used, replaced, expired or unknown token is `404 {error}` on both.
    `accepted|reworked|replanned|escalated|skipped|wontfix|duplicate|obsolete`. A forced close is not a
    resolution; it is the `forced` flag (from the `forced_transition` record).
 7. **The tenant.** Every request acts in one workspace, its credential's (doc 08 §4): the cookie's
-   current tenant, a `wss_` token's session's, an OAuth token's (its `workstate:tenant` claim, else its
+   current tenant, a `wss_` token's session's, an OAuth token's (its `workman:tenant` claim, else its
    user's only membership), or the one a static or reader token is bound to. No header or query
    parameter selects it. Everything a response names is in it: an id from another workspace is 404
    like a typo, `/resolve` and `/search` look nowhere else, and `/api/stream` carries only its events.
@@ -220,7 +222,7 @@ characters. A used, replaced, expired or unknown token is `404 {error}` on both.
 
 ```jsonc
 ItemRef = { "id": "uuid", "ref": "2.3", "qualifiedRef": "m1/2.3", "kind": "task", "title": "…", "status": "done",
-           "fullRef": "workstate/m1/2.3" }
+           "fullRef": "workman/m1/2.3" }
 Rollup  = { "total": 14, "done": 10, "inProgress": 1, "review": 0, "blocked": 0, "open": 3,
             "cancelled": 0, "superseded": 0 }      // leaves only: task, followup, subtask, spike, question, incident,
           // plus a phase or feature that has no children (an empty container is one item of work)
@@ -403,7 +405,7 @@ Read-only like every v1 route: it neither sweeps lapsed claims nor consumes note
 ```jsonc
 { "asOf": "…", "seq": 1234, "scope": ItemRef,
   "prompts": [{ "key": "housekeeping", "label": "Housekeeping", "count": 7,
-                "text": "Housekeeping for WorkState project …" }] }
+                "text": "Housekeeping for Workman project …" }] }
 ```
 
 ### `GET /api/stream`

@@ -54,7 +54,7 @@ public enum ProjectBypass
 public sealed class WorkmanConnections(NpgsqlDataSource dataSource)
 {
     /// <summary>The NOLOGIN role the TenantRls migration creates; its policies read <see cref="WorkspaceSetting"/>.</summary>
-    public const string AppRole = "workstate_app";
+    public const string AppRole = "workman_app";
 
     public const string WorkspaceSetting = "app.workspace_id";
 
@@ -108,7 +108,7 @@ public sealed class WorkmanConnections(NpgsqlDataSource dataSource)
         var user = everyProject ? null : userId;
         var access = user is null
             ? "(SELECT ''::text AS seq, ''::text AS hidden) a"
-            : $"{Migrations.ProjectAccessSeq.AccessFunction}(@workspaceId, @userId) a";
+            : $"{Migrations.WorkmanNames.AccessFunction}(@workspaceId, @userId) a";
         await using var command = new NpgsqlCommand(
             $"SELECT set_config('role', '{AppRole}', true), set_config('{WorkspaceSetting}', @workspace, true), "
             + $"set_config('{UserSetting}', @user, true), set_config('{AccessSeqSetting}', coalesce(a.seq, ''), true), "

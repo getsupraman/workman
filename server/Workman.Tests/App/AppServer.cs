@@ -61,18 +61,18 @@ internal sealed class AppServer : IAsyncDisposable
             builder.WebHost.UseUrls("http://127.0.0.1:0");
             builder.Configuration.AddInMemoryCollection(new Dictionary<string, string?>
             {
-                ["ConnectionStrings:WorkState"] = connectionString,
-                ["WorkState:Workspace"] = workspaceSlug,
-                ["WorkState:Auth:WorkerToken"] = ReadServer.WorkerToken,
-                ["WorkState:Auth:OrchestratorToken"] = ReadServer.OrchestratorToken,
-                ["WorkState:Auth:ControllerToken"] = ReadServer.ControllerToken,
-                ["WorkState:Auth:ReaderToken"] = readerToken,
-                ["WorkState:Dashboard:Username"] = dashboardConfigured ? Username : null,
-                ["WorkState:Dashboard:Password"] = dashboardConfigured ? Password : null,
-                ["WorkState:Stream:Heartbeat"] = heartbeat,
-                ["WORKSTATE_PUBLIC_URL"] = publicUrl,
-                ["WorkState:PublicUrls"] = publicUrls,
-                ["WORKSTATE_TRUSTED_PROXIES"] = trustedProxies,
+                ["ConnectionStrings:Workman"] = connectionString,
+                ["Workman:Workspace"] = workspaceSlug,
+                ["Workman:Auth:WorkerToken"] = ReadServer.WorkerToken,
+                ["Workman:Auth:OrchestratorToken"] = ReadServer.OrchestratorToken,
+                ["Workman:Auth:ControllerToken"] = ReadServer.ControllerToken,
+                ["Workman:Auth:ReaderToken"] = readerToken,
+                ["Workman:Dashboard:Username"] = dashboardConfigured ? Username : null,
+                ["Workman:Dashboard:Password"] = dashboardConfigured ? Password : null,
+                ["Workman:Stream:Heartbeat"] = heartbeat,
+                ["WORKMAN_PUBLIC_URL"] = publicUrl,
+                ["Workman:PublicUrls"] = publicUrls,
+                ["WORKMAN_TRUSTED_PROXIES"] = trustedProxies,
             });
             configure?.Invoke(builder);
         });
@@ -185,7 +185,7 @@ internal sealed class AppServer : IAsyncDisposable
                 {
                     protocolVersion = "2025-06-18",
                     capabilities = new { },
-                    clientInfo = new { name = "workstate-tests", version = "0.0.0" },
+                    clientInfo = new { name = "workman-tests", version = "0.0.0" },
                 },
             }),
         };

@@ -26,7 +26,7 @@ public static class OAuthEndpoints
     /// The authorization property naming the tenant an approval was given in. A remembered approval issues a
     /// token only for that tenant; in any other the user is asked again.
     /// </summary>
-    public const string TenantProperty = "workstate_tenant";
+    public const string TenantProperty = "workman_tenant";
 
     private const int MaxRedirectUris = 10;
     private const int MaxClientNameLength = 200;
@@ -303,7 +303,8 @@ public static class OAuthEndpoints
 
     /// <summary>What every client here may do, whether it registered or named a metadata document.</summary>
     public static OpenIddictApplicationDescriptor PublicClient(string clientId, string displayName)
-        => new()
+    {
+        var descriptor = new OpenIddictApplicationDescriptor
         {
             ClientId = clientId,
             ClientType = ClientTypes.Public,
@@ -325,6 +326,9 @@ public static class OAuthEndpoints
             },
             Requirements = { Requirements.Features.ProofKeyForCodeExchange },
         };
+        descriptor.Permissions.UnionWith(OAuthServer.ScopeAliases.Keys.Select(alias => Permissions.Prefixes.Scope + alias));
+        return descriptor;
+    }
 
     public static bool IsAcceptableRedirect(string? value, out Uri uri)
     {

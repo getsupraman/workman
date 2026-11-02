@@ -4,7 +4,7 @@
 > to fall back on, so every tool result is judged on one question — *can a model act on this without
 > a second call?*
 >
-> `WorkState.Core` owns these renderers. They are **domain logic, not presentation**, and they are
+> `Workman.Core` owns these renderers. They are **domain logic, not presentation**, and they are
 > unit-tested for shape and for token cost.
 
 ---
@@ -48,7 +48,7 @@ A text with no detail view at all is a gap, closed by printing it whole where it
 why `work_get` prints every `work_report` an item received, and `work_threads` an assumption's
 statement and an addressed note's body.
 
-The exceptions are an allow-list in `WorkState.Tests/Read/NoClipSourceTests.cs`: a call to
+The exceptions are an allow-list in `Workman.Tests/Read/NoClipSourceTests.cs`: a call to
 `Glyph.Row` from any other method, `Clip(`, or a hand-made cut (`[..n]`, `Substring`, `left(`, a glued
 `"…"`) fails the build, and adding an entry is a visible review decision. `NoClipBehaviourTests`
 fills every text field with a 300-character sentinel and asserts each view shows it whole.

@@ -4,7 +4,7 @@ import assert from 'node:assert/strict'
 import fs from 'node:fs'
 import path from 'node:path'
 import { resolveClaude, parseBackgroundId } from '../claude.mjs'
-import { parseEnvFile } from '../workstate.mjs'
+import { parseEnvFile } from '../workman.mjs'
 import { stateDir } from '../state.mjs'
 import { tmp } from './helpers.mjs'
 
@@ -36,17 +36,12 @@ test('Windows: claude.exe preferred; a lone claude.cmd is refused', { skip: proc
     assert.deepEqual(resolveClaude({ PATH: cmdOnly, USERPROFILE: emptyHome }), [path.join(emptyHome, '.local', 'bin', 'claude.exe')])
 })
 
-test('state dir: workman-agents by default, an existing rlarch-agents is kept until the new one exists', () => {
+test('state dir: workman-agents only; an old rlarch-agents directory is not read', () => {
     const fresh = tmp('state-fresh')
     assert.equal(stateDir({}, fresh), path.join(fresh, 'workman-agents', 'agents'))
 
     const upgraded = tmp('state-legacy')
     fs.mkdirSync(path.join(upgraded, 'rlarch-agents', 'agents'), { recursive: true })
-    fs.writeFileSync(path.join(upgraded, 'rlarch-agents', 'agents', 'old.json'), '{}')
-    assert.equal(stateDir({}, upgraded), path.join(upgraded, 'rlarch-agents', 'agents'))
-    assert.ok(!fs.existsSync(path.join(upgraded, 'workman-agents')))
-
-    fs.mkdirSync(path.join(upgraded, 'workman-agents'))
     assert.equal(stateDir({}, upgraded), path.join(upgraded, 'workman-agents', 'agents'))
 
     assert.equal(stateDir({ CLAUDE_PLUGIN_DATA: path.join(fresh, 'data') }, upgraded), path.join(fresh, 'data', 'agents'))

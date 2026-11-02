@@ -209,7 +209,7 @@ public sealed class UserTests(PostgresFixture fixture)
             configure: password is null
                 ? null
                 : builder => builder.Configuration.AddInMemoryCollection(
-                    new Dictionary<string, string?> { ["WorkState:Dashboard:Password"] = password }),
+                    new Dictionary<string, string?> { ["Workman:Dashboard:Password"] = password }),
             soleMember: false);
 
     private static async Task<UserRow> SingleUserAsync(FreshDatabase database)

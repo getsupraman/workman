@@ -5,7 +5,7 @@
 > taught by a skill file has failed it.
 
 The test: **a fresh Claude Code session, with no skill loaded and no instructions from the user
-beyond "use workstate to run this work", drives a full decompose → execute → verify → close cycle
+beyond "use workman to run this work", drives a full decompose → execute → verify → close cycle
 without a wrong call and without asking how.**
 
 **Four** channels carry the explanation — a fifth, MCP prompts, was measured out of existence (§5).
@@ -174,7 +174,7 @@ nothing"* — pointed at ourselves.
    `CLAUDE.md` describing Workman, nothing in the repo that documents the tools.
 2. **The entire prompt is one sentence of intent**, and it must be *outcome* language a user would
    actually type. Permitted:
-   > *"Use workstate to pick up the next task on the atlas entity-store run and take it to done."*
+   > *"Use workman to pick up the next task on the atlas entity-store run and take it to done."*
 
    **Forbidden in the prompt:** any tool name, the word `work_brief`, the order of operations, the
    closure conditions, the existence of an attention block, the word "ref". If the prompt would
@@ -214,11 +214,11 @@ easiest way to contaminate the test without noticing.
 
 **Run A — mid-run state** (a fixture run imported, multi-phase, with open assumptions):
 
-> Use workstate to pick up the next piece of work on the imported run and take it as far as you can.
+> Use workman to pick up the next piece of work on the imported run and take it as far as you can.
 
 **Run B — empty server** (nothing seeded at all):
 
-> I want to track a piece of work in workstate. Set it up and tell me where things stand.
+> I want to track a piece of work in workman. Set it up and tell me where things stand.
 
 Checked against the forbidden list: no tool name, no ordering, no closure conditions, no mention of
 briefs, refs, attention or verification. Neither would tell a server-less agent what to do — which

@@ -41,12 +41,11 @@ test('the nearest claude ancestor keys the session, and claude agents names it',
     const key = `${os.hostname()}/80/1100`
     assert.deepEqual(headers, {
         'X-Workman-Client': key, 'X-Workman-Agent': 'm27-probe',
-        'X-WorkState-Client': key, 'X-WorkState-Agent': 'm27-probe',
     })
 })
 
 test('a session claude agents does not list (a fresh interactive one) sends the key alone', () => {
-    const keyOnly = { 'X-Workman-Client': `${os.hostname()}/80/1100`, 'X-WorkState-Client': `${os.hostname()}/80/1100` }
+    const keyOnly = { 'X-Workman-Client': `${os.hostname()}/80/1100` }
     assert.deepEqual(helper(CHAIN, { agents: [{ pid: 999, name: 'other' }] }), keyOnly)
     assert.deepEqual(helper(CHAIN, [{ pid: 80, name: '' }]), keyOnly)
 })
@@ -55,7 +54,7 @@ test('CLAUDE_PID and CLAUDE_JOB_DIR are inherited from another session and never
     const headers = helper(CHAIN, [{ pid: 70, name: 'someone-else' }], { CLAUDE_PID: '70', CLAUDE_JOB_DIR: 'x/jobs/someone-else' })
     assert.equal(headers['X-Workman-Client'], `${os.hostname()}/80/1100`)
     assert.equal(headers['X-Workman-Agent'], undefined)
-    assert.equal(headers['X-WorkState-Agent'], undefined)
+    assert.equal(Object.keys(headers).length, 1)
 })
 
 test('no claude ancestor, a reused parent pid, or an unreadable table prints {}', () => {
@@ -67,8 +66,8 @@ test('no claude ancestor, a reused parent pid, or an unreadable table prints {}'
 test('ps output parses, and a native claude or a node running Claude Code is claude', () => {
     const rows = parsePsTable([
         '  501     1 Mon Oct 26 15:40:30 2026 claude claude --name m27-probe',
-        '  777   501 Mon Oct 26 15:40:31 2026 sh /bin/sh -c node /home/u/.workstate/session-header.mjs',
-        '  778   777 Mon Oct 26 15:40:31 2026 node node /home/u/.workstate/session-header.mjs',
+        '  777   501 Mon Oct 26 15:40:31 2026 sh /bin/sh -c node /home/u/.workman/session-header.mjs',
+        '  778   777 Mon Oct 26 15:40:31 2026 node node /home/u/.workman/session-header.mjs',
         '  900     1 Mon Oct 26 15:00:00 2026 node node /usr/lib/node_modules/@anthropic-ai/claude-code/cli.js',
     ].join('\n'))
     assert.equal(rows.length, 4)

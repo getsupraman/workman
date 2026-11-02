@@ -2,13 +2,13 @@
 
 Four questions from the owner, answered against what is verified rather than assumed.
 
-> The product is **Workman** (dashboard, consent pages, MCP `serverInfo.title`). Its machine-facing names
-> are `workman` too: `serverInfo.name`, the registration `/workman:setup` writes (so `mcp__workman__*`
-> tools) and the `X-Workman-*` headers. The old names keep working until server 2.0 / plugin 2.0: every
-> `X-WorkState-*` request header is still read (the new name wins when both arrive), the headers the
-> server sends go out under both names, and a client may register the server under any name,
-> `workstate` included. `CHANGELOG.md` holds the migration note. A public URL is still one OAuth issuer,
-> and `WORKMAN_PUBLIC_URLS` adds more (§4).
+> The product is **Workman** (dashboard, consent pages, MCP `serverInfo.title`). Since server 2.0 /
+> plugin 2.0 every machine-facing name is `workman`: `serverInfo.name`, the registration
+> `/workman:setup` writes (so `mcp__workman__*` tools), the `X-Workman-*` headers, the `WORKMAN_*`
+> environment and `Workman:*` settings, the compose project and volume, the home `~/.workman`. The 1.x
+> `workstate` names are no longer read, with one exception: the OAuth scopes `workstate.read` and
+> `workstate.sessions` stay accepted as aliases of `workman.read` and `workman.sessions` until Supraman
+> has switched. `CHANGELOG.md` holds the upgrade guide. A public URL is still one OAuth issuer, and `WORKMAN_PUBLIC_URLS` adds more (§4).
 
 ---
 
@@ -64,7 +64,7 @@ So `plugin/.mcp.json` becomes:
 ```json
 { "mcpServers": {
     "workman": { "type": "http", "url": "http://127.0.0.1:5290/mcp",
-                   "headers": { "Authorization": "Bearer ${WORKSTATE_TOKEN}" } } } }
+                   "headers": { "Authorization": "Bearer ${WORKMAN_TOKEN}" } } } }
 ```
 
 ### `${VAR}` expansion — **measured 2026-09-21, it works**
@@ -93,7 +93,7 @@ Three things the probe established that the design did not know:
   names that are deliberately read as **empty** when expanded toward a remote server, with a warning
   rather than an error. It targets specific ecosystems — `GIT_CONFIG_*`, `CARGO_REGISTRIES_*_TOKEN`,
   `BUNDLE_*__*`, package-registry user/token names, `OTEL_*`, and Claude's own credential variables.
-  `WSPROBE_TOKEN` is not on it and neither is `WORKSTATE_TOKEN`, but this is a **trap for anyone who
+  `WSPROBE_TOKEN` is not on it and neither is `WORKMAN_TOKEN`, but this is a **trap for anyone who
   later renames it to something more obviously secret**: the failure is a silent 401, not a message
   saying the name was refused. (Read from the client bundle, not measured — unlike the table above.)
 - **Plugin tools are namespaced `mcp__plugin_<plugin>_<server>__<tool>`**, not `mcp__<server>__`.
@@ -108,7 +108,7 @@ agent may not call is simply *absent* from `tools/list` is now measured from the
 
 This repository is public. The `dev-*-token` values in `appsettings.Development.json` are
 localhost-only throwaways, which is why they are committed — but a marketplace file is a different
-audience, and a token in it is a token on the internet. The `${WORKSTATE_TOKEN}` indirection is what keeps the shipped file
+audience, and a token in it is a token on the internet. The `${WORKMAN_TOKEN}` indirection is what keeps the shipped file
 clean, and it is now known to work.
 
 ### And the version-skew problem, which is new
@@ -131,15 +131,15 @@ over assumptions, rules and notes with `scope`, the raised `tools/list` budgets,
 `fullRef` field, and two indexes (`item_ref_lower_idx`, `note_search_idx`).
 
 `0.7.1` (plugin 2.5.1) carries readable dashboard links (`/r/<project/run/ref>`, the `web` line in
-`work_brief` and `work_get`, optional `WORKSTATE_PUBLIC_URL`) and the dashboard's split run page.
+`work_brief` and `work_get`, optional `WORKMAN_PUBLIC_URL`) and the dashboard's split run page.
 
 `0.8.0` (plugin 2.7.0) carries OAuth 2.1 sign-in for `/mcp` (OpenIddict; client-ID metadata
 documents and dynamic registration; PKCE S256; keys held in Postgres), the `/connect/signin` and
-`/connect/consent` pages with the client's icon, `WORKSTATE_TRUSTED_PROXIES`, and one additive
+`/connect/consent` pages with the client's icon, `WORKMAN_TRUSTED_PROXIES`, and one additive
 migration (`OAuthServer`). Static and minted `wss_` tokens are unchanged.
 
 `0.9.0` (plugin 2.7.0, no plugin change) carries OAuth for the read API, `/api/stream` and the
-agent-session mint (resource `<origin>/api`, scopes `workstate.read` and `workstate.sessions`), the
+agent-session mint (resource `<origin>/api`, scopes `workman.read` and `workman.sessions`), the
 cascade that ends `wss_` sessions minted under a revoked authorization, the launcher takeover of a
 name by Claude session id, the name release (dashboard Sessions page and
 `POST /api/agent-sessions/{id}/release`), and one additive migration (`OAuthMintedSession`).
@@ -253,7 +253,7 @@ The owner's standard .NET service blueprint already prescribes the shape, and th
 doc 03: **the SPA is built into `wwwroot` and served by the same ASP.NET host.**
 
 ```
-        ┌──────────────── WorkState.Api (one process, always on) ─────────────┐
+        ┌──────────────── Workman.Api (one process, always on) ─────────────┐
 agents →│  /mcp      Streamable HTTP · bearer token · three role profiles     │
 human  →│  /         SolidJS SPA from wwwroot                                 │
         │  /api/*    App API · cookie session · excluded from the OpenAPI doc │
@@ -277,16 +277,17 @@ routes.
 
 | Token | Config / env | Reaches |
 |---|---|---|
-| worker · orchestrator · controller | `WorkState:Auth:{Worker,Orchestrator,Controller}Token` · `WORKSTATE_{WORKER,ORCHESTRATOR,CONTROLLER}_TOKEN` — **local install only** (required in `server/compose.yml`; the server deploy `deploy/multi-deploy` sets none, so a server accepts none) | `/mcp` by role, and `GET /api/v1/*` + `/api/stream`; orchestrator and controller also `/api/agent-sessions` |
-| reader | `WorkState:Auth:ReaderToken` · `WORKSTATE_READER_TOKEN` (**optional**: compose passes `${WORKSTATE_READER_TOKEN:-}`, and empty means no reader token exists) | `GET /api/v1/*` and `/api/stream` only — `/mcp` refuses it (403), and so does `/api/session` |
+| worker · orchestrator · controller | `Workman:Auth:{Worker,Orchestrator,Controller}Token` · `WORKMAN_{WORKER,ORCHESTRATOR,CONTROLLER}_TOKEN` — **local install only** (required in `server/compose.yml`; the server deploy `deploy/multi-deploy` sets none, so a server accepts none) | `/mcp` by role, and `GET /api/v1/*` + `/api/stream`; orchestrator and controller also `/api/agent-sessions` |
+| reader | `Workman:Auth:ReaderToken` · `WORKMAN_READER_TOKEN` (**optional**: compose passes `${WORKMAN_READER_TOKEN:-}`, and empty means no reader token exists) | `GET /api/v1/*` and `/api/stream` only — `/mcp` refuses it (403), and so does `/api/session` |
 | minted `wss_…` (per session) | none — `POST /api/agent-sessions` with an orchestrator or controller bearer returns it once; the store keeps only its SHA-256. Expires after `ttlHours` (default 72, max 720) **unused** — an idle window each use renews, no hard cap — revoked by `DELETE` | exactly what a static token of its granted role reaches (never above its minter's role), and its calls are that session's: `X-Workman-Agent` is ignored |
 
 Foreman signs in with OAuth only (autowork m5/43): it registers by DCR, signs in with PKCE for the
-scopes `workstate.read workstate.sessions offline_access`, and mints a `wss_` session per agent it
-launches. It holds no reader token.
+scopes `workman.read workman.sessions offline_access` (a Supraman that still asks for the 1.x
+`workstate.read workstate.sessions` is served the same: the server accepts those as aliases until
+Supraman has switched), and mints a `wss_` session per agent it launches. It holds no reader token.
 
 **The dashboard's users (m48).** The cookie is issued to a row of `app_user` (doc 02 §12a), not to the
-configured credential. `WorkState:Dashboard:{Username,Password}` (`WORKSTATE_DASHBOARD_USERNAME` /
+configured credential. `Workman:Dashboard:{Username,Password}` (`WORKMAN_DASHBOARD_USERNAME` /
 `_PASSWORD`) is a **bootstrap credential**: the first `POST /api/session` that presents it while
 `app_user` is empty creates the first user — named after the configured username, the presented
 password stored only as an ASP.NET Core `PasswordHasher` hash, system administrator, admin of every
@@ -296,7 +297,7 @@ then on only the table decides: **changing or removing the configured password c
 the dashboard keeps working with neither set. A wrong password, an unknown name and a disabled user
 get the same 401 and each runs one hash verification. Every cookie request re-reads its user
 (the `sub` claim): a user deleted or disabled (`disabled_at`) is signed out on their next request,
-and so is a cookie whose security stamp (`workstate:stamp`) is no longer the user's
+and so is a cookie whose security stamp (`workman:stamp`) is no longer the user's
 `app_user.security_stamp`, which a password change or reset draws anew (m52). A cookie issued before
 m48 (no `sub`), before m50 (no tenant) or before m52 (no stamp) has to sign in again. The
 configured credential has nothing to do with OAuth (m51): `/connect/authorize` is gated by a
@@ -306,7 +307,7 @@ Users are managed on the dashboard's Admin page and change their own password on
 
 **Tenants (m50).** A tenant is a `workspace` row, and every request acts in exactly one: its
 credential's, never one a header, a query parameter or a server default names (C62). Every
-authentication path puts it on the principal as the claim `workstate:tenant`:
+authentication path puts it on the principal as the claim `workman:tenant`:
 
 - **Dashboard cookie** — at sign-in, the user's first membership (oldest grant first); a system
   administrator who is a member of nothing lands in the oldest workspace; a user who is a member of
@@ -319,12 +320,12 @@ authentication path puts it on the principal as the claim `workstate:tenant`:
 - **`wss_` token** — its session's workspace. A mint creates the session in the minting credential's
   own tenant (doc 11). A session a user's credential minted works only while that user may enter its
   workspace: removing the membership or disabling the user fails the token on its next use (401).
-- **OAuth access token** — the token's `workstate:tenant` claim (m51). A token belongs to **one user
+- **OAuth access token** — the token's `workman:tenant` claim (m51). A token belongs to **one user
   in one tenant**: its `sub` is the user's `app_user` id, and its tenant is the one the user's cookie
   was in when they approved. The consent page names that workspace and offers the user's others to
   switch to first; a user in several tenants signs in once per tenant, and each client's connection
   acts in one. An approval is remembered per user, client **and tenant** (the OpenIddict permanent
-  authorization keeps the tenant in its `workstate_tenant` property): approved in A, the same client
+  authorization keeps the tenant in its `workman_tenant` property): approved in A, the same client
   authorized from B asks again and gets a token for B. Every call and every refresh re-checks that
   the user exists, is not disabled and may still enter the tenant; otherwise the call is refused
   403 and the refresh `invalid_grant`, each saying to sign in again. The role is controller for a
@@ -346,7 +347,7 @@ authentication path puts it on the principal as the claim `workstate:tenant`:
   redeems, once, into a handle (OpenIddict tries a handle lookup only for a token that is not a JWT),
   so no client signs in again. Rotation, the 30-second reuse leeway for concurrent refreshes and
   revocation — of the token or of its authorization — behave the same on either format.
-- **Static role tokens and the reader token** — bound to the workspace `WorkState:Workspace` names,
+- **Static role tokens and the reader token** — bound to the workspace `Workman:Workspace` names,
   or, unset, the oldest workspace. That slug is these credentials' own configured binding, not a
   default for anyone else: only their handler reads it. A configured workspace that does not exist
   yet is created at the token's first use, so a fresh install's first `work_create` has somewhere to
@@ -445,16 +446,16 @@ has joined yet — a static token's on an install with no user — is every memb
 joins. A credential with no user — a static role token or the reader token — sees every project of its
 workspace; the server deploy configures no static role token, so there every client is a user.
 
-**`WORKSTATE_PUBLIC_URL`** (`WorkState:PublicUrl`, **optional**; compose passes
-`${WORKSTATE_PUBLIC_URL:-}`) is the base of the `web` line `work_brief` and `work_get` print
+**`WORKMAN_PUBLIC_URL`** (`Workman:PublicUrl`, **optional**; compose passes
+`${WORKMAN_PUBLIC_URL:-}`) is the base of the `web` line `work_brief` and `work_get` print
 (doc 01 §8). Unset, the line names the scheme and host the MCP request came in on — from the host
 that is `http://127.0.0.1:5290`, which is also where the dashboard is. Set it when humans reach the
 dashboard at another address than agents reach `/mcp` (a reverse proxy, a LAN name). An `https`
 public URL also makes the dashboard cookie `Secure` unconditionally; otherwise the cookie follows the
 request's scheme.
 
-**`WORKSTATE_TRUSTED_PROXIES`** (`WorkState:TrustedProxies`, **optional**; compose passes
-`${WORKSTATE_TRUSTED_PROXIES:-}`) is a comma-separated list of IPs or CIDRs whose `X-Forwarded-Proto`,
+**`WORKMAN_TRUSTED_PROXIES`** (`Workman:TrustedProxies`, **optional**; compose passes
+`${WORKMAN_TRUSTED_PROXIES:-}`) is a comma-separated list of IPs or CIDRs whose `X-Forwarded-Proto`,
 `X-Forwarded-Host` and `X-Forwarded-For` the API believes. Set it to the reverse proxy's address (on
 a docker network, that network's CIDR). From those addresses the request's scheme and host become
 the forwarded ones before authentication runs, so the `web` line (when no public URL is set), the
@@ -475,7 +476,7 @@ image, the port it listens on (8080) and the code path are the same. The reverse
 docker compose -f server/compose.yml up -d
 ```
 
-…or, with no clone at all, `/workman:setup` (its script) writes `~/.workstate/compose.yml`,
+…or, with no clone at all, `/workman:setup` (its script) writes `~/.workman/compose.yml`,
 which **pulls the published image** instead of building one, and runs the same command against it.
 
 > **Changed 2026-10-26 — a published image.** `.github/workflows/image.yml` builds
@@ -536,7 +537,7 @@ It is written and proved, so the temptation is to drop it straight into `plugin/
 reasons not to, and the second is the real one:
 
 - **It is not free to install.** The moment it ships, every session in every repo with the workman
-  plugin tries to reach `127.0.0.1:5290`. If the stack is not up or `WORKSTATE_TOKEN` is unset, the
+  plugin tries to reach `127.0.0.1:5290`. If the stack is not up or `WORKMAN_TOKEN` is unset, the
   result is a failed MCP connection notice — in every project, whether or not that project has
   anything to do with Workman. That is a cost the owner should choose, not inherit.
 - **An unbumped file in `plugin/` is a landmine.** It reaches nobody today, which reads as

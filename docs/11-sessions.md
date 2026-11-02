@@ -110,7 +110,7 @@ travels on every request can name a session. No tool parameter was added (tools/
 ## Releasing a name
 A row with no Claude session id cannot prove who it was, so no launcher can take it over. The operator
 frees its name instead: `POST /api/agent-sessions/{id}/release` (a controller bearer, or an OAuth
-token with `workstate.sessions`; doc 14 §2), or **Release** on the dashboard's Sessions page (cookie,
+token with `workman.sessions`; doc 14 §2), or **Release** on the dashboard's Sessions page (cookie,
 `POST /api/sessions/{id}/release`, doc 10). The row is **not deleted** — claims, events and evidence
 point at it. It is renamed to `<name>~released~<its id, 32 hex>`, which its own id makes unique; its
 token is revoked (`revoked_at`), its client key is let go, and `session_name_released` (`{name,

@@ -154,7 +154,7 @@ public sealed partial class SessionStore(NpgsqlDataSource dataSource)
             $"the session name \"{name}\" is held by a session launched by {held ?? "no launcher"}.",
             $"this call's X-Workman-Launched-By says {asked ?? "no launcher"}; a name is unique per "
             + "workspace and user, and two launchers' sessions cannot share one. Nothing ran",
-            "work_brief() once WorkState is registered with X-Workman-Agent:<a name of your own> — "
+            "work_brief() once Workman is registered with X-Workman-Agent:<a name of your own> — "
             + "the name your session goes by, e.g. the one ListAgents prints",
             "work_brief() once X-Workman-Launched-By names the launcher that started this session, "
             + "if it is the same one");

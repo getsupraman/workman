@@ -19,8 +19,8 @@ public sealed class WorkResources(BoardReader reader, RequestTenant tenant, Call
     [Authorize(Policy = WorkmanPolicies.Worker)]
     [McpServerResource(
         UriTemplate = WorkUris.Workspace,
-        Name = "workstate_index",
-        Title = "WorkState: where this workspace stands",
+        Name = "workman_index",
+        Title = "Workman: where this workspace stands",
         MimeType = "text/markdown")]
     [Description("The active run: its shape, its rollups, and the attention block. The board, as a document.")]
     public async Task<string> IndexAsync(CancellationToken cancellationToken)
@@ -38,8 +38,8 @@ public sealed class WorkResources(BoardReader reader, RequestTenant tenant, Call
     [Authorize(Policy = WorkmanPolicies.Worker)]
     [McpServerResource(
         UriTemplate = WorkUris.WorkspaceBrief,
-        Name = "workstate_brief",
-        Title = "WorkState: the recovery payload",
+        Name = "workman_brief",
+        Title = "Workman: the recovery payload",
         MimeType = "text/markdown")]
     [Description("The same payload work_brief returns, attachable with @ so it can be pinned into a session.")]
     public async Task<string> BriefAsync(CancellationToken cancellationToken)
@@ -55,8 +55,8 @@ public sealed class WorkResources(BoardReader reader, RequestTenant tenant, Call
     [Authorize(Policy = WorkmanPolicies.Worker)]
     [McpServerResource(
         UriTemplate = WorkUris.Conventions,
-        Name = "workstate_conventions",
-        Title = "WorkState: the rules that bind this run",
+        Name = "workman_conventions",
+        Title = "Workman: the rules that bind this run",
         MimeType = "text/markdown")]
     [Description("Every active constraint in scope, red lines first, each with its route out.")]
     public async Task<string> ConventionsAsync(CancellationToken cancellationToken)
@@ -70,8 +70,8 @@ public sealed class WorkResources(BoardReader reader, RequestTenant tenant, Call
     [Authorize(Policy = WorkmanPolicies.Orchestrator)]
     [McpServerResource(
         UriTemplate = WorkUris.Handoff,
-        Name = "workstate_handoff",
-        Title = "WorkState: enough for a competent stranger to continue",
+        Name = "workman_handoff",
+        Title = "Workman: enough for a competent stranger to continue",
         MimeType = "text/markdown")]
     [Description("Brief, shape and every unclosed thread in one document — what a handover has to carry.")]
     public async Task<string> HandoffAsync(CancellationToken cancellationToken)
@@ -91,8 +91,8 @@ public sealed class WorkResources(BoardReader reader, RequestTenant tenant, Call
     [Authorize(Policy = WorkmanPolicies.Worker)]
     [McpServerResource(
         UriTemplate = WorkUris.Attention,
-        Name = "workstate_attention",
-        Title = "WorkState: everything that needs attention",
+        Name = "workman_attention",
+        Title = "Workman: everything that needs attention",
         MimeType = "text/markdown")]
     [Description("The active run's attention block, uncapped: every line, ranked, each with its call.")]
     public Task<string> AttentionAsync(CancellationToken cancellationToken)
@@ -102,8 +102,8 @@ public sealed class WorkResources(BoardReader reader, RequestTenant tenant, Call
     [Authorize(Policy = WorkmanPolicies.Worker)]
     [McpServerResource(
         UriTemplate = WorkUris.AttentionTemplate,
-        Name = "workstate_attention_scope",
-        Title = "WorkState: everything that needs attention under one scope",
+        Name = "workman_attention_scope",
+        Title = "Workman: everything that needs attention under one scope",
         MimeType = "text/markdown")]
     [Description("One scope's attention block, uncapped. Reachable with the exact URI a capped block printed.")]
     public async Task<string> AttentionScopeAsync(
@@ -136,8 +136,8 @@ public sealed class WorkResources(BoardReader reader, RequestTenant tenant, Call
     [Authorize(Policy = WorkmanPolicies.Worker)]
     [McpServerResource(
         UriTemplate = WorkUris.ItemTemplate,
-        Name = "workstate_item",
-        Title = "WorkState: one item",
+        Name = "workman_item",
+        Title = "Workman: one item",
         MimeType = "text/markdown")]
     [Description("One item in full. Reachable only with the exact URI a tool result printed.")]
     public async Task<string> ItemAsync(
@@ -164,8 +164,8 @@ public sealed class WorkResources(BoardReader reader, RequestTenant tenant, Call
     [Authorize(Policy = WorkmanPolicies.Worker)]
     [McpServerResource(
         UriTemplate = WorkUris.ItemBriefTemplate,
-        Name = "workstate_item_brief",
-        Title = "WorkState: one item's worker brief",
+        Name = "workman_item_brief",
+        Title = "Workman: one item's worker brief",
         MimeType = "text/markdown")]
     [Description("The brief for one item: context, constraints, criteria, verification and the report format.")]
     public async Task<string> ItemBriefAsync(

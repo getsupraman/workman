@@ -10,7 +10,7 @@ using static Workman.Tests.Store.Tokens;
 namespace Workman.Tests.App;
 
 /// <summary>
-/// One server reached on two origins (<c>WorkState:PublicUrls</c>): each is its own issuer and resource, the
+/// One server reached on two origins (<c>Workman:PublicUrls</c>): each is its own issuer and resource, the
 /// request's host picks which one answers, and an unknown host is answered as the first. The test socket is
 /// <c>127.0.0.1:&lt;random&gt;</c>; the <c>Host</c> header is what names the origin, as a proxy's would.
 /// </summary>

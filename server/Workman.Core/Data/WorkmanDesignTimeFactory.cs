@@ -10,5 +10,5 @@ public sealed class WorkmanDesignTimeFactory : IDesignTimeDbContextFactory<Workm
 {
     public WorkmanDbContext CreateDbContext(string[] args)
         => new(WorkmanDbContextOptions.Build(
-            "Host=localhost;Port=5432;Database=workstate_design_time;Username=workstate;Password=workstate"));
+            "Host=localhost;Port=5432;Database=workman_design_time;Username=workman;Password=workman"));
 }

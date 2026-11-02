@@ -123,7 +123,7 @@ CREATE TABLE project_repo (
   slashes, no trailing `/` or `/.git`, and a Windows path (drive letter or UNC) lowercased whole.
 
 The server cannot run git, so the client computes the keys and the server normalises whatever it
-receives. The rule exists twice — `RepoKeys` in `WorkState.Core/Domain/Repos.cs` and
+receives. The rule exists twice — `RepoKeys` in `Workman.Core/Domain/Repos.cs` and
 `agents/server/repo.mjs` — and both test suites run the one table in
 [`repo-keys.json`](repo-keys.json).
 
@@ -854,7 +854,7 @@ Append-only; never updated. `event.seq` is the cursor for the web UI's SSE strea
 `work_history(since_seq)` — which is how a compacted orchestrator asks *"what happened while I was
 gone"* instead of re-reading a file.
 
-A trigger emits `pg_notify('workstate', json_build_object('ws', workspace_id, 'seq', seq, ...))` so
+A trigger emits `pg_notify('workman', json_build_object('ws', workspace_id, 'seq', seq, ...))` so
 the API can push without polling.
 
 ---
@@ -1008,17 +1008,17 @@ CREATE VIEW open_thread AS
 ## 15. Row-level security — the database keeps the tenant
 
 m54, migration `TenantRls`. Every request has exactly one tenant (`RequestTenant`, claim
-`workstate:tenant`), and every query names it in its own SQL. Row-level security is the second line:
+`workman:tenant`), and every query names it in its own SQL. Row-level security is the second line:
 the database itself returns only that tenant's rows, so a query that forgets its filter leaks nothing,
 and a write that names another workspace is refused.
 
 ### The role and the setting
 
 ```sql
-CREATE ROLE workstate_app NOLOGIN;     -- cluster-wide; created once, shared by every database that migrates
-GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO workstate_app;   -- and its sequences
-REVOKE ALL ON "__EFMigrationsHistory", data_protection_key, oauth_key, openiddict_* FROM workstate_app;
-ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO workstate_app;
+CREATE ROLE workman_app NOLOGIN;     -- cluster-wide; created once, shared by every database that migrates
+GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO workman_app;   -- and its sequences
+REVOKE ALL ON "__EFMigrationsHistory", data_protection_key, oauth_key, openiddict_* FROM workman_app;
+ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO workman_app;
 
 ALTER TABLE item ENABLE ROW LEVEL SECURITY;
 ALTER TABLE item FORCE ROW LEVEL SECURITY;
@@ -1030,12 +1030,12 @@ CREATE POLICY tenant_isolation ON item
 The tenant is a scalar subquery so that a plan reads it once, as an InitPlan, and not once per row
 (doc 15 §7).
 
-The server never logs in as `workstate_app`. It connects as it always did, as `POSTGRES_USER` — the
+The server never logs in as `workman_app`. It connects as it always did, as `POSTGRES_USER` — the
 image's superuser and the tables' owner, which no policy confines — and every request-path transaction
 begins with
 
 ```sql
-SELECT set_config('role', 'workstate_app', true), set_config('app.workspace_id', $tenant, true);
+SELECT set_config('role', 'workman_app', true), set_config('app.workspace_id', $tenant, true);
 ```
 
 Both are **transaction-local**: the commit or rollback that ends the transaction ends them, so a pooled
@@ -1077,7 +1077,7 @@ supported: the bypass below and `LEAKPROOF` both need a superuser.
 `RlsTests` reads the catalogue, so a table added later cannot slip past. Every table must be a tenant
 table, forced and with its policy, or one of the global or server-owned tables above. Every view must
 run as its caller. A tenant table added after TenantRls is created with its policy by its own
-migration and listed in `TenantTables` (`WorkState.Core/Data`), which the tests read; TenantRls's own
+migration and listed in `TenantTables` (`Workman.Core/Data`), which the tests read; TenantRls's own
 lists stay what that migration applied.
 
 ### LEAKPROOF — the indexes a policy would otherwise switch off
@@ -1114,18 +1114,18 @@ to be one, as the bypass already does. `Down` marks all four `NOT LEAKPROOF` aga
 carry attributes of built-in functions: a database restored from a dump keeps its migration history and
 loses the flags. So `SchemaOwner` re-asserts them at every start, after migrating. It logs one warning
 line naming the functions when it had to, and nothing when they were already set. A deployment that sets
-`WorkState:Migrate=false` must run the four `ALTER FUNCTION`s itself.
+`Workman:Migrate=false` must run the four `ALTER FUNCTION`s itself.
 `RlsTests.Rls_the_subtree_ref_and_search_indexes_still_serve_reads_under_the_tenant_role` fails if any of
 the four indexes stops serving its predicate as the tenant role.
 
 ### Connections — the tenant helper, and the bypass by name
 
-`WorkStateConnections` (WorkState.Core/Data) is the only code that opens a connection or begins a
+`WorkmanConnections` (Workman.Core/Data) is the only code that opens a connection or begins a
 transaction. `RlsSourceGuardTests` fails on `OpenConnection`, `BeginTransaction`, `new NpgsqlConnection`
 or `dataSource.CreateCommand` anywhere else in the server. It also fails on an EF context outside the
 schema owner, OpenIddict's registration and the offline importer.
 
-- **`TenantAsync()`** — a transaction acting as `workstate_app` in the tenant of the ambient
+- **`TenantAsync()`** — a transaction acting as `workman_app` in the tenant of the ambient
   **`TenantScope`**. The API enters that scope in one middleware right after `UseAuthorization`, which
   is where an endpoint policy's schemes (the cookie, OAuth) put their principal on the request. A
   scope with no tenant, or no scope at all, sees no rows; it does not see all rows.
@@ -1146,7 +1146,7 @@ schema owner, OpenIddict's registration and the offline importer.
 | `Journal` | `EventStream`'s one `LISTEN` connection | it hears every workspace and fans each event out to that workspace's subscribers only |
 
 The owner also runs, outside the helper, the migrations (`SchemaOwner`, at startup), OpenIddict's EF
-stores (its tables hold no tenant rows) and the importer (`tools/WorkState.Import`, an offline tool).
+stores (its tables hold no tenant rows) and the importer (`tools/Workman.Import`, an offline tool).
 
 One request path chooses its tenants itself: `/r/{ref}` is anonymous to the pipeline and authenticates
 the cookie in its handler. It enters the cookie's tenant. To say "this ref is in your other workspace
@@ -1187,15 +1187,15 @@ names what it reads, and the database is the line that holds when one forgets.
 The tenant helper sets three more transaction-local settings with the first two, in the same statement:
 
 ```sql
-SELECT set_config('role', 'workstate_app', true), set_config('app.workspace_id', $tenant, true),
+SELECT set_config('role', 'workman_app', true), set_config('app.workspace_id', $tenant, true),
        set_config('app.user_id', $user, true),
        set_config('app.access_seq', coalesce(a.seq, ''), true),
        set_config('app.hidden_projects', coalesce(a.hidden, ''), true)
-FROM   workstate_project_access($tenant, $user) a;        -- with no user: '' and '', no call
+FROM   workman_project_access($tenant, $user) a;        -- with no user: '' and '', no call
 ```
 
 `$user` is the `TenantScope`'s user, which the API enters with the tenant, from the principal and from
-nothing else (`RequestUser`): the cookie's `sub`, or the `workstate:user-id` of an OAuth token or of a
+nothing else (`RequestUser`): the cookie's `sub`, or the `workman:user-id` of an OAuth token or of a
 `wss_` session a user minted. A principal that names two different users — a cookie beside another
 user's bearer token — enters no tenant at all. `/r/{path}` enters the cookie's user, in the cookie's
 tenant and in each other one it looks in. The server enters a scope only with
@@ -1252,15 +1252,15 @@ that makes it:
 
 A kind change makes or unmakes no root — a root is an item with no parent, whatever its kind — so it has
 no trigger. A move between two existing roots needs none either: each row's root is read from the row.
-`workstate_bump_access_seq` runs as the owner, so the bump lands whatever the writer's policies see.
+`workman_bump_access_seq` runs as the owner, so the bump lands whatever the writer's policies see.
 
-`workstate_project_access(workspace, user)` (owner, `STABLE`) reads the seq and the projects hidden from
+`workman_project_access(workspace, user)` (owner, `STABLE`) reads the seq and the projects hidden from
 the user in one statement, so the list is exactly what that seq stands for. The policies then read:
 
 ```sql
 -- a root:      item, project_member
 no_user OR CASE WHEN unchanged THEN NOT (root = ANY (hidden_at_start))
-                ELSE NOT (root = ANY ((SELECT workstate_hidden_projects())::uuid[])) END
+                ELSE NOT (root = ANY ((SELECT workman_hidden_projects())::uuid[])) END
 -- a row that hangs off an item
 no_user OR (unchanged AND nothing_hidden_at_start) OR EXISTS (SELECT 1 FROM item p WHERE p.id = <column>)
 
@@ -1274,7 +1274,7 @@ no_user OR (unchanged AND nothing_hidden_at_start) OR EXISTS (SELECT 1 FROM item
 
 While the statement reads the seq the transaction began with, the list is the truth: a member of every
 project pays nothing per row — no comparison and no item lookup behind a child row. When it reads another,
-the policy asks `workstate_hidden_projects()` (owner, `STABLE`), which reads the statement's own snapshot.
+the policy asks `workman_hidden_projects()` (owner, `STABLE`), which reads the statement's own snapshot.
 An InitPlan runs only when its branch is reached, so that function runs only after a change.
 
 **Fail-closed.** The seq and the change it marks commit together, and every statement reads both from its
@@ -1299,7 +1299,7 @@ block), and no reader waits.
 ### The paths that see every project, and the ones the database cannot keep
 
 - **A project's member list.** `GET|POST|DELETE /api/projects/{id}/members` run in a tenant transaction
-  that hides nothing (`WorkStateConnections.TenantEveryProjectAsync(ProjectBypass.Membership)`), because a
+  that hides nothing (`WorkmanConnections.TenantEveryProjectAsync(ProjectBypass.Membership)`), because a
   workspace admin manages a project's members without being one. The writer checks that the caller is a
   member or an admin, and reads the project's ref and its members, never its work. The admin pages run as
   the owner (§15) and name a project only in the refusal to remove its last member.

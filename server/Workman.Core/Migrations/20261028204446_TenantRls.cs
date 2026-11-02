@@ -80,7 +80,7 @@ namespace Workman.Core.Migrations
         /// <summary>A view runs as its owner unless told otherwise, and the owner is not confined.</summary>
         public static readonly IReadOnlyList<string> Views = ["item_rollup", "open_thread"];
 
-        private const string Role = WorkmanConnections.AppRole;
+        private const string Role = WorkmanNames.OldAppRole;
 
         private static string OfItem(string table)
             => $"EXISTS (SELECT 1 FROM item p WHERE p.id = {table}.item_id AND p.workspace_id = {Tenant})";

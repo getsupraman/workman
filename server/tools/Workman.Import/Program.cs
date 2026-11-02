@@ -2,8 +2,8 @@ using System.Text;
 using Workman.Import;
 
 var roots = new List<string>();
-var connection = Environment.GetEnvironmentVariable("WORKSTATE_CONNECTION")
-                 ?? "Host=localhost;Port=55433;Database=workstate;Username=workstate;Password=workstate";
+var connection = Environment.GetEnvironmentVariable("WORKMAN_CONNECTION")
+                 ?? "Host=localhost;Port=55433;Database=workman;Username=workman;Password=workman";
 var workspace = "import";
 string? reportPath = null;
 var ephemeral = false;

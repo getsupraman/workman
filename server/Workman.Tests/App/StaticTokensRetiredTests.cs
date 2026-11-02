@@ -25,9 +25,9 @@ public sealed class StaticTokensRetiredTests(PostgresFixture fixture)
             Ct,
             configure: builder => builder.Configuration.AddInMemoryCollection(new Dictionary<string, string?>
             {
-                ["WorkState:Auth:WorkerToken"] = "",
-                ["WorkState:Auth:OrchestratorToken"] = "",
-                ["WorkState:Auth:ControllerToken"] = "",
+                ["Workman:Auth:WorkerToken"] = "",
+                ["Workman:Auth:OrchestratorToken"] = "",
+                ["Workman:Auth:ControllerToken"] = "",
             }));
 
         foreach (var token in new[] { ReadServer.WorkerToken, ReadServer.OrchestratorToken, ReadServer.ControllerToken })
