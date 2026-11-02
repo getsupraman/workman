@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Report a security vulnerability
+    url: https://github.com/getsupraman/workman/security/advisories/new
+    about: Never in a public issue. Report it privately; SECURITY.md says what is in scope.
+  - name: Security policy
+    url: https://github.com/getsupraman/workman/blob/main/SECURITY.md
+    about: How to report a vulnerability, and what is in scope.
