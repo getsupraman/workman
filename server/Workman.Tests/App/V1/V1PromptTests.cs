@@ -27,6 +27,9 @@ public sealed partial class V1PromptTests(PostgresFixture fixture)
     [GeneratedRegex(@"\bwork_[a-z_]+\(")]
     private static partial Regex Call();
 
+    [GeneratedRegex(@"\bC\d+\b")]
+    private static partial Regex RuleRef();
+
     [GeneratedRegex(@"`([^`]+)`")]
     private static partial Regex FirstRef();
 
@@ -34,7 +37,7 @@ public sealed partial class V1PromptTests(PostgresFixture fixture)
     private static partial Regex StartFrom();
 
     /// <summary>The verbs of docs/language.md that reshape the board, as a prompt would say them.</summary>
-    [GeneratedRegex(@"\b(close|cancel|defer|merge|move|archive)\b", RegexOptions.IgnoreCase)]
+    [GeneratedRegex(@"\b(close|cancel|defer|merge|move|archive|retire)\b", RegexOptions.IgnoreCase)]
     private static partial Regex Reshapes();
 
     /// <summary>
@@ -240,6 +243,48 @@ public sealed partial class V1PromptTests(PostgresFixture fixture)
         }
 
         Assert.True(seen >= 15, $"only {seen} prompts were checked");
+    }
+
+    /// <summary>
+    /// Review rules counts what its agent will read: the workspace rules, the scope's own and its
+    /// parents', and those on anything inside it; a retired rule is not one of them.
+    /// </summary>
+    [Fact]
+    public async Task Review_rules_shows_with_active_rules_in_scope_counts_them_and_guards_red_lines()
+    {
+        var w = await CreateAsync();
+        var writer = w.World.Writer;
+        var actor = WriteSeed.Orchestrator;
+
+        Assert.DoesNotContain("rules", Keys(await PromptsAsync(w.World, w.World.ProjectId)));
+        Assert.DoesNotContain("rules", Keys(await PromptsAsync(w.World, w.World.RunId)));
+
+        Ok(await writer.ConstrainAsync(
+            w.World.WorkspaceId, actor, null, new ConstrainArgs(Kind: "red_line", Text: "never push to main", Route: "open a PR"), Ct));
+        Ok(await writer.ConstrainAsync(
+            w.World.WorkspaceId, actor, null, new ConstrainArgs(Kind: "command", Text: "tests run with dotnet test", Scope: "1.1"), Ct));
+        var retired = await writer.ConstrainAsync(
+            w.World.WorkspaceId, actor, null, new ConstrainArgs(Kind: "stack_fact", Text: "Postgres 16", Scope: "run-a"), Ct);
+        Ok(retired);
+        Ok(await writer.ConstrainAsync(
+            w.World.WorkspaceId, actor, RuleRef().Match(retired.Text).Value, new ConstrainArgs(Retire: true, Reason: "Postgres 17 now"), Ct));
+
+        var project = Assert.Single(await PromptsAsync(w.World, w.World.ProjectId), p => p.Key == "rules");
+        var run = Assert.Single(await PromptsAsync(w.World, w.World.RunId), p => p.Key == "rules");
+        Assert.Equal(2, project.Count);
+        Assert.Equal(2, run.Count);
+        Assert.Contains("2 active rule(s)", run.Text, StringComparison.Ordinal);
+        Assert.Equal(["resume", "stepback", "rules", "blocking"], Keys(await PromptsAsync(w.World, w.World.RunId)));
+        Assert.DoesNotContain("rules", Keys(await PromptsAsync(w.World, w.DoneRun)));
+
+        foreach (var prompt in (PromptAction[])[project, run])
+        {
+            Assert.False(Call().IsMatch(prompt.Text), prompt.Text);
+            Assert.Matches(StartFrom(), prompt.Text);
+            Assert.Matches(Reshapes(), prompt.Text);
+            Assert.Contains(PromptCatalogue.ProposeAndWait, prompt.Text, StringComparison.Ordinal);
+            Assert.Contains("Never retire a red line without the human's explicit yes for that rule.", prompt.Text, StringComparison.Ordinal);
+        }
     }
 
     [Fact]

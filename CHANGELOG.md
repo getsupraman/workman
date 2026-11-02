@@ -16,6 +16,9 @@ All notable changes to the Workman server and the `workman` plugin are recorded 
 - New prompts: *Plan a feature*, *Clean up* (replaces *Housekeeping*; its count is the project's open items),
   and *Step back* on a project; *Finalize run*, *Step back* and *What's blocking* on a run; *Still needed?* on
   an item. *Status report* reads *Where are we*, and the run's *Audit* reads *Did we cheat?*.
+- *Review rules* on a project and a run, shown while a binding rule is active in scope: realign the rules with
+  the current code and the human's later decisions, propose keep, reword, retire or rescope and the missing
+  rules, and never retire a red line without an explicit yes for it.
 - `docs/language.md`: the vocabulary for talking to an AI that uses Workman, with example conversations.
 
 ### Plugin 2.0.1

@@ -157,11 +157,13 @@ apply, in this order:
 | project | `plan` · Plan a feature | check the code, write a run, stop for approval (the human fills in the feature) | always | — |
 | project | `cleanup` · Clean up | read every open item and loose end, check each against the code, then close, cancel, defer, merge, update and restructure into clear runs | open leaves or loose ends | the project's open leaves; the text also names the loose ends: every row `work_threads(scope:project)` lists plus the expired claims its attention block names that no stale row covers (`BoardReader.UnclosedCountAsync`) |
 | project | `stepback` · Step back | question every open item against the current code and the project's goal | open leaves | — |
+| project | `rules` · Review rules | read every active binding rule in scope, check each against the current code and later decisions, propose keep, reword, retire or rescope and the missing ones; never retire a red line without the human's yes for it | an active rule in scope | the active rules: workspace-wide, on the project, and on anything under it (`BoardQueries.RulesInScopeCountAsync`) |
 | project | `triage` · Triage backlog | do now, later, drop or needs a decision, then a queue | n &gt; 0 | the project brief's backlog: open leaves of the backlog run, and open follow-ups anywhere under the project |
 | project | `finalize` · Finalize | carry leftovers to the backlog, close the runs, archive | not archived, at least one run besides the backlog, and no such run has an unclosed leaf | — |
 | run | `resume` · Resume | pick up the run where it stopped and work the loop | the run is not closed | — |
 | run | `finalize-run` · Finalize run | clean up and reorder what is left, explain what the done guard still wants, offer to start the rest | not closed, and a leaf under it is done | the run's open leaves |
 | run | `stepback` · Step back | question every open item against the current code and the run's goal | not closed, with open leaves | — |
+| run | `rules` · Review rules | the same, for the run | not closed, with an active rule in scope | the active rules: workspace-wide, on the run and its project, and on anything under the run |
 | run | `blocking` · What's blocking | every blocked item, what it waits on, who could free it; makes no writes | not closed, with a blocked leaf | the run's blocked leaves |
 | run | `audit` · Did we cheat? | reported against verified, weak verify commands, forced closes, quiet deferrals; makes no writes | a leaf under the run is done | — |
 | item | `work` · Work on this | do it from the worker brief and hand it back with a report | a task, follow-up or subtask that is open or ready | — |
@@ -176,7 +178,7 @@ Rules every template keeps (`V1PromptTests` holds each one):
    that resolves to that item alone (`run-a/1.2`, never a bare `1.2` that matches two items).
 2. Plain, short, and a goal rather than a recipe: it names no `work_*` tool and says what to achieve
    in the Workman words (brief, the loop, done guard, defer to the backlog, binding rule, evidence).
-3. A prompt that tells the agent to close, cancel, defer, merge, move or archive says, verbatim,
+3. A prompt that tells the agent to close, cancel, defer, merge, move, archive or retire says, verbatim,
    *"Propose first and wait for the human's yes: list every change you intend to make, and write
    nothing until the human answers yes."* (`PromptCatalogue.ProposeAndWait`). It closes only with
    evidence it ran itself, defers as a move with a reason, cancels with a reason, and never forces

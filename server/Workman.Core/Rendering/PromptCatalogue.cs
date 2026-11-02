@@ -13,7 +13,7 @@ public enum PromptScope
 /// What the catalogue's predicates and templates read about one scope. <see cref="Ref"/> is the
 /// callable form: bare while unique in the workspace, else the qualified form that resolves alone.
 /// <see cref="Open"/> and <see cref="Blocked"/> count the leaves not closed, and the blocked ones,
-/// under a project or a run.
+/// under a project or a run; <see cref="Rules"/> the active binding rules a review of it reads.
 /// </summary>
 public sealed record PromptFacts(
     PromptScope Scope,
@@ -27,7 +27,8 @@ public sealed record PromptFacts(
     bool Finalizable = false,
     int DoneLeaves = 0,
     int Open = 0,
-    int Blocked = 0);
+    int Blocked = 0,
+    int Rules = 0);
 
 /// <summary>One button: its label, the count it shows if any, and the whole prompt it copies.</summary>
 public sealed record PromptAction(string Key, string Label, int? Count, string Text);
@@ -64,11 +65,13 @@ public static class PromptCatalogue
         new("plan", "Plan a feature", PromptScope.Project, _ => true, _ => null, Plan, Writes: false),
         new("cleanup", "Clean up", PromptScope.Project, f => f.Open > 0 || f.Unclosed > 0, f => f.Open, Cleanup, Writes: true),
         new("stepback", "Step back", PromptScope.Project, f => f.Open > 0, _ => null, StepBackProject, Writes: true),
+        new("rules", "Review rules", PromptScope.Project, f => f.Rules > 0, f => f.Rules, ReviewRulesProject, Writes: true),
         new("triage", "Triage backlog", PromptScope.Project, f => f.Backlog > 0, f => f.Backlog, Triage, Writes: true),
         new("finalize", "Finalize", PromptScope.Project, f => f.Finalizable, _ => null, Finalize, Writes: true),
         new("resume", "Resume", PromptScope.Run, f => !Closed(f.Status), _ => null, Resume, Writes: false),
         new("finalize-run", "Finalize run", PromptScope.Run, f => !Closed(f.Status) && f.DoneLeaves > 0, f => f.Open, FinalizeRun, Writes: true),
         new("stepback", "Step back", PromptScope.Run, f => !Closed(f.Status) && f.Open > 0, _ => null, StepBackRun, Writes: true),
+        new("rules", "Review rules", PromptScope.Run, f => !Closed(f.Status) && f.Rules > 0, f => f.Rules, ReviewRulesRun, Writes: true),
         new("blocking", "What's blocking", PromptScope.Run, f => !Closed(f.Status) && f.Blocked > 0, f => f.Blocked, Blocking, Writes: false),
         new("audit", "Did we cheat?", PromptScope.Run, f => f.DoneLeaves > 0, _ => null, Audit, Writes: false),
         new("work", "Work on this", PromptScope.Item, f => Workable(f.Kind) && f.Status is ItemStatus.Open or ItemStatus.Ready, _ => null, Work, Writes: false),
@@ -139,6 +142,26 @@ public static class PromptCatalogue
             $"Step back on {Named(f)}: does the open work still make sense?",
             $"{From(f)}. Read the project's goal, then every open run and every backlog item.",
             "the project's goal");
+
+    private static string ReviewRulesProject(PromptFacts f)
+        => ReviewRules(f, "those on the project");
+
+    private static string ReviewRulesRun(PromptFacts f)
+        => ReviewRules(f, "those on the run and its project");
+
+    private static string ReviewRules(PromptFacts f, string where)
+        => Lines(
+            $"Review the binding rules of {Named(f)} and realign them with the code and the standing decisions: {f.Rules} active rule(s).",
+            $"{From(f)}, then read every binding rule active in scope: the workspace-wide ones, {where}, and those on anything inside it. Read the decision notes and the answered questions too: they hold what the human has decided since.",
+            "Check each rule:",
+            "- is it still true of the CURRENT code? The files, commands, hosts and names it cites may have moved or been renamed - look them up;",
+            "- does it contradict a newer decision or a standing approval the human gave?",
+            "- is it a duplicate of another rule, too vague to act on, or a red line without its route?",
+            "- is its kind right (red line, command, stack fact, domain rule, generated code), and does it bind the right scope?",
+            "For each, answer keep, reword, retire or rescope, with the evidence: a file and line, a commit, or the note that decided it. A rule is replaced, never edited: to reword or rescope one, retire it and add the new one.",
+            "Then propose the rules that are missing: what the code or the recent decisions show should bind the work and nothing says yet.",
+            ProposeAndWait,
+            "Never retire a red line without the human's explicit yes for that rule.");
 
     private static string Triage(PromptFacts f)
     {

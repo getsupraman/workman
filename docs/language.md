@@ -106,7 +106,11 @@ ref, so it can be cited, questioned or retired. The kinds:
 - **generated code**: code that is generated, so it is regenerated rather than edited by hand.
 
 *Use it* when you catch yourself saying the same thing twice. *Say:* "Make that a binding rule."
-"Make it a red line: never push to main; open a PR." "Retire rule C3, it's obsolete."
+"Make it a red line: never push to main; open a PR." "Retire rule C3, it's obsolete." "Realign the
+rules with the code."
+
+A rule is never edited in place. To reword it or change what it binds, the AI retires the old one
+and adds the new one, so the record shows what bound the work and when that changed.
 
 **Assumption.** A decision taken on incomplete knowledge. It records how sure the AI is, what
 reversing it would cost and when to look at it again. Past that point it shows up in every
@@ -209,11 +213,12 @@ written, across items, rules, assumptions and notes.
 | "Clean up the project." | reads every open item, checks each against the code, then *proposes* closes, cancels, merges, moves and updates, and waits for your yes |
 | "Step back." | questions each open item against the current code and the goal, and proposes keep, rewrite, merge, move, defer or cancel |
 | "Triage the backlog." | sorts the backlog into do now, later, drop and needs a decision, and proposes an ordered queue |
+| "Realign the rules." / "Review the rules." | reads every active binding rule in scope, checks each against the current code and your later decisions, and proposes keep, reword, retire or rescope, plus the rules that are missing. It never retires a red line without your yes for that rule |
 | "Did we cheat?" | compares what was reported with what was verified and lists every gap, without changing anything |
 | "What's blocking?" | lists every blocked item, what it waits on, and who or what could free it |
 | "Where are we?" | reports what landed, what is open and what needs you |
 
-Anything that closes, cancels, defers, merges, moves or archives in bulk is proposed first. The AI
+Anything that closes, cancels, defers, merges, moves, archives or retires in bulk is proposed first. The AI
 lists every change and writes nothing until you say yes. A single, explicit instruction ("cancel
 4.2") is that yes.
 
@@ -264,6 +269,18 @@ lists every change and writes nothing until you say yes. A single, explicit inst
 > cancel, merge and keep. I'll write nothing until you say yes.
 > **You:** Yes, except keep `bulk-import`.
 
+**Realigning the rules.**
+
+> **You:** Realign the rules with the code. We moved to pnpm last month.
+> **AI:** *(reads every active rule in the project and the decision notes)* Of 9 rules: C2 says "run
+> `npm test`", but the repo uses pnpm since commit `4f1c2e9`, so I'd retire it and add "run
+> `pnpm test`". C5 cites `src/legacy/`, which is gone, so retire it. C7 duplicates C3, so retire C7.
+> C1 is a red line ("never edit `src/gen/`") and still true, so keep it. The decision note from
+> 12 October approves pushing straight to the release branch, which contradicts red line C4. Retire
+> C4? I need your yes for that one by name. One rule is missing: the new `make gen` step. I've
+> written nothing yet.
+> **You:** Yes to all, including retiring C4.
+
 **Did we cheat?**
 
 > **You:** Review the run. Did we cheat?
@@ -273,8 +290,8 @@ lists every change and writes nothing until you say yes. A single, explicit inst
 ## Prompts on the dashboard
 
 The dashboard has buttons that copy a ready prompt in these words for a fresh session: Continue,
-Where are we, Plan a feature, Clean up, Step back, Triage backlog and Finalize on a project; Resume,
-Finalize run, Step back, What's blocking and Did we cheat? on a run; Work on this, Investigate block
+Where are we, Plan a feature, Clean up, Step back, Review rules, Triage backlog and Finalize on a
+project; Resume, Finalize run, Step back, Review rules, What's blocking and Did we cheat? on a run; Work on this, Investigate block
 and Still needed? on an item. Each prompt starts from the brief of the scope it was copied from, and
 every prompt that changes the shape of the work proposes first and waits for your yes. The full table
 is in [13-dashboard.md](13-dashboard.md#the-prompt-catalogue).
