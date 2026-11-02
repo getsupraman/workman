@@ -66,7 +66,7 @@ namespace Workman.Core.Migrations
                 columns: new[] { "user_id", "workspace_id" });
 
             // Default privileges grant a new table to the role only when the role that set them creates it.
-            migrationBuilder.Sql($"GRANT SELECT, INSERT, UPDATE, DELETE ON project_member TO {WorkmanConnections.AppRole};");
+            migrationBuilder.Sql($"GRANT SELECT, INSERT, UPDATE, DELETE ON project_member TO {WorkmanNames.OldAppRole};");
 
             foreach (var (table, column) in Direct)
             {
