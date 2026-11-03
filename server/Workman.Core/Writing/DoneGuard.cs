@@ -9,6 +9,9 @@ public sealed record VerificationFact(bool Passed, string? Command, VerifyRunner
 
 public sealed record BlockerFact(string Ref, string Title);
 
+/// <summary>An open finding somewhere in a run's or phase's subtree, at any severity and depth.</summary>
+public sealed record FindingFact(string Ref, string Title, string? Severity);
+
 /// <summary>
 /// Everything doc 07 §3 reads, gathered in one round trip. It is one record rather than five queries
 /// interleaved with five checks because the refusal has to list <b>every</b> unmet condition at once
@@ -25,7 +28,8 @@ public sealed record DoneFacts(
     IReadOnlyList<CriterionFact> Criteria,
     IReadOnlyList<VerificationFact> Verifications,
     IReadOnlyList<string> OpenChildren,
-    IReadOnlyList<BlockerFact> Blockers);
+    IReadOnlyList<BlockerFact> Blockers,
+    IReadOnlyList<FindingFact>? SubtreeFindings = null);
 
 /// <summary>
 /// The five conditions of doc 07 §3, as a pure function of the facts. No database here, so the
@@ -45,8 +49,73 @@ public static class DoneGuard
         Children(facts, unmet);
         Blockers(facts, unmet);
         Commit(facts, unmet);
+        SubtreeFindings(facts, unmet);
 
         return unmet;
+    }
+
+    /// <summary>
+    /// The success line of a task close over open non-blocker findings: the close goes through, but
+    /// the findings are named with the two calls that resolve them, so they are not left behind
+    /// silently. Empty when there are none.
+    /// </summary>
+    public static IReadOnlyList<string> OpenFindingsNotice(string reference, IReadOnlyList<BlockerFact> findings)
+    {
+        if (findings.Count == 0)
+        {
+            return [];
+        }
+
+        var lines = new List<string>
+        {
+            $"    findings  {findings.Count} open under {reference} — they do not hold this close, and "
+            + "nothing closes them for you:",
+        };
+
+        lines.AddRange(findings.Take(Listed).Select(f => $"              {f.Ref}  {Glyph.Flat(f.Title)}"));
+
+        if (findings.Count > Listed)
+        {
+            lines.Add($"              and {findings.Count - Listed} more — work_threads(scope:\"{reference}\", "
+                      + "include:\"findings\")");
+        }
+
+        var first = findings[0].Ref;
+        lines.Add($"              → work_status(ref:\"{first}\", to:\"done\", commit:\"…\")");
+        lines.Add($"              → work_status(ref:\"{first}\", to:\"deferred\", target:\"backlog\", reason:\"…\")");
+
+        return lines;
+    }
+
+    /// <summary>
+    /// Condition 6 — a run or phase closed over open findings. A task may close past a minor finding
+    /// (condition 4 holds it only at blocker severity), but the run is where they would otherwise be
+    /// forgotten: every open finding in the subtree holds it, whatever its severity or depth.
+    /// </summary>
+    private static void SubtreeFindings(DoneFacts facts, List<Unmet> unmet)
+    {
+        var findings = facts.SubtreeFindings ?? [];
+
+        foreach (var finding in findings.Take(Listed))
+        {
+            var severity = finding.Severity is { Length: > 0 } s ? $" ({s})" : string.Empty;
+
+            unmet.Add(new Unmet(
+                $"finding {finding.Ref}{severity} \"{Glyph.Flat(finding.Title)}\" is open under {facts.Ref}",
+                [
+                    $"work_status(ref:\"{finding.Ref}\", to:\"done\", commit:\"<sha>\")",
+                    $"work_status(ref:\"{finding.Ref}\", to:\"cancelled\", reason:\"…\")",
+                    $"work_status(ref:\"{finding.Ref}\", to:\"deferred\", target:\"backlog\", reason:\"…\") "
+                    + $"moves it out of {facts.Ref}",
+                ]));
+        }
+
+        if (findings.Count > Listed)
+        {
+            unmet.Add(new Unmet(
+                $"{findings.Count - Listed} further findings are open under {facts.Ref}",
+                $"work_threads(scope:\"{facts.Ref}\", include:\"findings\")"));
+        }
     }
 
     /// <summary>Condition 1 — the 424 unchecked boxes in runs whose ledgers declared them finished.</summary>

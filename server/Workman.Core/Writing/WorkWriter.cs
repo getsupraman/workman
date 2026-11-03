@@ -198,6 +198,10 @@ public sealed partial class WorkWriter(NpgsqlDataSource dataSource, BoardQueries
             await AnswerAsync(connection, transaction, item, actor, args.Reason!.Trim(), cancellationToken);
         }
 
+        var findings = status == ItemStatus.Done
+            ? await OpenFindingsAsync(connection, transaction, item, cancellationToken)
+            : [];
+
         var claimLine = status == ItemStatus.InProgress
             ? await AcquireAsync(connection, transaction, item, actor, args.Tree, cancellationToken)
             : await ReleaseAsync(connection, transaction, item, status, cancellationToken);
@@ -222,7 +226,7 @@ public sealed partial class WorkWriter(NpgsqlDataSource dataSource, BoardQueries
 
         await transaction.CommitAsync(cancellationToken);
 
-        return WriteResult.Ok(Wrote(item, status, args, forced, claimLine, carried));
+        return WriteResult.Ok(Wrote(item, status, args, forced, claimLine, carried, findings));
     }
 
     private static string Wrote(
@@ -231,7 +235,8 @@ public sealed partial class WorkWriter(NpgsqlDataSource dataSource, BoardQueries
         StatusArgs args,
         string[]? forced,
         string? claimLine,
-        string? carried)
+        string? carried,
+        IReadOnlyList<BlockerFact> findings)
     {
         var lines = new List<string>
         {
@@ -270,6 +275,8 @@ public sealed partial class WorkWriter(NpgsqlDataSource dataSource, BoardQueries
             lines.Add("            work_audit lists permanently. Unmet:");
             lines.AddRange(forced.Select(f => $"              · {Glyph.Flat(f)}"));
         }
+
+        lines.AddRange(DoneGuard.OpenFindingsNotice(item.Ref, findings));
 
         lines.Add(string.Empty);
         lines.Add(status switch
@@ -634,6 +641,10 @@ public sealed partial class WorkWriter(NpgsqlDataSource dataSource, BoardQueries
         var hasCommit = commit is { Length: > 0 } || await connection.ExecuteScalarAsync<bool>(
             new CommandDefinition(commitSql, parameters, transaction, cancellationToken: cancellationToken));
 
+        var subtreeFindings = item.Kind is "run" or "phase"
+            ? await SubtreeFindingsAsync(connection, transaction, item, cancellationToken)
+            : null;
+
         return new DoneFacts(
             item.Ref,
             item.Kind,
@@ -644,7 +655,59 @@ public sealed partial class WorkWriter(NpgsqlDataSource dataSource, BoardQueries
             criteria,
             verifications,
             children,
-            blockers);
+            blockers,
+            subtreeFindings);
+    }
+
+    /// <summary>
+    /// Condition 6's facts: every open finding below a run or phase, at any depth. <c>ancestors</c>
+    /// is the trigger-maintained path every subtree read in Queries/ uses. A blocker directly on the
+    /// item is left to condition 4, so it is not listed twice.
+    /// </summary>
+    private static async Task<IReadOnlyList<FindingFact>> SubtreeFindingsAsync(
+        NpgsqlConnection connection,
+        NpgsqlTransaction transaction,
+        ItemRow item,
+        CancellationToken cancellationToken)
+    {
+        const string sql =
+            """
+            SELECT ref AS "Ref", title AS "Title", severity AS "Severity"
+            FROM   item
+            WHERE  ancestors @> ARRAY[@id]::uuid[]
+              AND  kind = 'finding'
+              AND  status NOT IN ('done','cancelled','superseded')
+              AND  NOT (parent_id = @id AND severity = 'blocker')
+            ORDER  BY array_length(ancestors, 1), seq, ref;
+            """;
+
+        return (await connection.QueryAsync<FindingFact>(new CommandDefinition(
+            sql, new { id = item.Id }, transaction, cancellationToken: cancellationToken))).AsList();
+    }
+
+    /// <summary>
+    /// The open non-blocker findings directly under an item that has just closed. They do not hold a
+    /// task (condition 4), so the close names them rather than letting them outlive their run unseen.
+    /// </summary>
+    private static async Task<IReadOnlyList<BlockerFact>> OpenFindingsAsync(
+        NpgsqlConnection connection,
+        NpgsqlTransaction transaction,
+        ItemRow item,
+        CancellationToken cancellationToken)
+    {
+        const string sql =
+            """
+            SELECT ref AS "Ref", title AS "Title"
+            FROM   item
+            WHERE  parent_id = @id
+              AND  kind = 'finding'
+              AND  severity IS DISTINCT FROM 'blocker'
+              AND  status NOT IN ('done','cancelled','superseded')
+            ORDER  BY seq, ref;
+            """;
+
+        return (await connection.QueryAsync<BlockerFact>(new CommandDefinition(
+            sql, new { id = item.Id }, transaction, cancellationToken: cancellationToken))).AsList();
     }
 
     private async Task<(ScopeRef? Item, string? Refusal)> ResolveAsync(

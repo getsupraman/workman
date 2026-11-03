@@ -7,6 +7,21 @@ All notable changes to the Workman server and the `workman` plugin are recorded 
 
 ## [Unreleased]
 
+### Added
+
+- A task close names the findings it leaves open. When `work_status(ref, "done")` succeeds on an item with
+  open non-blocker findings directly under it, the result lists up to three as `ref  title`, counts the rest,
+  and gives the two calls that resolve them (`to:"done", commit:…` and `to:"deferred", target:"backlog"`).
+  The close still goes through. No migration.
+
+### Changed
+
+- A run or phase no longer closes over open findings. Every open finding anywhere in its subtree, at any
+  severity and depth, is now an unmet condition of `work_status(run|phase, "done")`, listed up to three with a
+  count of the rest, each with its resolving calls (done with a commit, cancelled with a reason, or deferred
+  with a target, which moves it out of the run). Tasks and sub-tasks are unchanged: a minor finding still does
+  not hold a task close. No migration.
+
 ## [2.2.0] — 2026-11-03
 
 Server 2.2.0 and plugin 2.2.0. No migration.
