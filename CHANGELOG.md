@@ -7,6 +7,18 @@ All notable changes to the Workman server and the `workman` plugin are recorded 
 
 ## [Unreleased]
 
+## [2.3.1] — 2026-11-03
+
+Server 2.3.1 and plugin 2.3.1. No migration.
+
+### Fixed
+
+- A blocker in another run or project prints as a ref that resolves to it alone. Links are workspace-wide, but
+  the `work_get` and `work_tree` blocked-by flag (`← 3`), the `work_threads(include:"deps")` lines and the
+  `work_audit` dep rows printed the blocker by its bare ref, which could name a different item or several. A
+  blocker in the waiting item's run still prints bare; one anywhere else prints the shortest ref that resolves
+  to it alone, such as `other-project/r1/3`, and the call hints on those lines use the same string.
+
 ## [Plugin 2.3.1] — 2026-11-03
 
 - Changed: the agents skill names `agent_launch` without the `mcp__plugin_workman_agents__` prefix. A session
