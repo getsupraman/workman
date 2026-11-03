@@ -7,6 +7,10 @@ All notable changes to the Workman server and the `workman` plugin are recorded 
 
 ## [Unreleased]
 
+## [2.3.0] — 2026-11-03
+
+Server 2.3.0 and plugin 2.3.0. No migration.
+
 ### Added
 
 - A task close names the findings it leaves open. When `work_status(ref, "done")` succeeds on an item with
