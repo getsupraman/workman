@@ -25,6 +25,8 @@ export type Rollup = {
   open: number
   cancelled: number
   superseded: number
+  /** Unclosed findings anywhere below: never part of `total`. */
+  findingsOpen: number
 }
 
 export type Session = {

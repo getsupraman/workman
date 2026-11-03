@@ -17,7 +17,8 @@ public sealed record RollupView(
     int Blocked,
     int Open,
     int Cancelled,
-    int Superseded);
+    int Superseded,
+    int FindingsOpen);
 
 public sealed record SessionView(
     Guid Id,

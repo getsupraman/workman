@@ -3,7 +3,7 @@ import { A, useNavigate, useParams, useSearchParams } from '@solidjs/router'
 import * as api from '../api.ts'
 import type { Board, BoardRow, ItemRef } from '../api.ts'
 import { load } from '../store.ts'
-import { CLOSED, progress, rowState, tally } from '../state.ts'
+import { CLOSED, findingsOpen, progress, rowState, tally } from '../state.ts'
 import { FILTERS, asFilter, cancelledLines, plan, planQuery as query, type Filter } from '../plan.ts'
 import { SHOW_CANCELLED, boardHref, runHref } from '../nav.ts'
 import { UNKNOWN, claimHolder, short } from '../format.ts'
@@ -141,7 +141,10 @@ function RunHeader(props: { board: Board }) {
           <CopyRef item={props.board.run} />
         </div>
         <h1>{short(props.board.run.title)}</h1>
-        <div class="sub">{progress(t())}</div>
+        <div class="sub">
+          {progress(t())}
+          <Show when={findingsOpen(props.board.rollup.findingsOpen)}>{(text) => <span> {text()}</span>}</Show>
+        </div>
         <PromptActions scope={props.board.run.id} />
       </div>
       <Segs leaves={t().leaves} style={{ width: 'min(420px, 40vw)' }} />
@@ -165,8 +168,8 @@ function PlanList(props: {
           <Show
             when={group().head}
             fallback={
-              <Show when={groups().length > 1}>
-                <div class="group-h">Tasks</div>
+              <Show when={group().label === 'Findings' || groups().length > 1}>
+                <div class="group-h">{group().label}</div>
               </Show>
             }
           >

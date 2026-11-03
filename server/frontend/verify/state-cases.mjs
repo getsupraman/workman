@@ -5,7 +5,7 @@
  *
  *   node verify/state-cases.mjs
  */
-import { CLOSED, LEAF, answer, countTitle, counted, independent, progress, state, tally } from '../src/state.ts'
+import { CLOSED, LEAF, answer, countTitle, counted, findingsOpen, independent, progress, state, tally } from '../src/state.ts'
 import { DEFAULT_FILTER, FILTERS, asFilter, cancelledLines, plan, planQuery, withoutCancelled } from '../src/plan.ts'
 import { boardHref, copyValue, itemHref, pathCrumbs, routeReads } from '../src/nav.ts'
 import { appIconHref, consentForm, consentStep, consentView, hiddenFields, iconStep, initials, isConnectPath, returnTarget, scopeLines, signInHref, signInStart, signInStep } from '../src/connect.ts'
@@ -187,6 +187,32 @@ check('a phase whose only child is cancelled is not empty', shape(plan(onlyCance
 check('a phase with children is still not counted itself', tally(rows).total, 6)
 check('hasChildren alone keeps a phase out of the count', tally([row(ref('phase', 'open'), 1, { hasChildren: true })]).total, 0)
 check('an empty run or a finding is not an item of work', tally([row(ref('run', 'open'), 0), row(ref('finding', 'open'), 1)]).total, 0)
+
+console.log('\n── findings on the run: their own group, never counted ──────────────────────')
+// 8 of 10 done over open findings filed on the run: they list after the phases, not among the tasks.
+const findingRows = [
+  row(ref('run', 'in_progress'), 0),
+  row(ref('task', 'done', 'shipped'), 1, { verification: proven }),
+  row(ref('finding', 'open', 'F-run'), 1),
+  row(ref('phase', 'in_progress', 'P'), 1, { hasChildren: true }),
+  row(ref('task', 'open', 'in-p'), 2, { hasChildren: true }),
+  row(ref('finding', 'open', 'F-task'), 3),
+  row(ref('finding', 'done', 'F-closed'), 1),
+  row(ref('task', 'open', 'loose-late'), 1),
+]
+const findingBoard = { rows: findingRows }
+const labelled = (groups) => groups.map((g) => [g.head?.item.title ?? g.label, g.rows.map((r) => r.row.item.title)])
+check('Open: Tasks, the phase, then Findings', labelled(plan(findingBoard, 'open')), [
+  ['Tasks', ['loose-late']], ['P', ['in-p', 'F-task']], ['Findings', ['F-run']],
+])
+check('All: a closed finding on the run is still under Findings', labelled(plan(findingBoard, 'all')), [
+  ['Tasks', ['shipped', 'loose-late']], ['P', ['in-p', 'F-task']], ['Findings', ['F-run', 'F-closed']],
+])
+check('no findings on the run, no Findings group', labelled(plan(empty, 'all')).map((g) => g[0]), ['Tasks', 'Empty'])
+check('the X of Y leaves findings out: 1 of 3', [tally(findingRows).done, tally(findingRows).total], [1, 3])
+check('header: several open', findingsOpen(3), '3 findings open.')
+check('header: one open', findingsOpen(1), '1 finding open.')
+check('header: none, nothing printed', [findingsOpen(0), findingsOpen(undefined)], ['', ''])
 
 console.log('\n── the run page opens on Open, and its links keep an explicit filter ───────')
 check('no filter in the URL is Open', asFilter(undefined), 'open')

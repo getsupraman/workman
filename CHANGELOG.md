@@ -14,6 +14,14 @@ All notable changes to the Workman server and the `workman` plugin are recorded 
   and gives the two calls that resolve them (`to:"done", commit:…` and `to:"deferred", target:"backlog"`).
   The close still goes through. No migration.
 
+- Open findings are shown as what they are. Findings are still never part of an "X of Y", but a run page could
+  read "8 of 10 done" over dozens of open findings listed flat among its tasks. The run page now lists the
+  findings filed directly on the run in their own "Findings" group after the tasks and phases (a task's or
+  phase's own findings stay under their owner), and its header says "N findings open" beside "X of Y done".
+  `work_tree` prints the same count after a container's rollup (`8/11 done · 3 findings open`), and the
+  `/api/v1` rollup carries `findingsOpen`: the unclosed findings anywhere below the item. The header reads that
+  field. No migration.
+
 ### Changed
 
 - A run or phase no longer closes over open findings. Every open finding anywhere in its subtree, at any

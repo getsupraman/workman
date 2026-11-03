@@ -60,6 +60,14 @@ public sealed class WorkmanQueries(NpgsqlDataSource dataSource)
         $"(c.kind IN {LeafKinds} OR (c.kind IN ('phase','feature') AND NOT EXISTS (SELECT 1 FROM item g WHERE g.parent_id = c.id)))";
 
     /// <summary>
+    /// The unclosed findings anywhere below <paramref name="alias"/>: never part of an "X of Y"
+    /// (<see cref="Counted"/> leaves them out), printed beside it so they are not lost.
+    /// </summary>
+    internal static string FindingsOpenBelow(string alias)
+        => $"SELECT count(*) FROM item f WHERE f.ancestors @> ARRAY[{alias}.id] AND f.kind = 'finding' "
+         + "AND f.status NOT IN ('done','cancelled','superseded')";
+
+    /// <summary>
     /// <see cref="Rollup"/> narrowed to <see cref="Counted"/> descendants: the numbers an "X of Y"
     /// prints. <see cref="Rollup"/> keeps every descendant, for the gates and flags that ask
     /// whether anything at all is still open below an item.

@@ -118,6 +118,9 @@ export function tally(rows: BoardRow[]): Tally {
   return t
 }
 
+/** Findings are never in an "X of Y"; the header names the open ones beside it. Empty when none. */
+export const findingsOpen = (n: number): string => (n > 0 ? `${n} finding${n === 1 ? '' : 's'} open.` : '')
+
 /** The run header's sentence. Gone leaves are outside `total`, so they are named, never dropped. */
 export function progress(t: Tally): string {
   const moved = t.gone - t.cancelled

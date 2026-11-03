@@ -49,17 +49,20 @@ function descendants(rows: BoardRow[], index: number): BoardRow[] {
 
 type PlanRow = { row: BoardRow; indent: number }
 
-type PlanGroup = { head: BoardRow | null; tally: Tally | null; rows: PlanRow[] }
+/** `label` names a headless group: "Tasks" for the loose work, "Findings" for what was filed on the run itself. */
+type PlanGroup = { head: BoardRow | null; label: 'Tasks' | 'Findings' | null; tally: Tally | null; rows: PlanRow[] }
 
 /**
  * The plan list: loose top-level work first under "Tasks", then one group per phase with its whole
- * subtree flattened beneath it. Row 0 of a board is the run itself and is never listed. Cancelled
+ * subtree flattened beneath it, then the findings filed directly on the run under "Findings" — a
+ * task's or phase's own findings stay under their owner. Row 0 of a board is the run itself and is never listed. Cancelled
  * rows are left out unless `cancelled` is set, an emptied cancelled phase with them. A phase with no
  * children at all is judged as a row itself, so an open empty phase stays under Open.
  */
 export function plan(board: Board, filter: Filter, cancelled = false): PlanGroup[] {
   const rows = board.rows
   const loose: PlanRow[] = []
+  const findings: PlanRow[] = []
   const phases: PlanGroup[] = []
 
   for (let i = 1; i < rows.length; i++) {
@@ -72,16 +75,21 @@ export function plan(board: Board, filter: Filter, cancelled = false): PlanGroup
       const inner = below.filter((r) => keep(filter, r, cancelled)).map((row) => ({ row, indent: row.depth - 2 }))
       const listable = filter === 'all' || below.length === 0
       if (inner.length === 0 && !(listable && keep(filter, top, cancelled))) continue
-      phases.push({ head: top, tally: tally(below), rows: inner })
+      phases.push({ head: top, label: null, tally: tally(below), rows: inner })
       continue
     }
 
+    const into = top.item.kind === 'finding' ? findings : loose
     for (const row of [top, ...below]) {
-      if (keep(filter, row, cancelled)) loose.push({ row, indent: row.depth - 1 })
+      if (keep(filter, row, cancelled)) into.push({ row, indent: row.depth - 1 })
     }
   }
 
-  return loose.length > 0 ? [{ head: null, tally: null, rows: loose }, ...phases] : phases
+  return [
+    ...(loose.length > 0 ? [{ head: null, label: 'Tasks' as const, tally: null, rows: loose }] : []),
+    ...phases,
+    ...(findings.length > 0 ? [{ head: null, label: 'Findings' as const, tally: null, rows: findings }] : []),
+  ]
 }
 
 const listed = (groups: PlanGroup[]) => groups.reduce((n, g) => n + g.rows.length + (g.head ? 1 : 0), 0)

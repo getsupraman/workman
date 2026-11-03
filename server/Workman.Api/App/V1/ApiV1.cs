@@ -83,7 +83,7 @@ public static partial class ApiV1
 
     private static RollupView Rollup(LeafRollup? rollup)
         => rollup is null
-            ? new RollupView(0, 0, 0, 0, 0, 0, 0, 0)
+            ? new RollupView(0, 0, 0, 0, 0, 0, 0, 0, 0)
             : new RollupView(
                 rollup.Total,
                 rollup.Done,
@@ -92,5 +92,6 @@ public static partial class ApiV1
                 rollup.Blocked,
                 rollup.Open,
                 rollup.Cancelled,
-                rollup.Superseded);
+                rollup.Superseded,
+                rollup.FindingsOpen);
 }

@@ -118,7 +118,7 @@ public sealed class ApiQueries(NpgsqlDataSource dataSource)
         IReadOnlyCollection<Guid> ids,
         CancellationToken cancellationToken = default)
     {
-        const string sql =
+        var sql =
             $"""
              SELECT p.id AS "Id",
                     count(c.id) FILTER (WHERE c.status IN ('open','ready'))::int AS "Open",
@@ -127,7 +127,8 @@ public sealed class ApiQueries(NpgsqlDataSource dataSource)
                     count(c.id) FILTER (WHERE c.status = 'review')::int         AS "Review",
                     count(c.id) FILTER (WHERE c.status = 'done')::int           AS "Done",
                     count(c.id) FILTER (WHERE c.status = 'cancelled')::int      AS "Cancelled",
-                    count(c.id) FILTER (WHERE c.status = 'superseded')::int     AS "Superseded"
+                    count(c.id) FILTER (WHERE c.status = 'superseded')::int     AS "Superseded",
+                    ({WorkmanQueries.FindingsOpenBelow("p")})::int              AS "FindingsOpen"
              FROM   item p
              LEFT   JOIN item c ON c.ancestors @> ARRAY[p.id] AND {WorkmanQueries.Counted}
              WHERE  p.id = ANY(@ids)
