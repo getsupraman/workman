@@ -325,8 +325,9 @@ self-hosting and serving one server on several hosts; to run the server from sou
 
 Workman is part of the Supraman suite. [Supraman](https://github.com/getsupraman/supraman) is the desktop
 app that starts and supervises your Claude Code sessions: sign in to Workman once, and every session it
-launches gets its own Workman token, while its Inbox shows the Workman items that need you. Workman works on
-its own too; Supraman needs a Workman server, hosted [work.supraman.ai](https://work.supraman.ai) or your own.
+launches gets its own Workman token, while its Inbox shows the Workman items that need you. Each works on its
+own: Workman with any Claude Code session, and Supraman without Workman until you sign in to a Workman
+server, hosted [work.supraman.ai](https://work.supraman.ai) or your own.
 
 ## Docs
 
