@@ -7,14 +7,9 @@ All notable changes to the Workman server and the `workman` plugin are recorded 
 
 ## [Unreleased]
 
-### Plugin 2.1.1
-
-- Removed: `agent_launch` no longer accepts `workstate: {…}`, the 1.x name of `workman: {…}`; it is refused as an
-  unknown parameter.
-
 ## [2.1.0] — 2026-11-03
 
-Server 2.1.0 and plugin 2.1.0: the 1.x rename workarounds go, and rules number correctly again. One additive migration (`ConstraintRefAllocator`).
+Server 2.1.0 and plugin 2.1.1: the 1.x rename workarounds go, and rules number correctly again. One additive migration (`ConstraintRefAllocator`).
 
 ### Changed — the dashboard's prompts state the goal
 
@@ -47,6 +42,11 @@ Server 2.1.0 and plugin 2.1.0: the 1.x rename workarounds go, and rules number c
   A choice still stored under the old key is forgotten once: the default applies.
 - Plugin (`/workman:setup`): the move of a 1.x `workstate` registration to `workman` (`move-registration.mjs`).
   Setup now registers `workman` beside it; remove the old one with `claude mcp remove workstate -s <scope>`.
+
+### Plugin 2.1.1
+
+- Removed: `agent_launch` no longer accepts `workstate: {…}`, the 1.x name of `workman: {…}`; it is refused as an
+  unknown parameter.
 
 ## [Plugin 2.0.1] — 2026-11-02
 
