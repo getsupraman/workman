@@ -7,6 +7,12 @@ All notable changes to the Workman server and the `workman` plugin are recorded 
 
 ## [Unreleased]
 
+## [Plugin 2.3.1] — 2026-11-03
+
+- Changed: the agents skill names `agent_launch` without the `mcp__plugin_workman_agents__` prefix. A session
+  that adds the plugin's `agents` server to its own MCP config (as `--strict-mcp-config` sessions must) lists
+  it under another prefix, such as `mcp__agents__agent_launch`.
+
 ## [2.3.0] — 2026-11-03
 
 Server 2.3.0 and plugin 2.3.0. No migration.

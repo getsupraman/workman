@@ -37,7 +37,7 @@ Otherwise use the `Agent` tool.
 
 ## 1. Launch — always `--bg`
 
-**Use the `agent_launch` tool** (`mcp__plugin_workman_agents__agent_launch`). It is the plugin's
+**Use the `agent_launch` tool** (the agents server's `agent_launch`, whatever prefix your session lists it under). It is the plugin's
 `agents` MCP server — Node 18+, no dependencies — and it does what the scripts below do, plus the one
 thing they cannot: it mints the agent **its own Workman token**, so the child's writes are recorded
 under its name and role instead of yours. It builds the argv in code (no shell, so no quoting traps),
