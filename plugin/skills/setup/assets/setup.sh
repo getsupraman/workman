@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# setup.sh - install, start, register and prove a local Workman server.
+# setup.sh - install, start, register and prove a local Workman server, or register and prove a remote one.
 # Twin of setup.ps1: same steps, same flags, same status lines. Change both together.
 #
 # Every line this prints is safe to show a model: tokens and passwords stay in the .env file and in
@@ -9,9 +9,13 @@ set -euo pipefail
 usage() {
     cat <<'EOF'
 usage: setup.sh [options]
+       setup.sh --url <https origin> [--name <name>] [--agent <session>] [--force] [--session-names] [--dry-run]
        setup.sh --backup <file>  [--home-dir <dir> | --clone <path>] [--project <name>]
        setup.sh --restore <file> [--home-dir <dir> | --clone <path>] [--project <name>]
 
+  --url <origin>          register a REMOTE server, e.g. https://work.supraman.ai: no Docker, no .env;
+                          OAuth sign-in and the session helper, then prove it. Not with --clone, --port,
+                          --project, --image-version, --update, --backup, --restore, --auth token, --role
   --clone <path>          use a clone of github.com/getsupraman/workman: <path>/server/compose.yml (builds
                           the image) and <path>/server/.env. Without it: the Workman home.
   --home-dir <dir>        the Workman home (default ~/.workman): compose.yml (pulls the
@@ -28,10 +32,11 @@ usage: setup.sh [options]
   --project <name>        compose project (default workman)
   --image-version <tag>   image tag for the pull-only compose (default latest)
   --update                pull the image again (home) or rebuild it (clone) before starting
-  --force                 replace an existing registration of the same name
+  --force                 replace an existing registration of the same name (with --url: re-point it)
   --session-names         re-register an existing registration with the session helper (a new one
                           gets it anyway), keeping the role its token has unless --role is given
-  --dry-run              do everything except write the registration; show it (a token masked)
+  --dry-run              do everything except write the registration; show it (a token masked).
+                          With --url it writes nothing at all
   --backup <file>         pg_dump -Fc the database to <file>, and stop
   --restore <file>        restore <file> over the database (after a safety backup), and stop
 EOF
@@ -43,7 +48,7 @@ status() { printf '%-10s%s\n' "$1" "$2"; }
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 clone=""; home_dir=""; role="orchestrator"; name="workman"; agent=""; port="5290"; project="workman"
 image_version=""; update=0; force=0; session_names=0; role_given=0; dry_run=0; backup=""; restore=""
-auth=""
+auth=""; url=""; port_given=0; project_given=0
 
 while [ $# -gt 0 ]; do
     case "$1" in
@@ -53,8 +58,9 @@ while [ $# -gt 0 ]; do
         --role) role="${2:?--role needs a value}"; role_given=1; shift 2 ;;
         --name) name="${2:?--name needs a value}"; shift 2 ;;
         --agent) agent="${2:?--agent needs a session name}"; shift 2 ;;
-        --port) port="${2:?--port needs a value}"; shift 2 ;;
-        --project) project="${2:?--project needs a value}"; shift 2 ;;
+        --url) url="${2:?--url needs an https origin}"; shift 2 ;;
+        --port) port="${2:?--port needs a value}"; port_given=1; shift 2 ;;
+        --project) project="${2:?--project needs a value}"; project_given=1; shift 2 ;;
         --image-version) image_version="${2:?--image-version needs a tag}"; shift 2 ;;
         --update) update=1; shift ;;
         --force) force=1; shift ;;
@@ -72,6 +78,28 @@ case "$auth" in ''|oauth|token) ;; *) die "--auth must be oauth or token" ;; esa
 [ "$auth" = "oauth" ] && [ "$role_given" -eq 1 ] && die "--role with --auth oauth: an OAuth sign-in is the dashboard user with the controller toolset; --role needs --auth token"
 case "$port" in ''|*[!0-9]*) die "--port must be a number" ;; esac
 [ -n "$clone" ] && [ -n "$home_dir" ] && die "--clone and --home-dir are two different installs; pass one"
+if [ -n "$url" ]; then
+    while [ "${url%/}" != "$url" ]; do url="${url%/}"; done
+    # https, or plain http on 127.0.0.1 only: a server already running on this machine
+    case "$url" in
+        https://*|http://127.0.0.1|http://127.0.0.1:*) ;;
+        *) die "--url must be an https origin, such as https://work.supraman.ai (plain http only for 127.0.0.1)" ;;
+    esac
+    case "${url#*://}" in
+        ''|*/*|*'?'*|*'#'*|*@*) die "--url is an origin, scheme://host[:port] with no path: $url" ;;
+    esac
+    local_only=""
+    [ -n "$clone" ] && local_only="$local_only --clone"
+    [ "$port_given" -eq 1 ] && local_only="$local_only --port"
+    [ "$project_given" -eq 1 ] && local_only="$local_only --project"
+    [ -n "$image_version" ] && local_only="$local_only --image-version"
+    [ "$update" -eq 1 ] && local_only="$local_only --update"
+    [ -n "$backup" ] && local_only="$local_only --backup"
+    [ -n "$restore" ] && local_only="$local_only --restore"
+    [ "$auth" = "token" ] && local_only="$local_only --auth token"
+    [ "$role_given" -eq 1 ] && local_only="$local_only --role"
+    [ -z "$local_only" ] || die "--url with$local_only: those are for a local Docker install, and tokens are too; a remote server is registered with OAuth sign-in"
+fi
 
 env_value() { # the value of key $1 in the env file, without printing it anywhere
     sed -n "s/^$1=//p" "$env_file" | tail -n 1 | tr -d '\r'
@@ -81,6 +109,32 @@ find_container() { # $1 = compose service
     docker ps -q --filter "label=com.docker.compose.project=$project" --filter "label=com.docker.compose.service=$1" | head -n 1
 }
 
+# the session helper - copied next to the .env (the home, for --url), because the plugin cache path changes per version
+install_helper() { # $1 = 1 to copy it, 0 to only say where it would go
+    helper_file="$base_dir/session-header.mjs"
+    has_node=0
+    command -v node >/dev/null 2>&1 && has_node=1
+    if [ "$1" -eq 0 ]; then
+        status "helper" "dry run, would copy session-header.mjs to $helper_file$([ "$has_node" -eq 1 ] || printf ' (node is not on PATH: it would go unused)')"
+        return
+    fi
+    mkdir -p "$base_dir"
+    cmp -s "$script_dir/session-header.mjs" "$helper_file" 2>/dev/null || cp "$script_dir/session-header.mjs" "$helper_file"
+    if [ "$has_node" -eq 1 ]; then
+        status "helper" "$helper_file (names each session; needs node, found)"
+    else
+        status "helper" "$helper_file copied, but node is not on PATH: registering without it, so sessions stay unnamed"
+    fi
+}
+
+if [ -n "$url" ]; then
+    # a remote server: nothing of Docker, no .env; only the helper lives here
+    [ -n "$home_dir" ] || home_dir="$HOME/.workman"
+    base_dir="$home_dir"
+    write_helper=1; [ "$dry_run" -eq 1 ] && write_helper=0
+    install_helper "$write_helper"
+    base_url="$url"
+else
 command -v docker >/dev/null 2>&1 || die "docker    not found: install Docker Desktop (or Docker Engine) first"
 docker info >/dev/null 2>&1 || die "docker    not reachable: start Docker Desktop (Linux: sudo systemctl start docker) and run this again"
 
@@ -183,16 +237,7 @@ EOF
     status "env" "wrote $env_file: 3 tokens, dashboard and Postgres passwords (values not shown, mode 600)"
 fi
 
-# the session helper - copied next to the .env, because the plugin cache path changes per version
-helper_file="$base_dir/session-header.mjs"
-cmp -s "$script_dir/session-header.mjs" "$helper_file" 2>/dev/null || cp "$script_dir/session-header.mjs" "$helper_file"
-has_node=0
-if command -v node >/dev/null 2>&1; then
-    has_node=1
-    status "helper" "$helper_file (names each session; needs node, found)"
-else
-    status "helper" "$helper_file copied, but node is not on PATH: registering without it, so sessions stay unnamed"
-fi
+install_helper 1
 
 port="$(env_value WORKMAN_API_PORT)"; port="${port:-5290}"
 base_url="http://127.0.0.1:$port"
@@ -214,6 +259,7 @@ for _ in $(seq 1 90); do
 done
 [ "$health" = "200" ] || die "start     $base_url/health never answered 200 (last: ${health:-none}); docker compose -p $project logs api"
 status "start" "project '$project' up, $base_url/health 200"
+fi
 
 # d. register - the token goes from the .env straight into the harness's config; with oauth none is stored
 mcp_url="$base_url/mcp"
@@ -229,7 +275,25 @@ prm_check() { # $1 = url; prints what it answered, and succeeds only for an OAut
 # WS_SETUP_PRM_URL is a test seam: point it at a 404 to see the token fallback without stopping the server.
 prm_url="${WS_SETUP_PRM_URL:-$base_url/.well-known/oauth-protected-resource/mcp}"
 offers_oauth=0
-prm="$(prm_check "$prm_url")" && offers_oauth=1
+# --url proves the sign-in end to end instead (prove_oauth), before anything is registered
+[ -z "$url" ] && prm="$(prm_check "$prm_url")" && offers_oauth=1
+
+where_logs="docker compose -p $project logs api"
+[ -n "$url" ] && where_logs="is $url a Workman server, and up?"
+prove_oauth() { # the server asks for sign-in the way Claude Code discovers it, or this stops
+    local reply code metadata metadata_code
+    reply="$(curl -s -m 10 -o /dev/null -D - -w '%{http_code}' -X POST "$mcp_url" -H "Content-Type: application/json" \
+        -H "Accept: application/json, text/event-stream" -d '{"jsonrpc":"2.0","id":1,"method":"tools/list"}' || true)"
+    code="$(printf '%s\n' "$reply" | tail -n 1)"
+    metadata="$(printf '%s' "$reply" | tr -d '\r' | sed -n 's/^[Ww][Ww][Ww]-[Aa]uthenticate:.*resource_metadata="\([^"]*\)".*/\1/p' | head -n 1)"
+    [ "$code" = "401" ] || die "prove     POST $mcp_url without a token answered ${code:-nothing}, not 401: this server does not ask for sign-in; $where_logs"
+    if [ -z "$metadata" ]; then
+        [ -n "$url" ] && die "prove     POST $mcp_url answered 401 without resource_metadata=: Claude Code cannot find the sign-in; $where_logs"
+        die "prove     POST $mcp_url answered 401 without resource_metadata=: Claude Code cannot find the sign-in; an image older than OAuth (run with --update)"
+    fi
+    metadata_code="$(prm_check "$metadata")" || die "prove     $metadata answered $metadata_code, not the OAuth metadata: Claude Code cannot discover the sign-in; $where_logs"
+    status "prove" "POST /mcp without a token: 401 with resource_metadata=$metadata, which answers 200 - Claude Code finds the sign-in from there"
+}
 existing=0
 scope="user"
 [ -n "$agent" ] && scope="local"
@@ -249,35 +313,41 @@ fi
 if [ "$existing" -eq 1 ] && [ "$scope" = "local" ] && ! printf '%s' "$get_out" | grep -q "Scope: Local"; then existing=0; fi
 existing_auth="oauth"
 printf '%s' "$get_out" | grep -q "Bearer " && existing_auth="token"
+existing_url="$(printf '%s\n' "$get_out" | tr -d '\r' | sed -n 's/^ *URL: *//p' | head -n 1)"
+url_differs=0
+[ "$existing" -eq 1 ] && [ -n "$url" ] && [ "${existing_url%/}" != "$mcp_url" ] && url_differs=1
 
 # which auth: a kept registration keeps its own; else --auth, --role, the re-registered one's, the server's offer
 keep=0
 [ "$existing" -eq 1 ] && [ "$force" -eq 0 ] && [ "$session_names" -eq 0 ] && keep=1
+# a registration that points elsewhere is re-pointed only by --force, never by --session-names
+[ "$url_differs" -eq 1 ] && [ "$force" -eq 0 ] && keep=1
 if [ "$keep" -eq 1 ]; then
     why="the existing '$name' registration uses $existing_auth, kept"
     [ -n "$auth" ] && [ "$auth" != "$existing_auth" ] && why="$why (--force replaces it with $auth)"
     auth="$existing_auth"
+elif [ -n "$url" ]; then auth="oauth"; why="--url: a remote server is signed in to with OAuth, no token stored"
 elif [ -n "$auth" ]; then why="--auth $auth"
 elif [ "$role_given" -eq 1 ]; then auth="token"; why="--role $role needs a token"
 elif [ "$existing" -eq 1 ]; then auth="$existing_auth"; why="the existing '$name' registration uses $existing_auth"
 elif [ "$offers_oauth" -eq 1 ]; then auth="oauth"; why="the server offers OAuth sign-in ($prm_url 200)"
 else auth="token"; why="the server has no OAuth sign-in ($prm_url answered $prm): an image older than OAuth; --update gets a newer one"
 fi
-if [ "$auth" = "oauth" ] && [ "$keep" -eq 0 ] && [ "$offers_oauth" -eq 0 ]; then
+if [ -z "$url" ] && [ "$auth" = "oauth" ] && [ "$keep" -eq 0 ] && [ "$offers_oauth" -eq 0 ]; then
     die "auth      --auth oauth, but $prm_url answered $prm: this server predates OAuth sign-in; run with --update (home: pulls the image, clone: rebuilds it), or pass --auth token"
 fi
 status "auth" "$auth: $why"
 
 upper() { printf '%s' "$1" | tr '[:lower:]' '[:upper:]'; }
 # --session-names on an existing registration keeps the role its token already has.
-if [ "$auth" = "token" ] && [ "$existing" -eq 1 ] && [ "$session_names" -eq 1 ] && [ "$role_given" -eq 0 ]; then
+if [ -z "$url" ] && [ "$auth" = "token" ] && [ "$existing" -eq 1 ] && [ "$session_names" -eq 1 ] && [ "$role_given" -eq 0 ]; then
     for candidate in controller orchestrator worker; do
         candidate_token="$(env_value "WORKMAN_$(upper "$candidate")_TOKEN")"
         if [ -n "$candidate_token" ] && printf '%s' "$get_out" | grep -qF "Bearer $candidate_token"; then role="$candidate"; break; fi
     done
 fi
 token=""
-if [ "$auth" = "token" ]; then
+if [ -z "$url" ] && [ "$auth" = "token" ]; then
     token="$(env_value "WORKMAN_$(upper "$role")_TOKEN")"
     [ -n "$token" ] || die "env       $env_file has no WORKMAN_$(upper "$role")_TOKEN"
 fi
@@ -294,7 +364,11 @@ registration() { # $1 = the bearer token, or *** for display; oauth stores none 
 }
 shown="claude mcp add-json --scope $scope $name '$(registration '***')'"
 
-if [ "$keep" -eq 1 ]; then
+[ -n "$url" ] && prove_oauth
+
+if [ "$keep" -eq 1 ] && [ "$url_differs" -eq 1 ]; then
+    status "register" "kept the existing '$name' registration, which points at $existing_url, not $mcp_url (pass --force to re-point it)"
+elif [ "$keep" -eq 1 ]; then
     status "register" "kept the existing '$name' registration (pass --session-names to add the session helper, --force to replace it)"
 elif [ "$dry_run" -eq 1 ]; then
     status "register" "dry run, would run: $shown"
@@ -337,15 +411,10 @@ else
 fi
 
 # e. prove - oauth: the server asks for sign-in the way Claude Code discovers it; token: count what it lists
-if [ "$auth" = "oauth" ]; then
-    reply="$(curl -s -m 10 -o /dev/null -D - -w '%{http_code}' -X POST "$mcp_url" -H "Content-Type: application/json" \
-        -H "Accept: application/json, text/event-stream" -d '{"jsonrpc":"2.0","id":1,"method":"tools/list"}' || true)"
-    code="$(printf '%s\n' "$reply" | tail -n 1)"
-    metadata="$(printf '%s' "$reply" | tr -d '\r' | sed -n 's/^[Ww][Ww][Ww]-[Aa]uthenticate:.*resource_metadata="\([^"]*\)".*/\1/p' | head -n 1)"
-    [ "$code" = "401" ] || die "prove     POST $mcp_url without a token answered ${code:-nothing}, not 401: this server does not ask for sign-in; docker compose -p $project logs api"
-    [ -n "$metadata" ] || die "prove     POST $mcp_url answered 401 without resource_metadata=: Claude Code cannot find the sign-in; an image older than OAuth (run with --update)"
-    metadata_code="$(prm_check "$metadata")" || die "prove     $metadata answered $metadata_code, not the OAuth metadata: Claude Code cannot discover the sign-in; docker compose -p $project logs api"
-    status "prove" "POST /mcp without a token: 401 with resource_metadata=$metadata, which answers 200 - Claude Code finds the sign-in from there"
+if [ -n "$url" ]; then
+    : # proved before registering
+elif [ "$auth" = "oauth" ]; then
+    prove_oauth
 else
     body="$(curl -s -m 10 -X POST "$mcp_url" -H "Content-Type: application/json" -H "Accept: application/json, text/event-stream" \
         -H "Authorization: Bearer $token" -d '{"jsonrpc":"2.0","id":1,"method":"tools/list"}' || true)"
@@ -360,9 +429,18 @@ else
 fi
 
 # f. what the human needs next
-status "dashboard" "$base_url - sign in with WORKMAN_DASHBOARD_USERNAME / _PASSWORD from $env_file"
-if [ "$auth" = "oauth" ]; then
-    status "next" "start a new Claude Code session, run /mcp, pick '$name', Authenticate, sign in with that dashboard user and Approve: the work_* tools appear there, not in this one"
+if [ -n "$url" ]; then
+    status "dashboard" "$base_url - sign in with your account there"
+    if [ "$keep" -eq 1 ] && [ "$url_differs" -eq 1 ]; then
+        status "next" "nothing changed: '$name' still points at $existing_url; run again with --force to re-point it to $mcp_url"
+    else
+        status "next" "start a new Claude Code session, run /mcp, pick '$name', Authenticate, sign in in the browser and Approve: the work_* tools appear there, not in this one"
+    fi
 else
-    status "next" "start a new Claude Code session: the work_* tools appear there, not in this one"
+    status "dashboard" "$base_url - sign in with WORKMAN_DASHBOARD_USERNAME / _PASSWORD from $env_file"
+    if [ "$auth" = "oauth" ]; then
+        status "next" "start a new Claude Code session, run /mcp, pick '$name', Authenticate, sign in with that dashboard user and Approve: the work_* tools appear there, not in this one"
+    else
+        status "next" "start a new Claude Code session: the work_* tools appear there, not in this one"
+    fi
 fi

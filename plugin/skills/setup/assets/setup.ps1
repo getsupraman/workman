@@ -1,12 +1,15 @@
 <#
 .SYNOPSIS
-  Install, start, register and prove a local Workman server.
+  Install, start, register and prove a local Workman server, or register and prove a remote one.
 .DESCRIPTION
   Twin of setup.sh: same steps, same flags, same status lines. Change both together.
 
   Every line this prints is safe to show a model: tokens and passwords stay in the .env file and in
   the harness's own config, and nothing here echoes them (SKILL.md "What the model never sees").
 
+  -Url <origin>          register a REMOTE server, e.g. https://work.supraman.ai: no Docker, no .env;
+                         OAuth sign-in and the session helper, then prove it. Not with -Clone, -Port,
+                         -Project, -ImageVersion, -Update, -Backup, -Restore, -Auth token, -Role
   -Clone <path>          use a clone of github.com/getsupraman/workman: <path>/server/compose.yml (builds the
                          image) and <path>/server/.env. Without it: the Workman home.
   -HomeDir <dir>         the Workman home (default %USERPROFILE%\.workman): compose.yml (pulls the
@@ -23,15 +26,17 @@
   -Project <name>        compose project (default workman)
   -ImageVersion <tag>    image tag for the pull-only compose (default latest)
   -Update                pull the image again (home) or rebuild it (clone) before starting
-  -Force                 replace an existing registration of the same name
+  -Force                 replace an existing registration of the same name (with -Url: re-point it)
   -SessionNames          re-register an existing registration with the session helper (a new one gets
                          it anyway), keeping the role its token has unless -Role is given
-  -DryRun               do everything except write the registration; show it (a token masked)
+  -DryRun               do everything except write the registration; show it (a token masked).
+                         With -Url it writes nothing at all
   -Backup <file>         pg_dump -Fc the database to <file>, and stop
   -Restore <file>        restore <file> over the database (after a safety backup), and stop
 #>
 [CmdletBinding()]
 param(
+    [string]$Url,
     [string]$Clone,
     [string]$HomeDir,
     [ValidateSet('oauth', 'token')][string]$Auth,
@@ -61,6 +66,26 @@ $onWindows = [System.Runtime.InteropServices.RuntimeInformation]::IsOSPlatform([
 if ($Clone -and $HomeDir) { Die '-Clone and -HomeDir are two different installs; pass one' }
 $roleGiven = $PSBoundParameters.ContainsKey('Role')
 if ($Auth -eq 'oauth' -and $roleGiven) { Die '-Role with -Auth oauth: an OAuth sign-in is the dashboard user with the controller toolset; -Role needs -Auth token' }
+if ($Url) {
+    $Url = $Url.TrimEnd('/')
+    # https, or plain http on 127.0.0.1 only: a server already running on this machine
+    if (-not ($Url.StartsWith('https://') -or $Url -eq 'http://127.0.0.1' -or $Url.StartsWith('http://127.0.0.1:'))) {
+        Die '-Url must be an https origin, such as https://work.supraman.ai (plain http only for 127.0.0.1)'
+    }
+    $authority = $Url.Substring($Url.IndexOf('://') + 3)
+    if (-not $authority -or $authority -match '[/?#@]') { Die "-Url is an origin, scheme://host[:port] with no path: $Url" }
+    $localOnly = ''
+    if ($Clone) { $localOnly += ' -Clone' }
+    if ($PSBoundParameters.ContainsKey('Port')) { $localOnly += ' -Port' }
+    if ($PSBoundParameters.ContainsKey('Project')) { $localOnly += ' -Project' }
+    if ($ImageVersion) { $localOnly += ' -ImageVersion' }
+    if ($Update) { $localOnly += ' -Update' }
+    if ($Backup) { $localOnly += ' -Backup' }
+    if ($Restore) { $localOnly += ' -Restore' }
+    if ($Auth -eq 'token') { $localOnly += ' -Auth token' }
+    if ($roleGiven) { $localOnly += ' -Role' }
+    if ($localOnly) { Die "-Url with${localOnly}: those are for a local Docker install, and tokens are too; a remote server is registered with OAuth sign-in" }
+}
 
 function Get-EnvValue([string]$Key) {
     $value = $null
@@ -75,6 +100,30 @@ function Find-Container([string]$Service) {
     if ($id) { @($id)[0] } else { $null }
 }
 
+# the session helper - copied next to the .env (the home, for -Url), because the plugin cache path changes per version
+function Install-Helper([bool]$Copy) {
+    $script:helperFile = Join-Path $script:baseDir 'session-header.mjs'
+    $script:node = Get-Command node -ErrorAction SilentlyContinue
+    if (-not $Copy) {
+        Status 'helper' "dry run, would copy session-header.mjs to $($script:helperFile)$(if (-not $script:node) { ' (node is not on PATH: it would go unused)' })"
+        return
+    }
+    New-Item -ItemType Directory -Force -Path $script:baseDir | Out-Null
+    $helperShipped = Join-Path $scriptDir 'session-header.mjs'
+    if (-not (Test-Path -LiteralPath $script:helperFile) -or (Get-FileHash -LiteralPath $helperShipped).Hash -ne (Get-FileHash -LiteralPath $script:helperFile).Hash) {
+        Copy-Item -LiteralPath $helperShipped -Destination $script:helperFile -Force
+    }
+    if ($script:node) { Status 'helper' "$($script:helperFile) (names each session; needs node, found)" }
+    else { Status 'helper' "$($script:helperFile) copied, but node is not on PATH: registering without it, so sessions stay unnamed" }
+}
+
+if ($Url) {
+    # a remote server: nothing of Docker, no .env; only the helper lives here
+    $baseDir = if ($HomeDir) { $HomeDir } else { Join-Path $HOME '.workman' }
+    Install-Helper (-not $DryRun)
+    $baseUrl = $Url
+}
+else {
 if (-not (Get-Command docker -ErrorAction SilentlyContinue)) { Die 'docker    not found: install Docker Desktop (or Docker Engine) first' }
 & docker info *> $null
 if ($LASTEXITCODE -ne 0) { Die 'docker    not reachable: start Docker Desktop (Linux: sudo systemctl start docker) and run this again' }
@@ -197,15 +246,7 @@ else {
     Status 'env' "wrote ${envFile}: 3 tokens, dashboard and Postgres passwords (values not shown, $modeNote)"
 }
 
-# the session helper - copied next to the .env, because the plugin cache path changes per version
-$helperShipped = Join-Path $scriptDir 'session-header.mjs'
-$helperFile = Join-Path $baseDir 'session-header.mjs'
-$node = Get-Command node -ErrorAction SilentlyContinue
-if (-not (Test-Path -LiteralPath $helperFile) -or (Get-FileHash -LiteralPath $helperShipped).Hash -ne (Get-FileHash -LiteralPath $helperFile).Hash) {
-    Copy-Item -LiteralPath $helperShipped -Destination $helperFile -Force
-}
-if ($node) { Status 'helper' "$helperFile (names each session; needs node, found)" }
-else { Status 'helper' "$helperFile copied, but node is not on PATH: registering without it, so sessions stay unnamed" }
+Install-Helper $true
 
 $portValue = Get-EnvValue 'WORKMAN_API_PORT'
 if (-not $portValue) { $portValue = '5290' }
@@ -237,6 +278,7 @@ for ($i = 0; $i -lt 90; $i++) {
 }
 if ($health -ne '200') { Die "start     $baseUrl/health never answered 200 (last: $(if ($health) { $health } else { 'none' })); docker compose -p $Project logs api" }
 Status 'start' "project '$Project' up, $baseUrl/health 200"
+}
 
 # d. register - the token goes from the .env straight into the harness's config; with oauth none is stored
 $mcpUrl = "$baseUrl/mcp"
@@ -276,14 +318,32 @@ function Test-Prm([string]$Uri) {
 }
 # WS_SETUP_PRM_URL is a test seam: point it at a 404 to see the token fallback without stopping the server.
 $prmUrl = if ($env:WS_SETUP_PRM_URL) { $env:WS_SETUP_PRM_URL } else { "$baseUrl/.well-known/oauth-protected-resource/mcp" }
-$prm = Test-Prm $prmUrl
+# -Url proves the sign-in end to end instead (Assert-OAuth), before anything is registered
+$prm = if ($Url) { @{ Offers = $false; Answer = 'not asked' } } else { Test-Prm $prmUrl }
+
+$whereLogs = if ($Url) { "is $Url a Workman server, and up?" } else { "docker compose -p $Project logs api" }
+# The server asks for sign-in the way Claude Code discovers it, or this stops.
+function Assert-OAuth {
+    $reply = Invoke-Probe $mcpUrl 'Post'
+    $code = if ($reply.Status) { $reply.Status } else { 'nothing' }
+    if ($code -ne '401') { Die "prove     POST $mcpUrl without a token answered $code, not 401: this server does not ask for sign-in; $whereLogs" }
+    $match = [regex]::Match($reply.Authenticate, 'resource_metadata="([^"]*)"')
+    if (-not $match.Success) {
+        if ($Url) { Die "prove     POST $mcpUrl answered 401 without resource_metadata=: Claude Code cannot find the sign-in; $whereLogs" }
+        Die "prove     POST $mcpUrl answered 401 without resource_metadata=: Claude Code cannot find the sign-in; an image older than OAuth (run with -Update)"
+    }
+    $metadata = $match.Groups[1].Value
+    $metadataCheck = Test-Prm $metadata
+    if (-not $metadataCheck.Offers) { Die "prove     $metadata answered $($metadataCheck.Answer), not the OAuth metadata: Claude Code cannot discover the sign-in; $whereLogs" }
+    Status 'prove' "POST /mcp without a token: 401 with resource_metadata=$metadata, which answers 200 - Claude Code finds the sign-in from there"
+}
 $existing = $false
 $scope = 'user'
 if ($Agent) { $scope = 'local' }
 $getOut = ''
 $here = (Get-Location).Path
 
-$helperCommand = "node `"$($helperFile.Replace('\', '/'))`"\"
+$helperCommand = "node `"$($helperFile.Replace('\', '/'))`""
 if (-not (Get-Command claude -ErrorAction SilentlyContinue)) {
     if (-not $DryRun) { Die 'register  the claude CLI is not on PATH: install Claude Code, or run this where it is' }
 }
@@ -295,33 +355,39 @@ else {
     if ($existing -and $scope -eq 'local' -and $getOut -notmatch 'Scope: Local') { $existing = $false }
 }
 $existingAuth = if ($getOut.Contains('Bearer ')) { 'token' } else { 'oauth' }
+$urlLine = [regex]::Match($getOut, '(?m)^\s*URL:\s*(\S+)')
+$existingUrl = if ($urlLine.Success) { $urlLine.Groups[1].Value } else { '' }
+$urlDiffers = $existing -and $Url -and $existingUrl.TrimEnd('/') -ne $mcpUrl
 
 # which auth: a kept registration keeps its own; else -Auth, -Role, the re-registered one's, the server's offer
 $keep = $existing -and -not ($Force -or $SessionNames)
+# a registration that points elsewhere is re-pointed only by -Force, never by -SessionNames
+if ($urlDiffers -and -not $Force) { $keep = $true }
 if ($keep) {
     $why = "the existing '$Name' registration uses $existingAuth, kept"
     if ($Auth -and $Auth -ne $existingAuth) { $why += " (-Force replaces it with $Auth)" }
     $Auth = $existingAuth
 }
+elseif ($Url) { $Auth = 'oauth'; $why = '-Url: a remote server is signed in to with OAuth, no token stored' }
 elseif ($Auth) { $why = "-Auth $Auth" }
 elseif ($roleGiven) { $Auth = 'token'; $why = "-Role $Role needs a token" }
 elseif ($existing) { $Auth = $existingAuth; $why = "the existing '$Name' registration uses $existingAuth" }
 elseif ($prm.Offers) { $Auth = 'oauth'; $why = "the server offers OAuth sign-in ($prmUrl 200)" }
 else { $Auth = 'token'; $why = "the server has no OAuth sign-in ($prmUrl answered $($prm.Answer)): an image older than OAuth; -Update gets a newer one" }
-if ($Auth -eq 'oauth' -and -not $keep -and -not $prm.Offers) {
+if (-not $Url -and $Auth -eq 'oauth' -and -not $keep -and -not $prm.Offers) {
     Die "auth      -Auth oauth, but $prmUrl answered $($prm.Answer): this server predates OAuth sign-in; run with -Update (home: pulls the image, clone: rebuilds it), or pass -Auth token"
 }
 Status 'auth' "${Auth}: $why"
 
 # -SessionNames on an existing registration keeps the role its token already has.
-if ($Auth -eq 'token' -and $existing -and $SessionNames -and -not $roleGiven) {
+if (-not $Url -and $Auth -eq 'token' -and $existing -and $SessionNames -and -not $roleGiven) {
     foreach ($candidate in 'controller', 'orchestrator', 'worker') {
         $candidateToken = Get-EnvValue "WORKMAN_$($candidate.ToUpperInvariant())_TOKEN"
         if ($candidateToken -and $getOut.Contains("Bearer $candidateToken")) { $Role = $candidate; break }
     }
 }
 $token = ''
-if ($Auth -eq 'token') {
+if (-not $Url -and $Auth -eq 'token') {
     $tokenKey = "WORKMAN_$($Role.ToUpperInvariant())_TOKEN"
     $token = Get-EnvValue $tokenKey
     if (-not $token) { Die "env       $envFile has no $tokenKey" }
@@ -338,7 +404,12 @@ function Get-Registration([string]$Bearer) {
 }
 $shown = "claude mcp add-json --scope $scope $Name '$(Get-Registration '***')'"
 
-if ($keep) {
+if ($Url) { Assert-OAuth }
+
+if ($keep -and $urlDiffers) {
+    Status 'register' "kept the existing '$Name' registration, which points at $existingUrl, not $mcpUrl (pass -Force to re-point it)"
+}
+elseif ($keep) {
     Status 'register' "kept the existing '$Name' registration (pass -SessionNames to add the session helper, -Force to replace it)"
 }
 elseif ($DryRun) {
@@ -382,17 +453,8 @@ if ($node) {
 else { Status 'shadows' 'not checked (needs node)' }
 
 # e. prove - oauth: the server asks for sign-in the way Claude Code discovers it; token: count what it lists
-if ($Auth -eq 'oauth') {
-    $reply = Invoke-Probe $mcpUrl 'Post'
-    $code = if ($reply.Status) { $reply.Status } else { 'nothing' }
-    if ($code -ne '401') { Die "prove     POST $mcpUrl without a token answered $code, not 401: this server does not ask for sign-in; docker compose -p $Project logs api" }
-    $match = [regex]::Match($reply.Authenticate, 'resource_metadata="([^"]*)"')
-    if (-not $match.Success) { Die "prove     POST $mcpUrl answered 401 without resource_metadata=: Claude Code cannot find the sign-in; an image older than OAuth (run with -Update)" }
-    $metadata = $match.Groups[1].Value
-    $metadataCheck = Test-Prm $metadata
-    if (-not $metadataCheck.Offers) { Die "prove     $metadata answered $($metadataCheck.Answer), not the OAuth metadata: Claude Code cannot discover the sign-in; docker compose -p $Project logs api" }
-    Status 'prove' "POST /mcp without a token: 401 with resource_metadata=$metadata, which answers 200 - Claude Code finds the sign-in from there"
-}
+if ($Url) { } # proved before registering
+elseif ($Auth -eq 'oauth') { Assert-OAuth }
 else {
     $body = ''
     try {
@@ -413,8 +475,19 @@ else {
 }
 
 # f. what the human needs next
-Status 'dashboard' "$baseUrl - sign in with WORKMAN_DASHBOARD_USERNAME / _PASSWORD from $envFile"
-if ($Auth -eq 'oauth') {
-    Status 'next' "start a new Claude Code session, run /mcp, pick '$Name', Authenticate, sign in with that dashboard user and Approve: the work_* tools appear there, not in this one"
+if ($Url) {
+    Status 'dashboard' "$baseUrl - sign in with your account there"
+    if ($keep -and $urlDiffers) {
+        Status 'next' "nothing changed: '$Name' still points at $existingUrl; run again with -Force to re-point it to $mcpUrl"
+    }
+    else {
+        Status 'next' "start a new Claude Code session, run /mcp, pick '$Name', Authenticate, sign in in the browser and Approve: the work_* tools appear there, not in this one"
+    }
 }
-else { Status 'next' 'start a new Claude Code session: the work_* tools appear there, not in this one' }
+else {
+    Status 'dashboard' "$baseUrl - sign in with WORKMAN_DASHBOARD_USERNAME / _PASSWORD from $envFile"
+    if ($Auth -eq 'oauth') {
+        Status 'next' "start a new Claude Code session, run /mcp, pick '$Name', Authenticate, sign in with that dashboard user and Approve: the work_* tools appear there, not in this one"
+    }
+    else { Status 'next' 'start a new Claude Code session: the work_* tools appear there, not in this one' }
+}
