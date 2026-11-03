@@ -81,6 +81,10 @@ public sealed record RunRow(
     int ActiveClaims,
     DateTimeOffset? LastEventAt);
 
+public sealed record RunOfProjectRow(Guid ProjectId, Guid RunId);
+
+public sealed record RunConfigRow(Guid RunId, string? Branch, string? Worktree);
+
 /// <summary>
 /// One row of a run board. <see cref="RollupTotal"/>/<see cref="RollupDone"/> count every descendant
 /// (<see cref="WorkmanQueries.Rollup"/>), not only the counted ones an "X of Y" prints: <c>disagrees</c>

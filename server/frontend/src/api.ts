@@ -151,6 +151,12 @@ export type Board = {
   rows: BoardRow[]
 }
 
+export type Boards = {
+  asOf: string
+  seq: number
+  boards: Board[]
+}
+
 export type Report = {
   attempt: number
   session: Session | null
@@ -300,6 +306,10 @@ const id = (value: string) => encodeURIComponent(value)
 export const overview = () => json<Overview>('/api/v1/overview')
 
 export const board = (run: string) => json<Board>(`/api/v1/runs/${id(run)}/board`)
+
+/** Every unarchived run's board without `runs`; with it, those runs' boards, an unknown id left out. */
+export const boards = (runs?: string[]) =>
+  json<Boards>(runs ? `/api/v1/boards?runs=${runs.map(id).join(',')}` : '/api/v1/boards')
 
 export const item = (item: string) => json<ItemPage>(`/api/v1/items/${id(item)}`)
 

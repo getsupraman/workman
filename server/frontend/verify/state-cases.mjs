@@ -15,6 +15,7 @@ import { HANDLE, LIST_MIN, PANEL_MIN, PANEL_SHARE, WIDTH_KEY, clampWidth, docks,
 import { MEMBERS_ANCHOR, memberLine, membersHref, projectOnPath, shareMarker } from '../src/sharing.ts'
 import { PHONE_QUERY, closesOnMove, pageName } from '../src/menu.ts'
 import { appLine, revokeWarning, sessionsLabel } from '../src/apps.ts'
+import { BOARDS_MAX, boardsRead } from '../src/boards.ts'
 import { expiresIn, isLastAdmin, isLinkPath, joinStep, joinToken, nameProblem, passwordMessage, passwordProblem, resetStep, resetToken, roleLabel, showSwitcher, slugFrom, slugProblem } from '../src/admin.ts'
 
 let failures = 0
@@ -574,6 +575,21 @@ check('no creation date', appLine(app({ createdAt: null }), asOf), 'mcp offline_
 check('revoke, no sessions', revokeWarning(app({ sessions: 0 })), 'Claude Code will need to sign in again.')
 check('revoke, one session', revokeWarning(app({})), 'Claude Code will need to sign in again, and its agent session stops.')
 check('revoke, three sessions', revokeWarning(app({ sessions: 3 })), 'Claude Code will need to sign in again, and its 3 agent sessions stop.')
+
+console.log('── boards: one read per refresh, never one per run ─────────────────────────')
+const withRuns = (count, archived = false) => ({
+  projects: [
+    { archivedAt: null, runs: Array.from({ length: count }, (_, n) => ({ item: { id: `r${n}` } })) },
+    { archivedAt: archived ? '2026-10-01T00:00:00Z' : null, runs: [{ item: { id: 'old' } }] },
+  ],
+})
+const heldAll = (count) => Object.fromEntries([...Array.from({ length: count }, (_, n) => `r${n}`), 'old'].map((id) => [id, {}]))
+check('opening the store: one read of every run, 75 runs', boardsRead(withRuns(75), 'all', {}), 'all')
+check('a frame naming two runs reads those two', boardsRead(withRuns(75), ['r3', 'r9'], heldAll(75)), ['r3', 'r9'])
+check('a run with no board yet is read with them', boardsRead(withRuns(3), ['r1'], { r0: {}, r1: {}, old: {} }), ['r1', 'r2'])
+check('a run of an archived project is not read', boardsRead(withRuns(2, true), [], { r0: {}, r1: {} }), null)
+check('nothing named, everything held: no read', boardsRead(withRuns(3), [], heldAll(3)), null)
+check('past the cap: one read of every run', boardsRead(withRuns(BOARDS_MAX + 1, true), [], {}), 'all')
 
 console.log(failures === 0 ? '\nAll checks passed.' : `\n${failures} check(s) failed.`)
 if (failures > 0) process.exitCode = 1

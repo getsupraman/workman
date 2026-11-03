@@ -1,6 +1,7 @@
 import { createEffect, createSignal, on, onCleanup, type Accessor } from 'solid-js'
 import * as api from './api.ts'
 import type { SessionTenant } from './connect.ts'
+import { boardsRead } from './boards.ts'
 import { onFrames } from './live.ts'
 
 /**
@@ -23,26 +24,16 @@ const note = (error: unknown) => {
   setFailure(error instanceof Error ? error.message : String(error))
 }
 
-async function loadBoard(run: string): Promise<void> {
-  try {
-    const board = await api.board(run)
-    setBoards((all) => ({ ...all, [run]: board }))
-  } catch (error) {
-    if (!(error instanceof api.NotFound)) note(error)
-  }
-}
-
 async function loadOverview(runs: 'all' | string[]): Promise<void> {
   try {
     const next = await api.overview()
     setOverview(next)
     setFailure(undefined)
 
-    // An archived project's bars are not drawn until it is shown, which falls back to the rollup.
-    const ids = next.projects.filter((p) => !p.archivedAt).flatMap((p) => p.runs.map((r) => r.item.id))
-    const known = boards()
-    const wanted = runs === 'all' ? ids : ids.filter((id) => runs.includes(id) || known[id] === undefined)
-    await Promise.all(wanted.map(loadBoard))
+    const read = boardsRead(next, runs, boards())
+    if (read === null) return
+    const fresh = await api.boards(read === 'all' ? undefined : read)
+    setBoards((all) => ({ ...all, ...Object.fromEntries(fresh.boards.map((b) => [b.run.id, b])) }))
   } catch (error) {
     note(error)
   }

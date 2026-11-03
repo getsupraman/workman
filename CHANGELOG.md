@@ -7,6 +7,14 @@ All notable changes to the Workman server and the `workman` plugin are recorded 
 
 ## [Unreleased]
 
+### Changed
+
+- The dashboard reads the run boards in one `GET /api/v1/boards` call instead of one `/api/v1/runs/{id}/board`
+  per run, so a page opens without waiting on a board per run and the sidebar bars arrive together. The new
+  endpoint returns every unarchived run's board the caller can see, in the overview's order, or with
+  `runs=<id>,<id>,…` (at most 200) just those; each board is the one `/runs/{id}/board` returns, read from one
+  snapshot. A live frame re-reads the boards of the runs it names in the same single call.
+
 ## [2.3.1] — 2026-11-03
 
 Server 2.3.1 and plugin 2.3.1. No migration.

@@ -294,6 +294,16 @@ seq order). The client rebuilds the tree from `parentId`/`depth`/`hasChildren`.
     "openedAt": "…", "startedAt": "…" | null, "closedAt": "…" | null }] }
 ```
 
+### `GET /api/v1/boards?runs={id},{id},…` (runs optional; added for the dashboard, additive)
+Many runs' boards in one read, each exactly the `/runs/{id}/board` body for that run; `asOf` and `seq` are
+read once and are the same on every board. Without `runs`: every run of every unarchived project the caller
+can see, in the overview's order. With it: those runs, in the order given — an archived project's run
+included — and an id that is unknown, not a run, or in a project rule 8 hides is left out, not a 404. More
+than 200 ids, or one that is not a uuid, is a 400.
+```jsonc
+{ "asOf": "…", "seq": 1234, "boards": [Board] }
+```
+
 ### `GET /api/v1/items/{id}`
 A unit page: what was asked, what the agent **reported**, what was **verified**.
 ```jsonc

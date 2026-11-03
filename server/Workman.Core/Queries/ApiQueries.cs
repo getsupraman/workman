@@ -294,21 +294,39 @@ public sealed class ApiQueries(NpgsqlDataSource dataSource)
         return await ListAsync<RunRow>(sql, new { project = projectId }, cancellationToken);
     }
 
-    public async Task<(string? Branch, string? Worktree)> RunConfigAsync(
-        Guid runId,
+    /// <summary>The runs under the projects, each project's in <see cref="RunsAsync"/>'s order.</summary>
+    public async Task<IReadOnlyList<RunOfProjectRow>> ProjectRunsAsync(
+        IReadOnlyCollection<Guid> projectIds,
         CancellationToken cancellationToken = default)
     {
         const string sql =
             """
-            SELECT branch AS "Branch", worktree_path AS "Worktree"
-            FROM   run_config WHERE item_id = @run;
+            SELECT p.id AS "ProjectId", r.id AS "RunId"
+            FROM   item p
+            JOIN   item r ON r.kind = 'run' AND r.ancestors @> ARRAY[p.id]::uuid[]
+            WHERE  p.id = ANY(@projects)
+            ORDER  BY p.id, r.seq, r.ref;
             """;
 
-        var row = await SingleAsync<RunConfigRow>(sql, new { run = runId }, cancellationToken);
-        return (row?.Branch, row?.Worktree);
+        return projectIds.Count == 0
+            ? []
+            : await ListAsync<RunOfProjectRow>(sql, new { projects = projectIds.ToArray() }, cancellationToken);
     }
 
-    private sealed record RunConfigRow(string? Branch, string? Worktree);
+    public async Task<IReadOnlyList<RunConfigRow>> RunConfigsAsync(
+        IReadOnlyCollection<Guid> runIds,
+        CancellationToken cancellationToken = default)
+    {
+        const string sql =
+            """
+            SELECT item_id AS "RunId", branch AS "Branch", worktree_path AS "Worktree"
+            FROM   run_config WHERE item_id = ANY(@runs);
+            """;
+
+        return runIds.Count == 0
+            ? []
+            : await ListAsync<RunConfigRow>(sql, new { runs = runIds.ToArray() }, cancellationToken);
+    }
 
     /// <summary>
     /// The subtree as one flat list in pre-order: the document path sorts a parent before its

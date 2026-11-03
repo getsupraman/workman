@@ -129,6 +129,8 @@ public sealed record BoardView(
     RollupView Rollup,
     IReadOnlyList<BoardRowView> Rows);
 
+public sealed record BoardsView(DateTimeOffset AsOf, long Seq, IReadOnlyList<BoardView> Boards);
+
 public sealed record CriterionView(string Id, string Text, bool Checked, string? Evidence, DateTimeOffset? CheckedAt);
 
 public sealed record ReportView(
