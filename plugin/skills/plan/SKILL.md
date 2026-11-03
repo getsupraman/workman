@@ -138,6 +138,7 @@ Sweep the project for items that no longer tell the truth:
 | two items, one piece of work | a `duplicates` or `supersedes` link |
 | blocked on a question nobody owns | name the decision and whose it is |
 | assumption past its revisit point | check it or re-date it |
+| findings from an audit or review, turned into units | `work_move` each finding under the unit that will fix it, so that unit owns it and resolves it when it closes |
 | claim expired | name it; whoever held it decides |
 | order wrong | new `blocks` links or a `priority` change |
 

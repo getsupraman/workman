@@ -1,7 +1,7 @@
 {
   "$schema": "https://json.schemastore.org/claude-code-plugin-manifest.json",
   "name": "workman",
-  "version": "2.2.0",
+  "version": "2.3.0",
   "description": "Six skills for running coding agents against Workman, the self-hosted work tracker. plan — turn a request into a run with units, done-criteria, verify commands, rules and assumptions, then stop for approval. orchestrate — execute one plan too large for a context window by delegating every task to subagents and verifying each result. controller — run a queue of independent units, one nested Claude each: brief, steer, verify, land and record. agents — launch, address, watch and stop nested Claude sessions over a READY/BLOCKED/DONE protocol (ships the agents MCP server). setup — install, start, register and back up the Workman server, or register a hosted one. import — bring a repo's existing plans, TODOs and ADRs into Workman, keeping only what is still true.",
   "author": {
     "name": "Supraman"

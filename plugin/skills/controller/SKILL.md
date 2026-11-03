@@ -112,6 +112,12 @@ under the queue, or `work_status(ref, "deferred", target: …)` if it already ex
 quietly disappear. The next person to read it must find out *why* half of it is undone without having
 to reconstruct your reasoning.
 
+### A finding belongs to the item it sits under
+
+When an audit or a review becomes units, move each of its findings under the unit that will fix it —
+`work_move(ref: "<finding ref>", parent: "<unit ref>")` — so that unit owns it. A finding left on the
+queue or on the audited run has no owner: the units that fix it close, and it stays open.
+
 ---
 
 ## 2. One at a time
@@ -330,6 +336,10 @@ A landed unit closes with the commit that landed it: tick its criteria with `wor
 criteria: [{id, checked: true, evidence}])`, then `work_status(ref, "done", commit: "<sha>")`. The
 close is refused until every criterion is checked, one of *your* verifications exists and no blocker
 finding targets it; the refusal names the call for each gap.
+
+When a unit closes, resolve each finding under it: done with the unit's commit, or deferred with a
+target and the reason. A minor finding does not hold the close, so nothing else will make you look.
+A run does not close while a finding under it is open.
 
 Green units land. Red or blocked units **do not** — leave the branch in place, record why with
 `work_status(ref, "blocked", reason: …)`, and move on. A half-fix on the integration branch costs more

@@ -277,7 +277,7 @@ Ranked by what has actually been caught. The brief is in `references/briefs.md`;
 
 ### What to do with the result
 
-Findings come back BLOCKER/MINOR against the same bar as a review: *an agent reading X would do Y, which breaks Z*. Record them with `work_finding(…, source: "plan_audit")`. Blockers change the plan — the items (`work_update`, `work_create`, `work_link`) or the rules (`work_constrain`) — before the next task runs, and the change is a re-plan. Minors stay open as findings until you close or defer them.
+Findings come back BLOCKER/MINOR against the same bar as a review: *an agent reading X would do Y, which breaks Z*. Record them with `work_finding(…, source: "plan_audit")`. Blockers change the plan — the items (`work_update`, `work_create`, `work_link`) or the rules (`work_constrain`) — before the next task runs, and the change is a re-plan. Minors stay open as findings until you close or defer them. A finding belongs to the item it sits under: when an audit becomes tasks, `work_move` each finding under the task that will fix it, and when that task closes, resolve each finding under it — done with the task's commit, or deferred with a target and the reason.
 
 **Then re-audit, if you fixed blockers by editing the plan.** Same rule as re-gating after gate-produced fixes, and the same reason. A fix round has already been observed to drop a line mid-sentence and to leave four decorative verification filters standing after the round that was supposed to fix them.
 

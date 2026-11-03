@@ -132,7 +132,8 @@ public static class PromptCatalogue
             "- two items for one piece of work: merge them - keep one, and mark the other a duplicate of it;",
             "- out of date: update its title, intent or criteria to what is true now;",
             "- an assumption: confirm or disprove it, with the evidence;",
-            "- an expired claim or a stale in-progress item: find out whether the work finished, then close, defer or restart it.",
+            "- an expired claim or a stale in-progress item: find out whether the work finished, then close, defer or restart it;",
+            "- a finding left open under a closed item: settle it with that item's commit, or move it under the item that will fix it, so it has an owner.",
             "Then restructure what stays into clear runs - one goal each, phases where the work is connected - and order it so what others wait on comes first.",
             NoForce,
             ProposeAndWait);
@@ -181,6 +182,7 @@ public static class PromptCatalogue
             $"Finalize {Named(f)}: no run in it has open work left.",
             $"{From(f)} and confirm that nothing open is left outside the backlog.",
             "- carry any leftover to the backlog: defer it, with the reason;",
+            "- give every finding still open an owner: resolve it with the commit that fixed it, or move it under the item that will fix it - a run does not close while a finding under it is open;",
             "- close each run still open, with evidence: run its verification yourself first;",
             "- then archive the project.",
             ProposeAndWait,
@@ -197,6 +199,7 @@ public static class PromptCatalogue
             $"Finalize {Named(f)}: {f.Open} open item(s) left.",
             $"{From(f)}, then read everything still open in the run and its loose ends.",
             "1. Clean up what is left: what is done in the code gets closed with evidence, what is stale gets cancelled with the reason, what can wait gets deferred to the backlog, and the rest is reordered so what others wait on comes first.",
+            "   Resolve or move every open finding in the run: done with the commit that fixed it, deferred with a target and the reason, or moved under the unit that will fix it. A run does not close while a finding under it is open.",
             "2. Explain what is missing to close the run: for each item still open, what the done guard still wants (an unchecked criterion, a verification you have not run, an open child, a blocker finding), and for each phase whether its gate has run.",
             "3. Offer to start the remaining work, in that order.",
             ProposeAndWait,
@@ -225,7 +228,8 @@ public static class PromptCatalogue
             "- a report that claims more than the evidence shows;",
             "- criteria ticked without evidence, or reworded to fit what was built;",
             "- a transition forced past the done guard;",
-            "- work deferred or cancelled to make the run look finished.",
+            "- work deferred or cancelled to make the run look finished;",
+            "- a finding still open under an item marked done: the item closed, and nobody settled what was found wrong with it.",
             "Then check a few done items against the code itself. List every gap with its ref and what would settle it.");
 
     private static string Work(PromptFacts f)

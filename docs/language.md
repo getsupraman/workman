@@ -46,7 +46,10 @@ me the item."
 **Finding.** Something found wrong, by a review, a gate, an audit or the AI itself. It has a
 severity: a **blocker** stops its target from being closed until it is settled; a **minor** one
 doesn't. *Use it* when something is wrong and must not get lost. *Say:* "Log that as a finding
-against 2.4." "Is that a blocker?"
+against 2.4." "Is that a blocker?" A finding belongs to the item it sits under: when an audit becomes
+units, each finding moves under the unit that will fix it, and that unit settles it when it closes —
+done with its commit, or deferred with a target and the reason. A run does not close while a finding
+under it is open.
 
 **Follow-up.** Something to do later, written down now so it is not lost in chat. *Say:* "Make a
 follow-up for the flaky test." "Note it as a follow-up and carry on."

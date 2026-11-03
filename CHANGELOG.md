@@ -22,6 +22,18 @@ All notable changes to the Workman server and the `workman` plugin are recorded 
   with a target, which moves it out of the run). Tasks and sub-tasks are unchanged: a minor finding still does
   not hold a task close. No migration.
 
+- The dashboard's prompts say who owns a finding. `finalize-run` resolves or moves every open finding in the run
+  (done with the commit that fixed it, deferred with a target and the reason, or moved under the unit that will
+  fix it); `audit` ("Did we cheat?") looks for a finding still open under an item marked done; `finalize` and
+  `cleanup` give every finding left open an owner. A run does not close while a finding under it is open.
+
+### Plugin 2.3.0
+
+- Changed: the controller, plan and orchestrate skills and `docs/language.md` teach the same practice. A finding
+  belongs to the item it sits under: when an audit or a review becomes units, each finding moves under the unit
+  that will fix it (`work_move`), and when that unit closes it resolves each finding under it - done with the
+  unit's commit, or deferred with a target and the reason.
+
 ## [2.2.0] — 2026-11-03
 
 Server 2.2.0 and plugin 2.2.0. No migration.
