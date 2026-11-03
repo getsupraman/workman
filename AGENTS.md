@@ -18,7 +18,8 @@ it. Read this before you change anything.
 
 ## Build and test
 
-Run what `.github/workflows/ci.yml` runs for every part you touched:
+Run the gate for every part you touched (the same steps as `.github/workflows/ci.yml`, which no longer runs on
+GitHub). Nothing is pushed while it is red:
 
 ```sh
 # .NET (Testcontainers needs a running Docker)
@@ -45,7 +46,8 @@ that alters any tool's name, description or schema must repin its constants and 
 - **A change that reaches installed users bumps `plugin/.claude-plugin/plugin.json` `version`.**
   Claude Code re-copies the plugin only when that version changes, so a skill or asset edit without a
   bump never arrives.
-- **PR-only to `main`.** No direct pushes, no force-pushes.
+- **Gate, then push to `main`.** Maintainers run the gate on their machine and push straight to `main`;
+  outside contributions come as pull requests. Linear history; never force-push `main`.
 - **Nothing private (C95).** No client names, private hosts or domains, ssh details, tokens, or live
   data — in code, docs, tests, fixtures or commit messages. Use placeholders (`example.com`,
   `127.0.0.1`) and synthetic data.

@@ -8,7 +8,7 @@
 
 ## Checklist
 
-- [ ] CI is green
+- [ ] The gate passes locally (the commands and result lines are above)
 - [ ] Reaches installed users? `version` in `plugin/.claude-plugin/plugin.json` is bumped
 - [ ] User-visible? `CHANGELOG.md` says what changed
 - [ ] Changes a tool's name, description or schema? `ImportVisibilityTests` is repinned and this

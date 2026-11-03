@@ -6,7 +6,6 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/getsupraman/workman/actions/workflows/ci.yml"><img src="https://github.com/getsupraman/workman/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
   <a href="LICENSE"><img src="https://img.shields.io/github/license/getsupraman/workman" alt="License: Apache-2.0"></a>
   <a href="https://github.com/getsupraman/workman/releases"><img src="https://img.shields.io/github/v/release/getsupraman/workman" alt="Release"></a>
   <a href="https://github.com/getsupraman/workman/pkgs/container/workman"><img src="https://img.shields.io/badge/image-ghcr.io%2Fgetsupraman%2Fworkman-1f2430" alt="Image: ghcr.io/getsupraman/workman"></a>
@@ -321,6 +320,13 @@ Compose, and registers `http://127.0.0.1:5290/mcp` as `workman`. The dashboard i
 The model never reads or pastes a token. [docs/install.md](docs/install.md) covers the hosted server,
 self-hosting and serving one server on several hosts; to run the server from source, see
 [CONTRIBUTING.md](CONTRIBUTING.md) and [server/frontend/README.md](server/frontend/README.md).
+
+## Supraman
+
+Workman is part of the Supraman suite. [Supraman](https://github.com/getsupraman/supraman) is the desktop
+app that starts and supervises your Claude Code sessions: sign in to Workman once, and every session it
+launches gets its own Workman token, while its Inbox shows the Workman items that need you. Workman works on
+its own too; Supraman needs a Workman server, hosted [work.supraman.ai](https://work.supraman.ai) or your own.
 
 ## Docs
 

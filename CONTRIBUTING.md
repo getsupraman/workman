@@ -16,8 +16,8 @@ read it too if an agent does the work.
 
 ## Build and test
 
-Run what [CI](.github/workflows/ci.yml) runs for every part you touched. A pull request merges only
-with CI green.
+Run the gate below for every part you touched: the same steps as [ci.yml](.github/workflows/ci.yml),
+which does not run on GitHub. A maintainer runs it again before a pull request merges.
 
 **Server.** The tests start Postgres 17 through Testcontainers, so Docker must be running.
 
@@ -55,7 +55,8 @@ claude plugin validate .
 
 - **Pull requests only.** Nothing is pushed to `main` directly, and nothing is force-pushed. Branch,
   open a pull request against `main`, and fill in the template.
-- **CI must be green** before a pull request merges.
+- **The gate must pass**: say in the pull request what you ran and what it printed. A maintainer runs it
+  again before merging.
 - **A change that reaches installed users bumps `version`** in
   [`plugin/.claude-plugin/plugin.json`](plugin/.claude-plugin/plugin.json). Claude Code re-copies the
   plugin only when that version changes, so a skill or asset edit without a bump never arrives.
