@@ -133,7 +133,11 @@ public sealed class WorkmanQueries(NpgsqlDataSource dataSource)
             SELECT t.ref            AS "Waiting",
                    b.ref            AS "On",
                    b.status         AS "Status",
-                   b.seq < t.seq    AS "OrderedCorrectly"
+                   b.seq < t.seq    AS "OrderedCorrectly",
+                   t.id             AS "WaitingId",
+                   t.ref_scope_id   AS "WaitingScopeId",
+                   b.id             AS "OnId",
+                   b.ref_scope_id   AS "OnScopeId"
             FROM   item_link l
             JOIN   item t ON t.id = l.to_item_id
             JOIN   item b ON b.id = l.from_item_id

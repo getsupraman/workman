@@ -21,7 +21,11 @@ public sealed record UnclosedDependency(
     string Waiting,
     string On,
     ItemStatus Status,
-    bool OrderedCorrectly);
+    bool OrderedCorrectly,
+    Guid WaitingId,
+    Guid? WaitingScopeId,
+    Guid OnId,
+    Guid? OnScopeId);
 
 /// <summary>
 /// The four unclosed buckets plus <see cref="DoneCount"/>. <c>cancelled</c> and <c>superseded</c>

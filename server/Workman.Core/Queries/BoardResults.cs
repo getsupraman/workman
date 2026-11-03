@@ -109,7 +109,13 @@ public sealed record BlockerRow(
     string? TargetRef,
     Guid FindingId);
 
-public sealed record BlockedRow(Guid ItemId, string Ref, string BlockedByRef);
+public sealed record BlockedRow(
+    Guid ItemId,
+    string Ref,
+    string BlockedByRef,
+    Guid? RefScopeId,
+    Guid BlockedById,
+    Guid? BlockedByScopeId);
 
 public sealed record ClaimRow(
     string ItemRef,

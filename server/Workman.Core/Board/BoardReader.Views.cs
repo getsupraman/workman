@@ -97,8 +97,7 @@ public sealed partial class BoardReader
 
         var root = subtree.First(n => n.Id == scope.Item.Id);
         var facts = await FactsAsync(subtree.Select(n => n.Id), cancellationToken);
-        var blocked = (await board.BlockedByAsync([scope.Item.Id], cancellationToken))
-            .ToLookup(b => b.ItemId, b => b.BlockedByRef);
+        var blocked = await BlockedByAsync(scope.WorkspaceId, [scope.Item.Id], cancellationToken);
 
         var nodes = subtree
             .Where(n => n.Depth - root.Depth <= depth)
@@ -253,7 +252,7 @@ public sealed partial class BoardReader
             : [];
         var verifications = (await board.VerificationsAsync(ids, cancellationToken)).ToLookup(v => v.ItemId);
         var reports = (await board.ReportsAsync(ids, cancellationToken)).ToLookup(r => r.ItemId);
-        var blocked = (await board.BlockedByAsync(ids, cancellationToken)).ToLookup(b => b.ItemId, b => b.BlockedByRef);
+        var blocked = await BlockedByAsync(workspaceId, ids, cancellationToken);
         var projects = resolved.Where(r => r.Kind == "project").Select(r => r.Id).Distinct().ToList();
         var repos = (projects.Count == 0 ? [] : await board.ProjectReposAsync(projects, cancellationToken))
             .ToLookup(r => r.ProjectId);
@@ -555,11 +554,14 @@ public sealed partial class BoardReader
 
         if (wanted.Contains("deps"))
         {
-            var deps = await queries.UnclosedDependenciesAsync(scope.Item.Id, cancellationToken);
-            found.AddRange(deps.Select(d => (IReadOnlyList<string>)[
-                $"{Glyph.Pad(d.Waiting, 6)}  {Glyph.Pad("dep", 6)}  "
-                + $"{Glyph.Pad($"waiting on {d.On} ({d.Status.ToString().ToLowerInvariant()})", 46)}  "
-                + $"— work_status(ref:\"{d.On}\", to:\"done\") or work_link to re-point it"]));
+            foreach (var d in await queries.UnclosedDependenciesAsync(scope.Item.Id, cancellationToken))
+            {
+                var (waiting, on) = await DependencyRefsAsync(scope, d, cancellationToken);
+                found.Add([
+                    $"{Glyph.Pad(waiting, 6)}  {Glyph.Pad("dep", 6)}  "
+                    + $"{Glyph.Pad($"waiting on {on} ({d.Status.ToString().ToLowerInvariant()})", 46)}  "
+                    + $"— work_status(ref:\"{on}\", to:\"done\") or work_link to re-point it"]);
+            }
         }
 
         if (wanted.Contains("stale"))
@@ -597,12 +599,13 @@ public sealed partial class BoardReader
 
         foreach (var dep in await queries.UnclosedDependenciesAsync(scope.Item.Id, cancellationToken))
         {
+            var (waiting, on) = await DependencyRefsAsync(scope, dep, cancellationToken);
             rows.Add(new AuditRow(
                 dep.OrderedCorrectly ? "dep-unclosed" : "dep-inverted",
-                dep.Waiting,
-                $"waits on {dep.On} ({dep.Status.ToString().ToLowerInvariant()})"
+                waiting,
+                $"waits on {on} ({dep.Status.ToString().ToLowerInvariant()})"
                 + (dep.OrderedCorrectly ? string.Empty : ", which is sequenced after it"),
-                $"work_move(ref:\"{dep.On}\", before:\"{dep.Waiting}\") or work_link to re-point it"));
+                $"work_move(ref:\"{on}\", before:\"{waiting}\") or work_link to re-point it"));
         }
 
         var lines = new List<string>
@@ -740,6 +743,46 @@ public sealed partial class BoardReader
         { VerificationsPassed: > 0 } => "✓",
         _ => Glyph.None,
     };
+
+    /// <summary>
+    /// The <c>← 2.4</c> flag per blocked item: a blocker in the waiting item's run prints bare, one
+    /// elsewhere (links are workspace-wide) prints as a ref that resolves to it alone.
+    /// </summary>
+    private async Task<ILookup<Guid, string>> BlockedByAsync(
+        Guid workspaceId,
+        IReadOnlyCollection<Guid> ids,
+        CancellationToken cancellationToken)
+    {
+        var printed = new List<(Guid ItemId, string Ref)>();
+        foreach (var row in await board.BlockedByAsync(ids, cancellationToken))
+        {
+            printed.Add((row.ItemId, row.BlockedByScopeId == row.RefScopeId
+                ? row.BlockedByRef
+                : await board.PrintableRefAsync(workspaceId, row.BlockedById, row.BlockedByRef, cancellationToken)));
+        }
+
+        return printed.ToLookup(p => p.ItemId, p => p.Ref);
+    }
+
+    /// <summary>
+    /// A dependency's two ends as printed: the waiting item bare inside the rendered scope's run, the
+    /// blocker bare inside the waiting item's run, each otherwise a ref that resolves to it alone.
+    /// </summary>
+    private async Task<(string Waiting, string On)> DependencyRefsAsync(
+        ScopeResult.Found scope,
+        UnclosedDependency dependency,
+        CancellationToken cancellationToken)
+    {
+        var waiting = dependency.WaitingScopeId == scope.Item.RefScopeId
+            ? dependency.Waiting
+            : await board.PrintableRefAsync(scope.WorkspaceId, dependency.WaitingId, dependency.Waiting, cancellationToken);
+
+        var on = dependency.OnScopeId == dependency.WaitingScopeId
+            ? dependency.On
+            : await board.PrintableRefAsync(scope.WorkspaceId, dependency.OnId, dependency.On, cancellationToken);
+
+        return (waiting, on);
+    }
 
     /// <summary>doc 06 §2 — absent means normal, so only an exception earns a marker.</summary>
     private static IReadOnlyList<string>? FlagsFor(

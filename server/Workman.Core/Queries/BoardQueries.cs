@@ -697,7 +697,10 @@ public sealed partial class BoardQueries(NpgsqlDataSource dataSource)
             """
             SELECT i.id  AS "ItemId",
                    i.ref AS "Ref",
-                   b.ref AS "BlockedByRef"
+                   b.ref AS "BlockedByRef",
+                   i.ref_scope_id AS "RefScopeId",
+                   b.id AS "BlockedById",
+                   b.ref_scope_id AS "BlockedByScopeId"
             FROM   item_link l
             JOIN   item i ON i.id = l.to_item_id
             JOIN   item b ON b.id = l.from_item_id
