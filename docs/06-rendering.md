@@ -134,7 +134,7 @@ RUN entity-store  ·  project atlas  ·  branch feat/entity-store @ 7cd34161
 GOAL Search answers from a curated entity store instead of page-chunked documents,
      provably without re-indexing unchanged records.
 
-WHERE  phase 2 of 9 — Ingestion. 6 of 8 tasks done, gate not yet run.
+WHERE  phase 2 of 9 — Ingestion. 6 of 8 done across the run.
 NEXT   work_status(ref:"2.8", to:"in_progress")   ← the literal next action
 
 BINDING (4)
@@ -275,10 +275,10 @@ GOAL <the project's intent, whole>
 
 OPEN RUNS (2)                      every open run but the backlog run
   run-a — The run
-    0/2 tasks done · held: 1.2 by aw-alpha
+    0/3 done · held: 1.2 by aw-alpha
     next  work_get(refs:["1.1"]) then work_status(ref:"1.1", to:"in_progress")
   run-b — The other run
-    0/1 tasks done
+    0/1 done
     next  nothing ready — 9.1 is blocked; work_threads(scope:"run-b", include:"deps")
 
 RECENT (5 of 7 closed)             newest first: outcome, closed date, last commit in the run

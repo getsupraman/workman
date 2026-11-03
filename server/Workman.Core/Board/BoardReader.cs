@@ -597,14 +597,14 @@ public sealed partial class BoardReader(WorkmanQueries queries, BoardQueries boa
     private static string Where(ScopeRef item, IReadOnlyList<SubtreeNode> subtree)
     {
         var phases = subtree.Where(n => n.Kind == "phase" && n.ParentId == item.Id).ToList();
-        var tasks = subtree.Where(n => n.Id != item.Id && n.Kind is "task" or "subtask").ToList();
-        var done = tasks.Count(t => t.Status == ItemStatus.Done);
+        var root = subtree.FirstOrDefault(n => n.Id == item.Id);
+        var (done, total) = root is null ? (0, 0) : (root.DoneCount, Total(root));
 
         if (phases.Count == 0)
         {
-            return tasks.Count == 0
+            return subtree.All(n => n.Id == item.Id)
                 ? $"{Glyph.Kind(item.Kind)} {item.Ref} has no children yet."
-                : $"{done} of {tasks.Count} tasks done.";
+                : $"{done} of {total} done.";
         }
 
         var current = phases.FirstOrDefault(p => p.DoingCount > 0 || p.ReviewCount > 0)
@@ -613,8 +613,12 @@ public sealed partial class BoardReader(WorkmanQueries queries, BoardQueries boa
         var index = phases.IndexOf(current) + 1;
 
         return $"phase {index} of {phases.Count} — {Glyph.Flat(current.Title)}. "
-             + $"{done} of {tasks.Count} tasks done across the run.";
+             + $"{done} of {total} done across the run.";
     }
+
+    /// <summary>The denominator of an "X of Y": a node's counted descendants that are not cancelled or superseded.</summary>
+    internal static long Total(SubtreeNode node)
+        => node.OpenCount + node.DoingCount + node.BlockedCount + node.ReviewCount + node.DoneCount;
 
     /// <summary>
     /// The literal next action (doc 06 §4). It names <c>work_get</c> first because that call exists

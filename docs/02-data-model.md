@@ -953,9 +953,12 @@ project with every member of its workspace is the tenant-wide one (doc 08 §4 "P
 ## 13. Views the server leans on
 
 ```sql
--- per-item rollup, used by work_tree and the board. The four unclosed buckets plus done_count
--- sum to the denominator of every "X of Y": 'review' is work in flight and counts, while
--- 'cancelled' and 'superseded' are in no bucket — they are closed and were not done.
+-- per-item rollup over EVERY descendant. The four unclosed buckets plus done_count: 'review' is
+-- work in flight and counts, while 'cancelled' and 'superseded' are in no bucket — they are closed
+-- and were not done. Since rollup-two-counts no "X of Y" prints it: work_tree, work_brief and
+-- /api/v1 count only leaves plus childless phases and features (WorkmanQueries.Counted, the
+-- dashboard's LEAF + EMPTY_COUNTED). Every-descendant counts remain for what asks whether anything
+-- at all is open below an item: the run order of a project, the `open` flag, v1's `disagrees`.
 CREATE VIEW item_rollup AS
 SELECT p.id,
        count(*) FILTER (WHERE c.status IN ('open','ready'))  AS open_count,

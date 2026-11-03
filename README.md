@@ -77,7 +77,7 @@ generated from the record every time, so it can't go stale.
 RUN checkout-v2  ·  branch feat/checkout-v2
 GOAL Ship the new checkout behind a flag: carts survive a sign out, payment fits on one page.
 
-WHERE  phase 1 of 3 — Saved carts. 1 of 3 tasks done, gate not yet run.
+WHERE  phase 1 of 3 — Saved carts. 1 of 3 done across the run.
 NEXT   work_status(ref:"1.2", to:"in_progress")   ← the literal next action
 
 BINDING (2)

@@ -241,7 +241,7 @@ public sealed class RendererTests
             Branch: "feat/entity-store",
             Head: "7cd34161",
             Goal: "The voice agent answers from a curated entity store instead of page-chunked PDFs.",
-            Where: "phase 2 of 9 — Ingestion. 6 of 8 tasks done.",
+            Where: "phase 2 of 9 — Ingestion. 6 of 8 done across the run.",
             Next: "work_get(refs:[\"2.8\"])  then  work_status(ref:\"2.8\", to:\"in_progress\")",
             Binding: [new BindingLine("C1", "never modify Atlas.Web/Core/Rag/**", true, "ask the owner")],
             BindingTotal: 1,

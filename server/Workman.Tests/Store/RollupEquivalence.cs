@@ -8,9 +8,11 @@ using static Workman.Tests.Store.Tokens;
 namespace Workman.Tests.Store;
 
 /// <summary>
-/// The four reads doc 15 moved off the <c>item_rollup</c> view, frozen as they were at fc45f08 and
+/// The reads doc 15 moved off the <c>item_rollup</c> view, frozen as they were at fc45f08 and
 /// run beside the live methods over the 5k seed: every run and project scope must give identical
 /// rows in identical order. FactsAsync has no ORDER BY, so its rows are compared sorted by id.
+/// SubtreeAsync was the fourth; rollup-two-counts moved it onto <c>WorkmanQueries.CountedRollup</c>
+/// on purpose, so it no longer equals any <c>item_rollup</c> form and is not compared.
 /// </summary>
 public static class RollupEquivalence
 {
@@ -22,28 +24,6 @@ public static class RollupEquivalence
           JOIN   item a ON a.id = u.id
         ) p
         """;
-
-    private const string OldSubtree =
-        $"""
-         SELECT i.id              AS "Id",
-                i.parent_id       AS "ParentId",
-                i.ref             AS "Ref",
-                i.kind            AS "Kind",
-                i.title           AS "Title",
-                i.status          AS "Status",
-                i.depth           AS "Depth",
-                i.seq             AS "Seq",
-                r.open_count      AS "OpenCount",
-                r.doing_count     AS "DoingCount",
-                r.blocked_count   AS "BlockedCount",
-                r.review_count    AS "ReviewCount",
-                r.done_count      AS "DoneCount"
-         FROM   item i
-         JOIN   item_rollup r ON r.id = i.id
-         {DocumentPath}
-         WHERE  i.id = @scope OR i.ancestors @> ARRAY[@scope]::uuid[]
-         ORDER BY p.path || i.seq;
-         """;
 
     private const string OldDefaultScope =
         """
@@ -178,7 +158,7 @@ public static class RollupEquivalence
         var queries = new WorkmanQueries(source);
         var board = new BoardQueries(source);
         var api = new ApiQueries(source);
-        var compared = new Dictionary<string, int> { ["subtree"] = 0, ["default-scope"] = 0, ["board"] = 0, ["facts"] = 0 };
+        var compared = new Dictionary<string, int> { ["default-scope"] = 0, ["board"] = 0, ["facts"] = 0 };
 
         await using var connection = await source.OpenConnectionAsync(Ct);
         var scopes = (await connection.QueryAsync<Guid>(
@@ -192,8 +172,6 @@ public static class RollupEquivalence
         foreach (var scope in scopes)
         {
             var subtree = await queries.SubtreeAsync(scope, Ct);
-            Same("subtree", scope, subtree, (await connection.QueryAsync<SubtreeNode>(OldSubtree, new { scope })).AsList());
-            compared["subtree"] += subtree.Count;
 
             var rows = await api.BoardAsync(scope, Ct);
             Same("board", scope, rows, (await connection.QueryAsync<BoardRow>(OldBoard, new { scope })).AsList());

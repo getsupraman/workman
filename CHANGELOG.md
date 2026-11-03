@@ -7,6 +7,18 @@ All notable changes to the Workman server and the `workman` plugin are recorded 
 
 ## [Unreleased]
 
+## [2.2.0] — 2026-11-03
+
+Server 2.2.0 and plugin 2.2.0. No migration.
+
+### Fixed
+
+- One run, one "X of Y". `work_tree` counted every descendant (phases with children included) and `work_brief`
+  counted tasks and sub-tasks only, while the dashboard and `/api/v1` count leaves plus childless phases and
+  features. All of them now use that one definition (`WorkmanQueries.Counted`), so the same run, phase or
+  project shows the same done/total everywhere. The run, gate and project briefs say "N of M done" instead of
+  "N of M tasks done", since the count is no longer only tasks. No migration.
+
 ### Plugin 2.2.0
 
 - Added: `/workman:setup --url <origin>` (`setup.ps1 -Url`) registers a **remote** Workman server, such as the
@@ -18,6 +30,7 @@ All notable changes to the Workman server and the `workman` plugin are recorded 
   (`--clone`, `--port`, `--project`, `--image-version`, `--update`, `--backup`, `--restore`, `--auth token`,
   `--role`). The README and [docs/install.md](docs/install.md) now connect the hosted server this way.
 - Fixed: `setup.ps1` wrote the session helper's `headersHelper` with a trailing backslash.
+
 
 ## [2.1.0] — 2026-11-03
 

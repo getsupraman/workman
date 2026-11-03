@@ -50,9 +50,9 @@ public sealed class ProjectBriefTests(PostgresFixture fixture)
         var runA = Array.IndexOf(lines, "  run-a — The run");
         var runB = Array.IndexOf(lines, "  run-b — The other run");
         Assert.True(runA > 0 && runB > runA, text);
-        Assert.Equal("    0/2 tasks done · held: 1.2 by aw-alpha", lines[runA + 1]);
+        Assert.Equal("    0/3 done · held: 1.2 by aw-alpha", lines[runA + 1]);
         Assert.Equal("    next  work_get(refs:[\"1.1\"]) then work_status(ref:\"1.1\", to:\"in_progress\")", lines[runA + 2]);
-        Assert.Equal("    0/1 tasks done", lines[runB + 1]);
+        Assert.Equal("    0/1 done", lines[runB + 1]);
         Assert.Equal("    next  nothing ready — 9.1 is blocked; work_threads(scope:\"run-b\", include:\"deps\")", lines[runB + 2]);
         Assert.DoesNotContain(lines, l => l.StartsWith("  backlog — ", StringComparison.Ordinal));
 

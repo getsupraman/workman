@@ -16,10 +16,7 @@ public sealed class ApiQueries(NpgsqlDataSource dataSource)
 
     private const string InScope = "(i.id = @scope OR i.ancestors @> ARRAY[@scope]::uuid[])";
 
-    private const string LeafKinds = "('task','followup','subtask','spike','question','incident')";
-
-    /// <summary>Containers that count as one item while they have no children; the dashboard's <c>EMPTY_COUNTED</c> in <c>state.ts</c>.</summary>
-    private const string EmptyCounted = "('phase','feature')";
+    private const string LeafKinds = WorkmanQueries.LeafKinds;
 
     private const string Closed = "('done','cancelled','superseded')";
 
@@ -132,9 +129,7 @@ public sealed class ApiQueries(NpgsqlDataSource dataSource)
                     count(c.id) FILTER (WHERE c.status = 'cancelled')::int      AS "Cancelled",
                     count(c.id) FILTER (WHERE c.status = 'superseded')::int     AS "Superseded"
              FROM   item p
-             LEFT   JOIN item c ON c.ancestors @> ARRAY[p.id]
-                               AND (c.kind IN {LeafKinds}
-                                    OR (c.kind IN {EmptyCounted} AND NOT EXISTS (SELECT 1 FROM item g WHERE g.parent_id = c.id)))
+             LEFT   JOIN item c ON c.ancestors @> ARRAY[p.id] AND {WorkmanQueries.Counted}
              WHERE  p.id = ANY(@ids)
              GROUP  BY p.id;
              """;

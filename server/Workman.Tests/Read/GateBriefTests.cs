@@ -47,7 +47,7 @@ public sealed class GateBriefTests(PostgresFixture fixture)
         var text = await world.Reader.BriefSessionAsync(
             await world.ScopeAsync("1"), "gate", WriteSeed.Keeper(fixture), Ct, signed: true);
 
-        Assert.StartsWith("GATE 1 — Foundations  ·  run run-a  ·  0 of 2 tasks done\n", text, StringComparison.Ordinal);
+        Assert.StartsWith("GATE 1 — Foundations  ·  run run-a  ·  0 of 2 done\n", text, StringComparison.Ordinal);
         Assert.Contains("\nTASKS (2)\n", text, StringComparison.Ordinal);
         Assert.Matches("\n  1\\.1 +task +open .*\n      verify   ✓ Passed! Failed: 0, Passed: 91 by orchestrator,", text);
         Assert.Matches("\n  1\\.2 +task .*\n      verify   none recorded\n", text);
@@ -128,7 +128,7 @@ public sealed class GateBriefTests(PostgresFixture fixture)
 
         var brief = await world.Reader.BriefSessionAsync(
             await world.ScopeAsync(call.Groups[1].Value), call.Groups[2].Value, WriteSeed.Keeper(fixture), Ct, signed: true);
-        Assert.StartsWith("GATE 1 — Foundations  ·  run run-a  ·  2 of 2 tasks done", brief, StringComparison.Ordinal);
+        Assert.StartsWith("GATE 1 — Foundations  ·  run run-a  ·  2 of 2 done", brief, StringComparison.Ordinal);
     }
 
     /// <summary>gate-rest: <c>item.gate_criterion</c> is what must be true to accept the phase, and no query read it.</summary>

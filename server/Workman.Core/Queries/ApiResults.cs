@@ -81,8 +81,9 @@ public sealed record RunRow(
     DateTimeOffset? LastEventAt);
 
 /// <summary>
-/// One row of a run board. <see cref="RollupTotal"/>/<see cref="RollupDone"/> are the
-/// <c>item_rollup</c> numbers the pre-v1 tree judged a disagreement by, kept so the flag means the same.
+/// One row of a run board. <see cref="RollupTotal"/>/<see cref="RollupDone"/> count every descendant
+/// (<see cref="WorkmanQueries.Rollup"/>), not only the counted ones an "X of Y" prints: <c>disagrees</c>
+/// asks whether anything at all is unclosed below a closed item, as the text surfaces' <c>open</c> flag does.
 /// </summary>
 public sealed record BoardRow(
     Guid Id,

@@ -57,9 +57,10 @@ public sealed partial class BoardQueries
              LEFT JOIN item s ON s.id = i.ref_scope_id AND s.id <> i.id
              LEFT JOIN item_rollup r ON r.id = i.id
              LEFT JOIN LATERAL (
-                    SELECT count(*) FILTER (WHERE c.status = 'done') AS done, count(*) AS total
+                    SELECT count(*) FILTER (WHERE c.status = 'done') AS done,
+                           count(*) FILTER (WHERE c.status NOT IN ('cancelled','superseded')) AS total
                     FROM   item c
-                    WHERE  c.ancestors @> ARRAY[i.id]::uuid[] AND c.kind IN ('task','subtask')) t ON true
+                    WHERE  c.ancestors @> ARRAY[i.id]::uuid[] AND {WorkmanQueries.Counted}) t ON true
              LEFT JOIN LATERAL (
                     SELECT a.value
                     FROM   artifact a

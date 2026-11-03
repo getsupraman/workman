@@ -70,7 +70,7 @@ public static class ProjectBriefRenderer
             {
                 lines.AddRange(BriefRenderer.Wrap($"  {run.Ref} — ", run.Title, RowIndent));
                 var held = run.Held.Count > 0 ? $"  ·  held: {string.Join(", ", run.Held)}" : string.Empty;
-                lines.AddRange(BriefRenderer.Wrap("    ", $"{run.Done}/{run.Total} tasks done{held}", RowIndent));
+                lines.AddRange(BriefRenderer.Wrap("    ", $"{run.Done}/{run.Total} done{held}", RowIndent));
 
                 // Unwrapped like the run brief's NEXT: a call broken across lines cannot be copied.
                 lines.Add($"    next  {Glyph.Flat(run.Next)}");

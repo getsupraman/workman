@@ -80,7 +80,7 @@ public sealed partial class BoardReader
         var facts = await FactsAsync(ids, cancellationToken);
         var verifications = (await board.VerificationsAsync(ids, cancellationToken)).ToLookup(v => v.ItemId);
         var links = ids.Count == 0 ? [] : await board.LinksAsync(ids, cancellationToken);
-        var done = tasks.Count(t => t.Status == ItemStatus.Done);
+        var counted = subtree.First(n => n.Id == phase.Id);
 
         var printed = new Dictionary<Guid, string>();
         async Task<string> Printed(Guid id, string reference)
@@ -97,7 +97,7 @@ public sealed partial class BoardReader
         var run = header?.RunRef is { Length: > 0 } r ? $"  ·  run {r}" : string.Empty;
         var lines = new List<string>
         {
-            $"GATE {phaseRef} — {Glyph.Flat(phase.Title)}{run}  ·  {done} of {tasks.Count} tasks done",
+            $"GATE {phaseRef} — {Glyph.Flat(phase.Title)}{run}  ·  {counted.DoneCount} of {Total(counted)} done",
         };
 
         if (header?.Goal is { Length: > 0 } goal)

@@ -27,6 +27,7 @@ public sealed record UnclosedDependency(
 /// The four unclosed buckets plus <see cref="DoneCount"/>. <c>cancelled</c> and <c>superseded</c>
 /// are in none of them — they are closed and were not done, so they belong in neither half of an
 /// "X of Y" — but <see cref="ReviewCount"/> is work in flight and belongs in the denominator.
+/// Only <see cref="WorkmanQueries.Counted"/> descendants are in any bucket.
 /// </summary>
 public sealed record ItemRollup(
     Guid Id,
@@ -36,7 +37,7 @@ public sealed record ItemRollup(
     long ReviewCount,
     long DoneCount);
 
-/// <summary>An item in document order, with the rollup of everything beneath it.</summary>
+/// <summary>An item in document order, with the rollup of the counted items beneath it (<see cref="WorkmanQueries.Counted"/>).</summary>
 public sealed record SubtreeNode(
     Guid Id,
     Guid? ParentId,

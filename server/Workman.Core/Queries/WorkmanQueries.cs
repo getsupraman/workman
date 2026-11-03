@@ -48,6 +48,35 @@ public sealed class WorkmanQueries(NpgsqlDataSource dataSource)
         ) r
         """;
 
+    /// <summary>doc 10's Rollup leaves: the kinds that are a unit of work rather than a container of it.</summary>
+    internal const string LeafKinds = "('task','followup','subtask','spike','question','incident')";
+
+    /// <summary>
+    /// Whether the descendant <c>c</c> is one unit of an "X of Y": a leaf, or a phase or feature
+    /// with nothing below it. The dashboard's <c>LEAF</c> and <c>EMPTY_COUNTED</c> in
+    /// <c>state.ts</c> count the same, so every surface prints the same numbers for one scope.
+    /// </summary>
+    internal const string Counted =
+        $"(c.kind IN {LeafKinds} OR (c.kind IN ('phase','feature') AND NOT EXISTS (SELECT 1 FROM item g WHERE g.parent_id = c.id)))";
+
+    /// <summary>
+    /// <see cref="Rollup"/> narrowed to <see cref="Counted"/> descendants: the numbers an "X of Y"
+    /// prints. <see cref="Rollup"/> keeps every descendant, for the gates and flags that ask
+    /// whether anything at all is still open below an item.
+    /// </summary>
+    internal const string CountedRollup =
+        $"""
+        CROSS JOIN LATERAL (
+          SELECT count(*) FILTER (WHERE c.status IN ('open','ready')) AS open_count,
+                 count(*) FILTER (WHERE c.status = 'in_progress')     AS doing_count,
+                 count(*) FILTER (WHERE c.status = 'blocked')         AS blocked_count,
+                 count(*) FILTER (WHERE c.status = 'review')          AS review_count,
+                 count(*) FILTER (WHERE c.status = 'done')            AS done_count
+          FROM   item c
+          WHERE  c.ancestors @> ARRAY[i.id] AND {Counted}
+        ) r
+        """;
+
     /// <summary>
     /// Remaining work under <paramref name="scopeItemId"/> that nothing unfinished blocks and that
     /// has no open children of its own. doc 02 §4 — the single hottest query.
@@ -112,18 +141,21 @@ public sealed class WorkmanQueries(NpgsqlDataSource dataSource)
         return await QueryAsync<UnclosedDependency>(sql, new { scope = scopeItemId }, cancellationToken);
     }
 
+    /// <summary>The <see cref="CountedRollup"/> of one item: what an "X of Y" for it prints.</summary>
     public async Task<ItemRollup?> RollupAsync(Guid itemId, CancellationToken cancellationToken = default)
     {
         const string sql =
-            """
-            SELECT id            AS "Id",
-                   open_count    AS "OpenCount",
-                   doing_count   AS "DoingCount",
-                   blocked_count AS "BlockedCount",
-                   review_count  AS "ReviewCount",
-                   done_count    AS "DoneCount"
-            FROM   item_rollup WHERE id = @item;
-            """;
+            $"""
+             SELECT i.id            AS "Id",
+                    r.open_count    AS "OpenCount",
+                    r.doing_count   AS "DoingCount",
+                    r.blocked_count AS "BlockedCount",
+                    r.review_count  AS "ReviewCount",
+                    r.done_count    AS "DoneCount"
+             FROM   item i
+             {CountedRollup}
+             WHERE  i.id = @item;
+             """;
 
         await using var tenant = await _connections.TenantAsync(cancellationToken);
         var connection = tenant.Connection;
@@ -133,7 +165,7 @@ public sealed class WorkmanQueries(NpgsqlDataSource dataSource)
 
     /// <summary>
     /// The subtree in document order — siblings by <c>seq</c> at every level, not by depth — with
-    /// each node's rollup alongside it.
+    /// each node's <see cref="CountedRollup"/> alongside it.
     /// </summary>
     public async Task<IReadOnlyList<SubtreeNode>> SubtreeAsync(
         Guid scopeItemId,
@@ -155,7 +187,7 @@ public sealed class WorkmanQueries(NpgsqlDataSource dataSource)
                     r.review_count    AS "ReviewCount",
                     r.done_count      AS "DoneCount"
              FROM   item i
-             {Rollup}
+             {CountedRollup}
              {DocumentPath}
              WHERE  i.id = @scope OR i.ancestors @> ARRAY[@scope]::uuid[]
              ORDER BY p.path || i.seq;
