@@ -34,22 +34,18 @@ laptop, your desktop and your team's sessions all write to the same record.
 
 ## Install
 
-**Hosted, on [work.supraman.ai](https://work.supraman.ai)** (access by invitation today). Connect
-Claude Code to it once:
-
-```bash
-claude mcp add --transport http --scope user workman https://work.supraman.ai/mcp
-```
-
-Claude Code opens a browser sign-in on first use, so you never paste a token. Then install the
-skills, in Claude Code:
+**Hosted, on [work.supraman.ai](https://work.supraman.ai)** (access by invitation today). Install the
+skills and connect Claude Code to it once, in Claude Code:
 
 ```
 /plugin marketplace add getsupraman/workman
 /plugin install workman@supraman
+/workman:setup --url https://work.supraman.ai
 ```
 
-Restart Claude Code and you're done: the `mcp__workman__*` tools and the `/workman:*` skills are there.
+The last line registers the server with browser sign-in and the session helper, and proves it answers.
+Restart Claude Code, run `/mcp`, pick `workman` and **Authenticate**: you never paste a token, and the
+`mcp__workman__*` tools and the `/workman:*` skills are there.
 
 <details>
 <summary>Run it yourself instead</summary>

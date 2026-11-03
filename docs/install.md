@@ -6,15 +6,23 @@ server once, install the plugin once, and every session on that machine has both
 
 ## The hosted server
 
-[work.supraman.ai](https://work.supraman.ai) runs Workman for you (access by invitation today). Connect
-Claude Code to it once, at user scope so every project sees it:
+[work.supraman.ai](https://work.supraman.ai) runs Workman for you (access by invitation today). Install
+the plugin (below), then connect Claude Code to it once, at user scope so every project sees it:
 
-```bash
-claude mcp add --transport http --scope user workman https://work.supraman.ai/mcp
+```
+/workman:setup --url https://work.supraman.ai
 ```
 
-Claude Code opens a browser sign-in on first use; there is no token to paste or store. Do the same on
-each machine you work from: they all write to the same record. Then install the plugin (below).
+It touches no Docker and writes no `.env`: it copies the session helper to `~/.workman/`, proves the
+server asks for sign-in (`POST /mcp` without a token answers `401` with a `resource_metadata=` link
+that answers), and registers `https://work.supraman.ai/mcp` with browser sign-in. Restart Claude Code,
+run `/mcp`, pick `workman` and **Authenticate**; there is no token to paste or store. Do the same on
+each machine you work from: they all write to the same record.
+
+An existing `workman` registration that points at another server is kept; `--force` re-points it,
+which is how you move from one server to another. Without the plugin, the same registration by hand
+(no session helper, no proof) is
+`claude mcp add --transport http --scope user workman https://work.supraman.ai/mcp`.
 
 ## The plugin
 
@@ -61,8 +69,8 @@ Every flag and status line is in [plugin/skills/setup/SKILL.md](../plugin/skills
 ## One server for a team
 
 To share one server between machines and people, run it where they can all reach it, behind a reverse
-proxy with HTTPS, and register its public `/mcp` URL on every machine the way the hosted server is
-registered above. Each user signs in with their own account; the dashboard's Admin page creates
+proxy with HTTPS, and register it on every machine the way the hosted server is registered above:
+`/workman:setup --url https://<your origin>`. Each user signs in with their own account; the dashboard's Admin page creates
 workspaces and invite links.
 
 Two settings differ from a local install:

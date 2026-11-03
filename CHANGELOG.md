@@ -7,6 +7,18 @@ All notable changes to the Workman server and the `workman` plugin are recorded 
 
 ## [Unreleased]
 
+### Plugin 2.2.0
+
+- Added: `/workman:setup --url <origin>` (`setup.ps1 -Url`) registers a **remote** Workman server, such as the
+  hosted `https://work.supraman.ai`, as well as the local Docker one. It touches no Docker and writes no `.env`;
+  it copies the session helper to `~/.workman/`, proves the server asks for sign-in (`POST /mcp` without a token
+  answers `401` with a `resource_metadata=` link that answers `200`) before it registers anything, then registers
+  `<origin>/mcp` with OAuth and the helper and runs the shadow check. An existing registration that points
+  elsewhere is kept unless `--force`, which re-points it. `--url` refuses the local-install flags and tokens
+  (`--clone`, `--port`, `--project`, `--image-version`, `--update`, `--backup`, `--restore`, `--auth token`,
+  `--role`). The README and [docs/install.md](docs/install.md) now connect the hosted server this way.
+- Fixed: `setup.ps1` wrote the session helper's `headersHelper` with a trailing backslash.
+
 ## [2.1.0] — 2026-11-03
 
 Server 2.1.0 and plugin 2.1.1: the 1.x rename workarounds go, and rules number correctly again. One additive migration (`ConstraintRefAllocator`).
