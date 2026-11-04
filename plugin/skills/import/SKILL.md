@@ -1,6 +1,6 @@
 ---
 name: import
-description: "Import a repo's existing planning material into Workman: find plan files, TODO lists, roadmaps, specs, ADRs, docs and agent rules anywhere in the repo, judge each against the CURRENT code, keep only what is still true (open work, binding decisions and rules, open assumptions), propose a per-file plan, ask the human, then write it with work_import into the repo's project — with source and reason on every record, idempotent by source. Needs a session launched with the Workman import grant. USE FOR - bringing a repo that predates Workman under it; re-running an import after the plans changed; turning PLAN.md / TODO.md / ADR folders into runs, tasks, followups, rules and assumptions. DO NOT USE FOR - recording history or finished work (it is not imported), editing or moving the source files (never), or work you are planning now (use work_create via /workman:orchestrate)."
+description: "Import a repo's existing planning material into Workman: find plan files, TODO lists, roadmaps, specs, ADRs, docs and agent rules anywhere in the repo, judge each against the CURRENT code, keep only what is still true (open work, binding decisions and rules, open assumptions), propose a per-file plan, ask the human, then write it with work_import into the repo's project — with source and reason on every record, idempotent by source. Writing needs a session launched with the Workman import grant; an ordinary session offers to launch one and hands the import to it. USE FOR - bringing a repo that predates Workman under it; re-running an import after the plans changed; turning PLAN.md / TODO.md / ADR folders into runs, tasks, followups, rules and assumptions. DO NOT USE FOR - recording history or finished work (it is not imported), editing or moving the source files (never), or work you are planning now (use work_create via /workman:orchestrate)."
 ---
 
 # Workman import
@@ -22,10 +22,21 @@ describes the past, or a future the code has already reached, it is dropped.
 
 1. **`work_*` tools present.** None → *"/workman:import needs the Workman MCP server — run
    `/workman:setup`."* Stop.
-2. **`work_import` present.** It is shown only to a session minted with the `import` grant. Absent →
-   say so in one line and stop: *"this session cannot import; the controller launches one with
-   `agent_launch(workman: {role: "orchestrator", grants: ["import"], …})`."* Do not work around it
-   with `work_create` — provenance and idempotency live only in `work_import`.
+2. **`work_import` present.** It is shown only to a session started for an import (a session token
+   minted with the `import` grant); an interactive session signed in as the human never has it, by
+   design: bulk writes with provenance belong to a session launched for exactly that. Absent → this
+   session hands the import to one it launches. Tell the human in plain words, then offer:
+   *"This session can't write an import — Workman shows the import tool only to a session started
+   for one. Shall I start that session for this repo with your request? It runs in the background
+   and asks you before it writes anything."*
+   On a yes, call `agent_launch` with `cwd` the repo root, `workman: {role: "orchestrator", grants:
+   ["import"], url: <this session's Workman server origin>}` (omit `url` for a local server on
+   127.0.0.1:5290), and a prompt that is `/workman:import` followed by the human's own arguments
+   verbatim. Refused with *not signed in* → `agent_signin {"url": …}` (it opens the browser), then
+   launch again. Then follow `/workman:agents` to watch it and relay its plan to the human. No
+   `agent_launch` tool either → tell the human to install the plugin's agents server (`/workman:setup`)
+   and stop. Never work around a missing `work_import` with `work_create` — provenance and
+   idempotency live only in `work_import`.
 3. **The repo's project.** Call `work_brief(repo: {remote, root})` — `remote` is
    `git remote get-url origin` (omit with no origin), `root` the parent of
    `git rev-parse --path-format=absolute --git-common-dir`. A session from `agent_launch` already

@@ -7,6 +7,13 @@ All notable changes to the Workman server and the `workman` plugin are recorded 
 
 ## [Unreleased]
 
+## [Plugin 2.3.2] — 2026-11-04
+
+- Changed: `/workman:import` in a session without the import grant no longer stops with a one-line
+  refusal. It says in plain words why that session cannot write an import, and offers to start one that
+  can (`agent_launch` as orchestrator with `grants: ["import"]`, the repo as cwd, the human's arguments
+  as its prompt), running `agent_signin` first when it is not signed in.
+
 ## [2.3.2] — 2026-11-04
 
 Server 2.3.2. The plugin stays at 2.3.1. No migration.
