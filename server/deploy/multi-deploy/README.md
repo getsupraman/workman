@@ -69,6 +69,14 @@ WORKMAN_HOSTS=Host(`workman.example.com`) || Host(`workman.example.org`)
 answered as. `WORKMAN_HOSTS` is the Traefik rule for both routers (unset: `Host(WORKMAN_HOST)`), so
 Let's Encrypt issues a certificate for every host it names. Then `app deploy workman`.
 
+## Authentication failures in the log
+
+To see why a client's requests are refused, add `WORKMAN_AUTH_LOG_LEVEL=Information` to `.env` and
+`app deploy workman`. Each refused request then logs its scheme and reason in `docker logs workman-api-1`:
+`was not authenticated. Failure message: Unrecognised bearer token.` for a token the server does not
+accept, and only `was challenged` for a request that carried no `Authorization` header. Header and token
+values are never logged. Remove the line (default `Warning`) when done.
+
 ## Restore
 
 ```bash

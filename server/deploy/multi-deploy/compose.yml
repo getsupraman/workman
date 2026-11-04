@@ -39,6 +39,8 @@ services:
       # Optional: further origins, comma-separated; a request is answered as the one its host names.
       Workman__PublicUrls: ${WORKMAN_PUBLIC_URLS:-}
       Workman__TrustedProxies: ${WORKMAN_TRUSTED_PROXIES:?set WORKMAN_TRUSTED_PROXIES in .env}
+      # Optional: Information logs why each request failed authentication; never a header or token.
+      Logging__LogLevel__Microsoft.AspNetCore.Authentication: ${WORKMAN_AUTH_LOG_LEVEL:-Warning}
       ConnectionStrings__Workman: >-
         Host=db;Port=5432;Database=${POSTGRES_DB:-workman};Username=${POSTGRES_USER:-workman};Password=${POSTGRES_PASSWORD}
     networks:
