@@ -89,6 +89,8 @@ public sealed partial class WorkWriter
                     $"this repo is project {held.ProjectRef} — one project per repository, so "
                     + $"{projectRef} cannot hold it too",
                     $"work_brief(scope:\"{held.ProjectRef}\") to work in it",
+                    $"work_update(ref:\"{projectRef}\", repo:{RepoKeys.Literal(keys)}, take:true) to move the repo "
+                    + $"from {held.ProjectRef} to {projectRef}",
                     $"work_brief(repo:{RepoKeys.Literal(keys)}) — the same project, found from the repo"));
             }
 
@@ -117,6 +119,120 @@ public sealed partial class WorkWriter
         }
 
         return (added, null);
+    }
+
+    private sealed record HeldRow(Guid ProjectId, string ProjectRef, Guid? UserId, string Kind, string Key);
+
+    /// <summary>
+    /// <c>take:true</c>: every row another project holds for one of <paramref name="keys"/> moves to this project, the
+    /// user it was bound for kept, so another user's root opens the new project too. Only rows the caller can see move:
+    /// a project they are not a member of keeps its rows, and the bind that follows refuses as it would without take.
+    /// Each source project journals what left it; the caller journals the arrival.
+    /// </summary>
+    private static async Task<IReadOnlyList<HeldRow>> TakeReposAsync(
+        NpgsqlConnection connection,
+        NpgsqlTransaction transaction,
+        Guid workspaceId,
+        Guid projectId,
+        string projectRef,
+        Actor actor,
+        IReadOnlyList<RepoKey> keys,
+        CancellationToken cancellationToken)
+    {
+        const string take =
+            """
+            WITH gone AS (
+                DELETE FROM project_repo r
+                WHERE  r.workspace_id = @workspace AND r.project_item_id <> @project
+                  AND  (r.kind, r.key) IN (SELECT * FROM unnest(@kinds::text[], @keys::text[]))
+                RETURNING r.project_item_id, r.user_id, r.kind, r.key)
+            SELECT g.project_item_id AS "ProjectId", p.ref AS "ProjectRef", g.user_id AS "UserId", g.kind AS "Kind", g.key AS "Key"
+            FROM   gone g JOIN item p ON p.id = g.project_item_id
+            ORDER  BY p.ref, g.kind, g.key;
+            """;
+
+        const string insert =
+            """
+            INSERT INTO project_repo (id, workspace_id, project_item_id, user_id, kind, key)
+            VALUES (@id, @workspace, @project, @user, @kind, @key)
+            ON CONFLICT (workspace_id, user_id, key) DO NOTHING;
+            """;
+
+        var moved = (await connection.QueryAsync<HeldRow>(new CommandDefinition(
+            take,
+            new { workspace = workspaceId, project = projectId, kinds = keys.Select(k => k.Kind).ToArray(), keys = keys.Select(k => k.Key).ToArray() },
+            transaction,
+            cancellationToken: cancellationToken))).ToList();
+
+        foreach (var row in moved)
+        {
+            await connection.ExecuteAsync(new CommandDefinition(
+                insert,
+                new { id = Guid.CreateVersion7(), workspace = workspaceId, project = projectId, user = row.UserId, kind = row.Kind, key = row.Key },
+                transaction,
+                cancellationToken: cancellationToken));
+        }
+
+        foreach (var source in moved.GroupBy(r => (r.ProjectId, r.ProjectRef)))
+        {
+            var removed = source.Select(r => $"{r.Kind} {r.Key}").Distinct().ToArray();
+            await EventAsync(
+                connection, transaction, workspaceId, source.Key.ProjectId, actor, "repo",
+                $"{source.Key.ProjectRef}: {string.Join(", ", removed)} moved to {projectRef} by {actor.Label}",
+                new { moved_to = projectRef, keys = removed, rows = source.Count() },
+                cancellationToken);
+
+            await EventAsync(
+                connection, transaction, workspaceId, projectId, actor, "repo",
+                $"{projectRef}: {string.Join(", ", removed)} taken from {source.Key.ProjectRef} by {actor.Label}",
+                new { taken_from = source.Key.ProjectRef, keys = removed, rows = source.Count() },
+                cancellationToken);
+        }
+
+        return moved;
+    }
+
+    /// <summary>
+    /// <c>unbind:</c> removes <paramref name="keys"/> from the project: the remote, and the root for every user it is
+    /// bound for here — the same path bound to the same project is the same repository. A project left with no key is
+    /// an unbound project, still opened by its ref.
+    /// </summary>
+    private static async Task<IReadOnlyList<RepoKey>> UnbindReposAsync(
+        NpgsqlConnection connection,
+        NpgsqlTransaction transaction,
+        Guid workspaceId,
+        Guid projectId,
+        string projectRef,
+        Actor actor,
+        IReadOnlyList<RepoKey> keys,
+        CancellationToken cancellationToken)
+    {
+        const string sql =
+            """
+            DELETE FROM project_repo r
+            WHERE  r.workspace_id = @workspace AND r.project_item_id = @project
+              AND  (r.kind, r.key) IN (SELECT * FROM unnest(@kinds::text[], @keys::text[]))
+            RETURNING r.kind AS "Kind", r.key AS "Key";
+            """;
+
+        var rows = (await connection.QueryAsync<RepoKey>(new CommandDefinition(
+            sql,
+            new { workspace = workspaceId, project = projectId, kinds = keys.Select(k => k.Kind).ToArray(), keys = keys.Select(k => k.Key).ToArray() },
+            transaction,
+            cancellationToken: cancellationToken))).ToList();
+
+        var removed = keys.Where(k => rows.Contains(k)).ToList();
+        if (removed.Count > 0)
+        {
+            var named = removed.Select(k => $"{k.Kind} {k.Key}").ToArray();
+            await EventAsync(
+                connection, transaction, workspaceId, projectId, actor, "repo",
+                $"{projectRef}: {string.Join(", ", named)} unbound by {actor.Label}",
+                new { unbound = named, rows = rows.Count },
+                cancellationToken);
+        }
+
+        return removed;
     }
 
     private static string NotAProject(string call, string reference, string kind)

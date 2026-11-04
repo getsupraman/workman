@@ -959,7 +959,9 @@ public sealed partial class BoardQueries(NpgsqlDataSource dataSource)
                    f.ref    AS "FromRef",
                    t.ref    AS "ToRef",
                    l.type   AS "Type",
-                   f.status AS "FromStatus"
+                   f.status AS "FromStatus",
+                   f.ref_scope_id AS "FromScopeId",
+                   t.ref_scope_id AS "ToScopeId"
             FROM   item_link l
             JOIN   item f ON f.id = l.from_item_id
             JOIN   item t ON t.id = l.to_item_id

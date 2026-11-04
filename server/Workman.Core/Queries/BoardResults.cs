@@ -172,6 +172,7 @@ public sealed record EventRow(
 
 public sealed record CriterionRow(Guid ItemId, string ItemRef, int Seq, string Text, bool Checked, string? Evidence);
 
-public sealed record LinkRow(Guid FromId, Guid ToId, string FromRef, string ToRef, LinkType Type, ItemStatus FromStatus);
+public sealed record LinkRow(
+    Guid FromId, Guid ToId, string FromRef, string ToRef, LinkType Type, ItemStatus FromStatus, Guid? FromScopeId, Guid? ToScopeId);
 
 public sealed record AuditRow(string Check, string Ref, string Problem, string Route);

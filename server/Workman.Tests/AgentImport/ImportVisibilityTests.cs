@@ -35,11 +35,12 @@ public sealed class ImportVisibilityTests(PostgresFixture fixture)
     /// searched assumptions, rules and notes, with work_history's reach line trimmed to pay for it
     /// (search-scope); both re-pinned when work_brief, work_get, work_threads and work_status lost
     /// the sentences that restated the server instructions or a sibling line (tool-budget); the orchestrator list re-pinned
-    /// when work_create's ref named the project/backlog rule (readable-refs).
+    /// when work_create's ref named the project/backlog rule (readable-refs); the orchestrator list re-pinned when
+    /// work_update gained unbind and take (repo-move).
     /// Both are hashed sorted by name with LF line endings, so every host and checkout pins the same bytes.
     /// </summary>
     private const string WorkerList = "f85b6bceea63adfedb64ccb10138c7731bbd6086c6c7ab30348dad44eca55e23";
-    private const string OrchestratorList = "ad7bee69d3484603fb8d866d49e901fb3ef9a02a32b8f6d27b1fd55d6179181a";
+    private const string OrchestratorList = "abaa105f087e5ff78da1271900baa9507dbe46dad160f82015615a5879bb9adb";
     private const string ControllerList = OrchestratorList;
 
     [Fact]

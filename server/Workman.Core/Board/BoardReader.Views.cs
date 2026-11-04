@@ -324,11 +324,20 @@ public sealed partial class BoardReader
                     12));
             }
 
+            // The other end prints bare inside this item's run, otherwise as a ref that resolves to it alone, as the
+            // ← flag above does: a link survives work_move, and a bare 1.1 would read as this run's own.
             foreach (var link in links.Where(l => l.FromId == item.Id || l.ToId == item.Id))
             {
-                var arrow = link.FromId == item.Id
-                    ? $"{link.Type.ToString().ToLowerInvariant()} → {link.ToRef}"
-                    : $"← {link.FromRef} {link.Type.ToString().ToLowerInvariant()} this ({link.FromStatus.ToString().ToLowerInvariant()})";
+                var outgoing = link.FromId == item.Id;
+                var (otherId, otherRef, otherScope) = outgoing
+                    ? (link.ToId, link.ToRef, link.ToScopeId)
+                    : (link.FromId, link.FromRef, link.FromScopeId);
+                var other = otherScope == item.RefScopeId
+                    ? otherRef
+                    : await board.PrintableRefAsync(workspaceId, otherId, otherRef, cancellationToken);
+                var arrow = outgoing
+                    ? $"{link.Type.ToString().ToLowerInvariant()} → {other}"
+                    : $"← {other} {link.Type.ToString().ToLowerInvariant()} this ({link.FromStatus.ToString().ToLowerInvariant()})";
                 lines.Add($"  link      {arrow}");
             }
 

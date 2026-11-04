@@ -57,6 +57,34 @@ public sealed partial class CrossRunBlockedTests(PostgresFixture fixture)
         Assert.Equal("1.1", BlockedFlag(Row(tree, "1.3")));
     }
 
+    /// <summary>
+    /// work_get(include:"deps") prints each link's other end. A blocker moved to another project keeps its link, so
+    /// its bare ref would read as the waiting run's own 1.1; it prints as the ← flag does, both directions.
+    /// </summary>
+    [Fact]
+    public async Task A_link_line_to_another_project_prints_a_ref_that_resolves_to_it_alone()
+    {
+        var (world, blockerId, waiterId) = await WorldAsync();
+        var scope = await world.ScopeAsync("run-a");
+
+        var get = await world.Reader.GetAsync(scope, ["1.2", "1.3"], ["deps"], Ct);
+        var lines = get.Split('\n');
+
+        var incoming = Assert.Single(lines, l => l.StartsWith("  link      ← ", StringComparison.Ordinal) && l.Contains(" blocks this", StringComparison.Ordinal)
+                                                  && !l.Contains("← 1.1 ", StringComparison.Ordinal));
+        await AssertResolvesToAloneAsync(world, LinkEnd().Match(incoming).Groups[1].Value, blockerId);
+
+        Assert.Single(lines, l => l == "  link      ← 1.1 blocks this (open)");
+
+        var blocker = await world.Reader.GetAsync(scope, [LinkEnd().Match(incoming).Groups[1].Value], ["deps"], Ct);
+        var outgoing = Assert.Single(blocker.Split('\n'), l => l.StartsWith("  link      blocks → ", StringComparison.Ordinal));
+        var printed = outgoing["  link      blocks → ".Length..];
+        await AssertResolvesToAloneAsync(world, printed, waiterId);
+    }
+
+    [GeneratedRegex(@"← (\S+) ")]
+    private static partial Regex LinkEnd();
+
     private static async Task AssertResolvesToAloneAsync(WriteWorld world, string printed, Guid blockerId)
     {
         var matches = await new BoardQueries(world.Fixture.DataSource).ResolveAsync(world.WorkspaceId, printed, Ct);

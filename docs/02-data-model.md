@@ -131,8 +131,15 @@ receives. The rule exists twice — `RepoKeys` in `Workman.Core/Domain/Repos.cs`
 given; `work_update(ref:"<project>", repo:{…})` adds more. A root is bound for the caller's user
 (`Actor.UserId`; NULL for a static token or a local credential, which is how every row was before
 m60); a remote always with NULL. A key already bound to another project — a remote by anyone, a root
-by the same user — is refused, naming it: *this repo is project X — `work_brief(scope:"X")`*. There
-is no unbind tool. `work_get` of a project prints its remotes and the caller's own roots; another
+by the same user — is refused, naming it: *this repo is project X — `work_brief(scope:"X")`*, and
+the call that moves it. `work_update(ref:"<project>", repo:{…}, take:true)` moves the keys named from
+the project that holds them, every row for them — each user's root keeps its user, so that user's
+`work_brief(repo:…)` opens the new project too — in one transaction. Only rows the caller can see
+move: a project they are not a member of keeps its rows, and the bind refuses as it would without
+`take`. `work_update(ref:"<project>", unbind:{remote, root})` removes those keys from the project,
+the root for every user it is bound for there; a project left with no key is an unbound project,
+still opened by its ref. Both need `work_update` (an orchestrator) and membership of every project
+involved, and journal kind `repo` on each project. `work_get` of a project prints its remotes and the caller's own roots; another
 user's root is a path on their machine and is not shown. `work_tree` rows never print repos. The v1
 overview carries them, filtered the same way, as `projects[].repos`.
 

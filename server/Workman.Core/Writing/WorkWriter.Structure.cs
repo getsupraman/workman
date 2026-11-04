@@ -44,7 +44,9 @@ public sealed record UpdateArgs(
     CriterionArg[]? Criteria = null,
     int? ExpectedRevision = null,
     RepoArg? Repo = null,
-    bool? Archived = null);
+    bool? Archived = null,
+    RepoArg? Unbind = null,
+    bool Take = false);
 
 public sealed partial class WorkWriter
 {
@@ -344,8 +346,18 @@ public sealed partial class WorkWriter
         }
 
         var repo = args.Repo?.Keys() ?? [];
+        var unbind = args.Unbind?.Keys() ?? [];
 
-        var patching = Fields(args).Length > 0 || args.RiskTags is not null || args.Criteria is { Length: > 0 } || repo.Count > 0;
+        if (args.Take && repo.Count == 0)
+        {
+            return WriteResult.No(Refusal.Blocked(
+                $"work_update({scope.Ref}) — take:true moves a repo, and the call names none.",
+                "take moves the keys repo: names from the project that holds them to this one",
+                $"work_update(ref:\"{reference}\", repo:{{remote:\"…\", root:\"…\"}}, take:true)"));
+        }
+
+        var patching = Fields(args).Length > 0 || args.RiskTags is not null || args.Criteria is { Length: > 0 }
+            || repo.Count > 0 || unbind.Count > 0;
 
         if (!patching && args.Archived is null)
         {
@@ -378,12 +390,30 @@ public sealed partial class WorkWriter
             return WriteResult.No(unwritable);
         }
 
+        if ((repo.Count > 0 || unbind.Count > 0) && item.Kind != "project")
+        {
+            return WriteResult.No(NotAProject($"work_update({item.Ref})", item.Ref, item.Kind));
+        }
+
+        IReadOnlyList<RepoKey> unbound = [];
+        if (unbind.Count > 0)
+        {
+            unbound = await UnbindReposAsync(
+                connection, transaction, item.WorkspaceId, item.Id, item.Ref, actor, unbind, cancellationToken);
+        }
+
         IReadOnlyList<RepoKey> bound = [];
+        var moved = new List<string>();
         if (repo.Count > 0)
         {
-            if (item.Kind != "project")
+            if (args.Take)
             {
-                return WriteResult.No(NotAProject($"work_update({item.Ref})", item.Ref, item.Kind));
+                var rows = await TakeReposAsync(
+                    connection, transaction, item.WorkspaceId, item.Id, item.Ref, actor, repo, cancellationToken);
+                moved.AddRange(rows
+                    .GroupBy(r => r.ProjectRef)
+                    .Select(g => $"    {RepoLine([.. g.Select(r => new RepoKey(r.Kind, r.Key)).Distinct()])} — taken from {g.Key}"
+                                 + (g.Count() > g.Select(r => r.Key).Distinct().Count() ? $" ({g.Count()} bindings)" : string.Empty)));
             }
 
             var (added, taken) = await BindReposAsync(
@@ -465,7 +495,8 @@ public sealed partial class WorkWriter
 
         await transaction.CommitAsync(cancellationToken);
 
-        var already = repo.Where(k => !bound.Contains(k)).ToList();
+        List<RepoKey> already = moved.Count > 0 ? [] : [.. repo.Where(k => !bound.Contains(k))];
+        var notHeld = unbind.Where(k => !unbound.Contains(k)).ToList();
         return WriteResult.Ok(string.Join(
             "\n",
             [
@@ -473,7 +504,10 @@ public sealed partial class WorkWriter
                     ? $"OK  {item.Ref}  updated (revision {item.Revision + 1})"
                       + (touched > 0 ? $", {touched} criterion(s) written" : string.Empty)
                     : $"OK  {item.Ref}",
+                .. moved,
                 .. bound.Count > 0 ? [$"    {RepoLine(bound)} — bound"] : Array.Empty<string>(),
+                .. unbound.Count > 0 ? [$"    {RepoLine(unbound)} — unbound"] : Array.Empty<string>(),
+                .. notHeld.Count > 0 ? [$"    {RepoLine(notHeld)} — not this project's, nothing removed"] : Array.Empty<string>(),
                 .. already.Count > 0 ? [$"    {RepoLine(already)} — already this project's"] : Array.Empty<string>(),
                 .. archiveLine.Length > 0 ? [archiveLine] : Array.Empty<string>(),
                 string.Empty,
@@ -481,6 +515,8 @@ public sealed partial class WorkWriter
                     ? $"Next: work_brief(scope:\"{item.Ref}\") still opens it; work_create under it unarchives it."
                     : repo.Count > 0 && Fields(args).Length == 0 && args.Criteria is not { Length: > 0 }
                     ? $"Next: work_brief(repo:{RepoKeys.Literal(repo)}) — a session in that repo now opens {item.Ref}."
+                    : unbind.Count > 0 && Fields(args).Length == 0 && args.Criteria is not { Length: > 0 }
+                    ? $"Next: work_update(ref:\"<project>\", repo:{RepoKeys.Literal(unbind)}) binds the repo to the project it belongs to."
                     : $"Next: work_status(ref:\"{item.Ref}\", to:\"done\") when the criteria are met — "
                       + "the guard will tell you what is still missing.",
             ]));

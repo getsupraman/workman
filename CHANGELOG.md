@@ -7,6 +7,27 @@ All notable changes to the Workman server and the `workman` plugin are recorded 
 
 ## [Unreleased]
 
+## [2.4.0] — 2026-11-04
+
+Server 2.4.0. The plugin stays at 2.3.3. No migration.
+
+### Added
+
+- `work_update` moves a repo between projects or removes it from one, with no database edit.
+  `work_update(ref:"<project>", repo:{remote, root}, take:true)` moves those keys from the project that holds
+  them, in one transaction and for every user: each user's root keeps its user, so their `work_brief(repo:…)`
+  opens the new project too. `work_update(ref:"<project>", unbind:{remote, root})` removes the remote and the
+  root for every user it is bound for in that project; a project left with no key stays a valid, unbound
+  project. Both need an orchestrator and membership of every project involved: rows of a project the caller is
+  not a member of stay where they are, and the bind is refused as before. Each move or unbind journals a `repo`
+  event on every project it touches. The "already bound to project X" refusal now names the `take:true` call.
+
+### Fixed
+
+- `work_get(include:"deps")` link lines print the other end of a link as a ref that resolves to it alone, as
+  the `←` flag on the same item does. A link survives `work_move`, and an item moved to another project printed
+  by its bare ref, which read as an item of the current run.
+
 ## [Plugin 2.3.3] — 2026-11-04
 
 - Changed: `/workman:import` writes self-contained records. A record's title, intent, criteria and body
