@@ -7,6 +7,15 @@ All notable changes to the Workman server and the `workman` plugin are recorded 
 
 ## [Unreleased]
 
+## [Plugin 2.3.3] — 2026-11-04
+
+- Changed: `/workman:import` writes self-contained records. A record's title, intent, criteria and body
+  inline everything it needs, and `source` is provenance only, so the planning files may be deleted after
+  the import (by the human, never by the import) without losing anything. References are kept only to
+  living contracts (`CLAUDE.md`, `AGENTS.md`, rule files, kept specs and ADRs) and to code. A re-import
+  rewrites records that still point into a planning file, and the final check asks of every record
+  whether it would survive its source file being deleted.
+
 ## [Plugin 2.3.2] — 2026-11-04
 
 - Changed: `/workman:import` in a session without the import grant no longer stops with a one-line

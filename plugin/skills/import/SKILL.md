@@ -92,6 +92,19 @@ Shape what you keep:
   source; the source is the key a re-import updates by.
 - `status` is `open`, `ready` or `blocked`. There is no imported `done` and no imported evidence.
 
+**Every record stands on its own.** After the import, Workman is the source of truth for the work, and
+the planning files it came from may be deleted. A record must therefore be fully actionable from
+Workman alone: its `title`, `intent`, `criteria` and `body` inline the facts, numbers, URLs, code paths,
+measurements and reasoning it needs. `source` is provenance and the re-import key, nothing more —
+no record may depend on reading it. "See HANDOFF §3", "per P4-plan.md §4.5" or "as described above"
+is a hollow record: copy what that section says (only the part still true) into the record instead.
+A reference is allowed only to a **living contract** that stays in the repo — `CLAUDE.md`,
+`AGENTS.md`, rule files, a spec or ADR the team keeps — and to code (`path`, symbol).
+
+On a re-import, rewrite any record of the project whose text still points into a planning file: send
+it again under its own source with the content inlined. One the import reports `skipped: moved since
+import` is fixed with `work_update(ref, intent:…, criteria:[…])` instead.
+
 ## 4. Propose, then stop for the human
 
 Write the plan per file: **import → which records** / **drop → why** / **ask → the question**. Then
@@ -110,10 +123,15 @@ since import` and left alone.
 ## 6. Check and report
 
 `work_tree(scope: <project>)` and `work_get(refs:[…])` against your plan — every kept record present,
-under the right parent, with its source and why. Then report to the human: created / updated /
-skipped (with refs and sources), and the **dropped material with a reason for each file**.
+under the right parent, with its source and why. Then ask of every record: **would it survive its
+source file being deleted?** One that names a planning file, a section of one, or "above"/"below" for
+anything it needs fails — inline the missing content and send it again. Then report to the human:
+created / updated / skipped (with refs and sources), and the **dropped material with a reason for
+each file**.
 
-**Never modify, move or delete a source file.** The import reads the repo; it never edits it.
+**Never modify, move or delete a source file.** The import reads the repo; it never edits it. Once
+the check above passes, say which planning files are now fully held in Workman: the human, or a
+controller they ask, may delete them, and nothing is lost. Living contracts stay.
 
 ## 7. Large repos
 
