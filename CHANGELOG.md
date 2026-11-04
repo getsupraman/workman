@@ -7,6 +7,10 @@ All notable changes to the Workman server and the `workman` plugin are recorded 
 
 ## [Unreleased]
 
+## [2.3.2] — 2026-11-04
+
+Server 2.3.2. The plugin stays at 2.3.1. No migration.
+
 ### Changed
 
 - The dashboard reads the run boards in one `GET /api/v1/boards` call instead of one `/api/v1/runs/{id}/board`
