@@ -82,9 +82,11 @@ public sealed class RlsTests(PostgresFixture fixture) : IAsyncLifetime
             "INSERT INTO item_criterion (id, item_id, seq, text, checked) VALUES (gen_random_uuid(), @bRun, 9, 'x', false);",
             "INSERT INTO note (id, workspace_id, kind, body) VALUES (gen_random_uuid(), @b, 'observation', 'x');",
             "INSERT INTO event (workspace_id, actor, role, kind) VALUES (@b, 'rls', 'system', 'rls_probe');",
+            "INSERT INTO claim (id, item_id, serialization_key, key_workspace_id, agent_name, role, expires_at) VALUES (gen_random_uuid(), @bRun, 'rls-x', @a, 'rls', 'worker', now());",
+            "INSERT INTO claim (id, item_id, serialization_key, key_workspace_id, agent_name, role, expires_at) VALUES (gen_random_uuid(), @aRun, 'rls-x', @b, 'rls', 'worker', now());",
         ];
 
-        var args = new { b = b.WorkspaceId, aProject = a.ProjectId, bRun = b.RunId };
+        var args = new { a = a.WorkspaceId, b = b.WorkspaceId, aProject = a.ProjectId, aRun = a.RunId, bRun = b.RunId };
         foreach (var statement in refused)
         {
             await using var tenant = await connections.TenantAsync(Ct);
@@ -399,8 +401,8 @@ internal sealed record RlsWorld(Guid WorkspaceId, Guid ProjectId, Guid RunId)
             INSERT INTO attempt (id, item_id, n) VALUES (@attempt, @run, 1);
             INSERT INTO report (id, attempt_id, status) VALUES (gen_random_uuid(), @attempt, 'DONE');
             INSERT INTO artifact (id, item_id, kind, value) VALUES (gen_random_uuid(), @run, 'commit', @tag);
-            INSERT INTO claim (id, item_id, serialization_key, agent_name, role, expires_at)
-            VALUES (gen_random_uuid(), @run, 'rls-' || @tag, 'rls', 'worker', now() + interval '1 hour');
+            INSERT INTO claim (id, item_id, serialization_key, key_workspace_id, agent_name, role, expires_at)
+            VALUES (gen_random_uuid(), @run, 'rls-' || @tag, @ws, 'rls', 'worker', now() + interval '1 hour');
             INSERT INTO run_config (item_id, project_item_id, serialization_key) VALUES (@run, @project, 'rls-' || @tag);
             INSERT INTO project_config (item_id, repo_root) VALUES (@project, '/rls');
             INSERT INTO project_repo (id, workspace_id, project_item_id, kind, key)

@@ -343,7 +343,13 @@ do not. Each is under 2.2 ms at this size, and each is listed as an open item:
   The planner turns that into a hashed subplan over every item of the workspace (4,955 rows), built
   before the claim filter. The owner's plan instead hash-joins the claims onto the subtree it scanned
   through `item_subtree_idx`. A direct policy needs `claim.key_workspace_id` made `NOT NULL`, or a
-  workspace column: a schema change, not made here.
+  workspace column: a schema change, not made here. **Fixed by migration ClaimWorkspacePolicy
+  (rls-plan-estimates):** the column is backfilled from the claim's item and made `NOT NULL`, and the
+  policy compares it directly. A write still has to name an item of the tenant. The project-access
+  check the item lookup used to supply is now claim's own `project_access` policy, the same one
+  `verification` has. `QueryPlanTests` under the tenant role, before → after: run 2.71 → 0.66 ms
+  (816 → 120 buffers), project 2.76 → 1.24 ms (835 → 201 buffers). The hashed subplan over the
+  workspace's items is gone.
 - **Done-unverified, stale in-progress.** Same indexes as the owner, but the planner cannot see the
   InitPlan's value. It sizes `workspace_id = (InitPlan)` as an average workspace (1 / `n_distinct`). It
   estimated 1 row where 565 came back, so it chose nested loops. The same average is a risk wherever

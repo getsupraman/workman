@@ -162,6 +162,7 @@ public sealed class AttentionAndFrontierTests(PostgresFixture fixture)
             Id = Guid.CreateVersion7(),
             ItemId = world.T2,
             SerializationKey = world.Slug,
+            KeyWorkspaceId = world.WorkspaceId,
             Writes = true,
             AgentName = "worker-1",
             Role = ActorRole.Worker,

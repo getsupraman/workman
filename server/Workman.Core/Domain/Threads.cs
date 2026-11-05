@@ -101,10 +101,10 @@ public class Claim
     public string SerializationKey { get; set; } = "";
 
     /// <summary>
-    /// The workspace the lock is held in: every key, a path included, locks within its tenant. Null only
-    /// on a claim released before that rule (the ClaimKeyWorkspace migration filled the live ones).
+    /// The workspace the lock is held in, and the claim's tenant (its row-level policy compares it): every key, a path
+    /// included, locks within its tenant.
     /// </summary>
-    public Guid? KeyWorkspaceId { get; set; }
+    public Guid KeyWorkspaceId { get; set; }
 
     /// <summary>
     /// Whose machine a path key is on: a path names a folder on one person's machine, so it locks per user. Null for a

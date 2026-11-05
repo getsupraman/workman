@@ -1065,16 +1065,17 @@ image is one.
 
 | policy | tables |
 |---|---|
-| its own column, `workspace_id = tenant` | `item`, `item_link`, `doc`, `event`, `assumption`, `constraint_rule`, `note`, `verification`, `project_repo`, `agent_token`, `agent_session`, `import_record`, `tenant_membership`, `user_link` (a reset link has no workspace, so no tenant sees it), `project_member` (m58, created with its policy by its own migration) |
+| its own column, `workspace_id = tenant` | `item`, `item_link`, `doc`, `event`, `assumption`, `constraint_rule`, `note`, `verification`, `project_repo`, `agent_token`, `agent_session`, `import_record`, `tenant_membership`, `user_link` (a reset link has no workspace, so no tenant sees it), `project_member` (m58, created with its policy by its own migration), `claim` (its `key_workspace_id`, migration `ClaimWorkspacePolicy`; a write must also name an item of the tenant) |
 | its own id, `id = tenant` | `workspace` |
-| its parent `item` is the tenant's | `item_criterion`, `attempt`, `artifact`, `claim`, `project_config`, `run_config` |
+| its parent `item` is the tenant's | `item_criterion`, `attempt`, `artifact`, `project_config`, `run_config` |
 | through two parents | `report` (→ `attempt` → `item`), `doc_block` (→ `doc`), `doc_block_revision` (→ `doc_block` → `doc`) |
 | none — global, read whole | `app_user` (a user spans workspaces), `item_kind` (the vocabulary) |
 | none — and not granted to the role | `__EFMigrationsHistory`, `data_protection_key`, `oauth_key`, `openiddict_*` |
 
 A child table's policy is `EXISTS (SELECT 1 FROM item p WHERE p.id = <child>.item_id AND p.workspace_id
 = tenant)`. No column was added: no writer changes, and nothing can disagree with the parent. `claim`
-has `key_workspace_id`, but it is nullable, so it too goes through its item.
+reads its own `key_workspace_id`, made `NOT NULL` by `ClaimWorkspacePolicy` (backfilled from its item):
+through its item, the planner built a hashed subplan over every item of the workspace (doc 15 §7.2).
 
 Both views, `item_rollup` and `open_thread`, are `security_invoker = true`. A view otherwise reads its
 tables as its owner, which the policies do not confine.
@@ -1175,7 +1176,8 @@ statement that can run anything can also `RESET ROLE`.
 
 The cost is mostly round trips. On server time the gate's reads are within 20% on the live copy and on
 the 5k seed: frontier −4% to +6%, rollup +11% to +15%, board −27% to +11%. Four attention and search
-reads are not yet: expired claims, done-unverified, stale in-progress and search (doc 15 §7.2). A tenant
+reads are not yet: done-unverified, stale in-progress and search (doc 15 §7.2); expired claims was, until
+`ClaimWorkspacePolicy` gave `claim` a direct policy. A tenant
 read is now a transaction: `BEGIN` rides with the next statement, but the `set_config` and the closing
 `ROLLBACK` are a round trip each. Before m54 a read was the statement alone. Sending the `set_config`
 with the first statement was considered and left out. Npgsql 10 has no per-open or per-command hook:
@@ -1238,9 +1240,9 @@ tables (migrations `ProjectAccess`, then `ProjectAccessSeq`, which rewrote its p
 | policy | tables |
 |---|---|
 | its root is not hidden | `item` (root `coalesce(ancestors[1], id)`), `project_member` (its project) |
-| its item is visible — `EXISTS (SELECT 1 FROM item p WHERE p.id = <column>)`, read under `item`'s policies | `verification` (`item_id`), `project_repo` and `import_record` (`project_item_id`), `item_link` (both ends) |
+| its item is visible — `EXISTS (SELECT 1 FROM item p WHERE p.id = <column>)`, read under `item`'s policies | `verification` and `claim` (`item_id`), `project_repo` and `import_record` (`project_item_id`), `item_link` (both ends) |
 | the same, or the reference is null: a workspace row | `doc` (`item_id`), `event` (`item_id`), `assumption` and `constraint_rule` (`scope_item_id`), `agent_token` (`scope_item_id`), `note` (`to_item_id` and `from_item_id`) |
-| none of its own: its tenant policy already reads its parent, which reads `item` | `item_criterion`, `attempt`, `artifact`, `claim`, `project_config`, `run_config`, `report`, `doc_block`, `doc_block_revision` |
+| none of its own: its tenant policy already reads its parent, which reads `item` | `item_criterion`, `attempt`, `artifact`, `project_config`, `run_config`, `report`, `doc_block`, `doc_block_revision` |
 | none — no project | `workspace`, `tenant_membership`, `user_link`, `agent_session` |
 
 `TenantTables.ByProject` lists the first three rows; `ProjectAccessRlsTests` reads it. The views run as

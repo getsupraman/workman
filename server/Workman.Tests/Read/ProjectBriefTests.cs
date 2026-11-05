@@ -178,6 +178,7 @@ public sealed class ProjectBriefTests(PostgresFixture fixture)
             Id = Guid.CreateVersion7(),
             ItemId = claimed.Id,
             SerializationKey = $"tree-{world.RunId:n}",
+            KeyWorkspaceId = world.WorkspaceId,
             Writes = true,
             AgentName = "aw-alpha",
             Role = ActorRole.Orchestrator,

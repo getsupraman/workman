@@ -280,6 +280,7 @@ public sealed class AttentionRefTests(PostgresFixture fixture)
             Id = Guid.CreateVersion7(),
             ItemId = t12.Id,
             SerializationKey = slug,
+            KeyWorkspaceId = workspace.Id,
             Writes = true,
             AgentName = "worker-1",
             Role = ActorRole.Worker,

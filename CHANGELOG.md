@@ -7,6 +7,19 @@ All notable changes to the Workman server and the `workman` plugin are recorded 
 
 ## [Unreleased]
 
+## [2.4.1] — 2026-11-05
+
+Server 2.4.1. The plugin stays at 2.3.3. One migration, `ClaimWorkspacePolicy`; back up before upgrading.
+
+### Changed
+
+- `claim`'s row-level policy compares the claim's own `key_workspace_id` with the tenant instead of reading its
+  item. The column is backfilled from the item and made `NOT NULL`; a write must still name an item of the
+  tenant. The project-access check the item lookup carried is now claim's own `project_access` policy, the one
+  `verification` has. The expired-claims attention read no longer builds a hashed subplan over every item of
+  the workspace: 2.71 → 0.66 ms per run and 2.76 → 1.24 ms per project on the 5k seed (doc 15 §7.2).
+
+
 ## [2.4.0] — 2026-11-04
 
 Server 2.4.0. The plugin stays at 2.3.3. No migration.

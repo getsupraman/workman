@@ -350,8 +350,8 @@ public sealed class ProjectAccessRlsTests(PostgresFixture fixture) : IAsyncLifet
             INSERT INTO attempt (id, item_id, n) VALUES (@attempt, @run, 1);
             INSERT INTO report (id, attempt_id, status) VALUES (gen_random_uuid(), @attempt, 'DONE');
             INSERT INTO artifact (id, item_id, kind, value) VALUES (gen_random_uuid(), @run, 'commit', @tag);
-            INSERT INTO claim (id, item_id, serialization_key, agent_name, role, expires_at)
-            VALUES (gen_random_uuid(), @run, 'pa-' || @tag, 'pa', 'worker', now() + interval '1 hour');
+            INSERT INTO claim (id, item_id, serialization_key, key_workspace_id, agent_name, role, expires_at)
+            VALUES (gen_random_uuid(), @run, 'pa-' || @tag, @ws, 'pa', 'worker', now() + interval '1 hour');
             INSERT INTO run_config (item_id, project_item_id, serialization_key) VALUES (@run, @project, 'pa-' || @tag);
             INSERT INTO project_config (item_id, repo_root) VALUES (@project, '/pa');
             INSERT INTO project_repo (id, workspace_id, project_item_id, kind, key) VALUES (gen_random_uuid(), @ws, @project, 'remote', 'pa-' || @tag);

@@ -793,7 +793,7 @@ namespace Workman.Core.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("key_user_id");
 
-                    b.Property<Guid?>("KeyWorkspaceId")
+                    b.Property<Guid>("KeyWorkspaceId")
                         .HasColumnType("uuid")
                         .HasColumnName("key_workspace_id");
 

@@ -159,6 +159,7 @@ public sealed class V1BriefTests(PostgresFixture fixture)
             Id = Guid.CreateVersion7(),
             ItemId = item.Id,
             SerializationKey = $"brief-{item.Id:n}",
+            KeyWorkspaceId = item.WorkspaceId,
             AgentName = ParkedAgent,
             Role = ActorRole.Worker,
             AcquiredAt = DateTimeOffset.UtcNow.AddHours(-2),

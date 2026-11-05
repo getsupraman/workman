@@ -10,14 +10,16 @@ public static class TenantTables
 {
     /// <summary>Tables that carry their workspace: the policy compares the column.</summary>
     public static readonly IReadOnlyDictionary<string, string> Direct =
-        TenantRls.Direct.Concat(ProjectMembers.Direct).ToDictionary(t => t.Key, t => t.Value);
+        TenantRls.Direct.Concat(ProjectMembers.Direct).Concat(ClaimWorkspacePolicy.Direct).ToDictionary(t => t.Key, t => t.Value);
 
     /// <summary>Tables with no workspace of their own: a row is the tenant's when its parent is.</summary>
-    public static IReadOnlyDictionary<string, string> ThroughParent => TenantRls.ThroughParent;
+    public static readonly IReadOnlyDictionary<string, string> ThroughParent =
+        TenantRls.ThroughParent.Where(t => !ClaimWorkspacePolicy.Direct.ContainsKey(t.Key)).ToDictionary(t => t.Key, t => t.Value);
 
     /// <summary>
     /// Tenant tables whose rows belong to a project, and their <c>project_access</c> policy (doc 02 §15b). The
     /// <see cref="ThroughParent"/> tables follow their item through their tenant policy instead.
     /// </summary>
-    public static IReadOnlyDictionary<string, string> ByProject => WorkmanNames.ProjectTables;
+    public static readonly IReadOnlyDictionary<string, string> ByProject =
+        WorkmanNames.ProjectTables.Concat(ClaimWorkspacePolicy.ByProject).ToDictionary(t => t.Key, t => t.Value);
 }

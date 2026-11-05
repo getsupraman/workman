@@ -155,9 +155,9 @@ public sealed class SessionStoreTests(PostgresFixture fixture)
               (@first,  @workspace, @run, 'task', '1.1', 1, 'first'),
               (@second, @workspace, @run, 'task', '1.2', 2, 'second');
             INSERT INTO agent_session (id, workspace_id, name, role) VALUES (@session, @workspace, 'aw-m4', 'controller');
-            INSERT INTO claim (id, item_id, serialization_key, agent_name, role, expires_at, acquired_at, session_id) VALUES
-              (gen_random_uuid(), @first,  'P:/worktrees/m4', 'controller', 'controller', now() + interval '30 minutes', now() - interval '1 minute', @session),
-              (gen_random_uuid(), @second, 'P:/worktrees/m4', 'controller', 'controller', now() + interval '30 minutes', now(), @session);
+            INSERT INTO claim (id, item_id, serialization_key, key_workspace_id, agent_name, role, expires_at, acquired_at, session_id) VALUES
+              (gen_random_uuid(), @first,  'P:/worktrees/m4', @workspace, 'controller', 'controller', now() + interval '30 minutes', now() - interval '1 minute', @session),
+              (gen_random_uuid(), @second, 'P:/worktrees/m4', @workspace, 'controller', 'controller', now() + interval '30 minutes', now(), @session);
             """;
 
         await using var connection = new NpgsqlConnection(connectionString);
