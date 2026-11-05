@@ -141,6 +141,25 @@ public sealed class ConstrainTests(PostgresFixture fixture)
         Assert.Contains("postgres 17 on 55433", sibling, StringComparison.Ordinal);
     }
 
+    [Fact]
+    public async Task A_rule_without_a_scope_warns_that_it_binds_every_project_and_a_scoped_one_does_not()
+    {
+        var world = await WriteSeed.CreateAsync(fixture);
+
+        var wide = await world.Writer.ConstrainAsync(
+            world.WorkspaceId, WriteSeed.Orchestrator, null,
+            new ConstrainArgs(Kind: "domain_rule", Text: "no hand-rolled widgets: use the shared crate"), Ct);
+
+        var scoped = await world.Writer.ConstrainAsync(
+            world.WorkspaceId, WriteSeed.Orchestrator, null,
+            new ConstrainArgs(Kind: "domain_rule", Text: "everything here is English", Scope: "1.1"), Ct);
+
+        Assert.False(wide.Refused);
+        Assert.Contains("binds every project in the workspace", wide.Text, StringComparison.Ordinal);
+        Assert.Contains("scope:\"<project>\"", wide.Text, StringComparison.Ordinal);
+        Assert.DoesNotContain("binds every project", scoped.Text, StringComparison.Ordinal);
+    }
+
     /// <summary>
     /// The route is required for a red line and for nothing else. doc 07 §3's lesson is that a guard
     /// nobody can satisfy honestly teaches everyone the override — this one is satisfiable in every

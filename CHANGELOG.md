@@ -18,6 +18,10 @@ Server 2.4.1. The plugin stays at 2.3.3. One migration, `ClaimWorkspacePolicy`; 
   tenant. The project-access check the item lookup carried is now claim's own `project_access` policy, the one
   `verification` has. The expired-claims attention read no longer builds a hashed subplan over every item of
   the workspace: 2.71 → 0.66 ms per run and 2.76 → 1.24 ms per project on the 5k seed (doc 15 §7.2).
+- `work_constrain` explains what a rule without `scope` does: it binds every project in the workspace, and the
+  other projects read it as their own. The `scope` parameter keeps an unscoped rule to one that holds in any
+  repo or language, and a rule recorded without a scope says so in its result: if it names a repo, a language,
+  a stack or a host, retire it and record it again with the project as its scope.
 
 
 ## [2.4.0] — 2026-11-04

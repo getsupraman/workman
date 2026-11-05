@@ -298,7 +298,7 @@ public sealed class WorkWriteTools(
         string? kind = null,
         [Description("The rule, as the brief will print it.")] string? text = null,
         [Description("The way out. Required for a red_line.")] string? route = null,
-        [Description("An item's ref. Omitted, it binds the whole workspace.")]
+        [Description("The project or item it binds. Omitted: every project; only for a rule true in any repo or language.")]
         string? scope = null,
         [Description("risk tags this covers, matched against an item's risk_tags.")]
         string[]? covers_risk = null,

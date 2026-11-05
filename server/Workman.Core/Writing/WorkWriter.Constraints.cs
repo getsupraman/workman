@@ -131,6 +131,12 @@ public sealed partial class WorkWriter
             lines.Add($"    → {Glyph.Flat(args.Route)}");
         }
 
+        if (scopeItemId is null)
+        {
+            lines.Add($"    ⚠ no scope: {minted} binds every project in the workspace. If it names a repo, a "
+                    + "language, a stack or a host, retire it and record it again with scope:\"<project>\".");
+        }
+
         lines.Add(string.Empty);
         lines.Add($"Next: nothing — it prints as {minted} in the BINDING block of every brief in "
                 + $"scope, until work_constrain(ref:\"{minted}\", retire:true, reason:\"…\").");
