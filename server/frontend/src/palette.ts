@@ -10,7 +10,7 @@ export type Command = {
   /** Matched with the label but not shown: a project's ref and full title. */
   keywords: string
   href: string | null
-  action: 'theme' | 'tenant' | null
+  action: 'theme' | 'tenant' | 'keys' | null
   /** The workspace a `tenant` command switches to. */
   tenant?: string
 }

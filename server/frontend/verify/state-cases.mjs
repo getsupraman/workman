@@ -7,6 +7,8 @@
  */
 import { CLOSED, LEAF, answer, countTitle, counted, findingsOpen, independent, progress, state, tally } from '../src/state.ts'
 import { DEFAULT_FILTER, FILTERS, asFilter, cancelledLines, plan, planOrder, planQuery, withoutCancelled } from '../src/plan.ts'
+import { readFileSync } from 'node:fs'
+import { KEYS, KEYS_COMMAND, isHelpKey, keysTable } from '../src/keys.ts'
 import { activityDays, activityOrder, backlogOrder, projectOrder, projectRuns } from '../src/lists.ts'
 import { listMove, openRuns, runMove, runOnPath, sideProjects, sideRuns, step, typingIn } from '../src/listnav.ts'
 import { boardHref, copyValue, itemHref, pathCrumbs, routeReads } from '../src/nav.ts'
@@ -478,6 +480,18 @@ check('backlog: empty', backlogOrder({ groups: [] }, []), [])
 const proj = { runs: [sideRun('p1', 'done'), sideRun('p2'), sideRun('p3', 'in_progress', 0), sideRun('p4')] }
 check('project: the panel\'s open and closed split', Object.values(projectRuns(proj)).map((rs) => rs.map((r) => r.item.id)), [['p2', 'p4'], ['p1', 'p3']])
 check('project: open runs first, then the closed', projectOrder(proj), ['run:p2', 'run:p4', 'run:p1', 'run:p3'])
+console.log('\n── keyboard help: ? opens it, one table for the dialog and doc 13 ──────────')
+check('? opens the help', isHelpKey(k({ key: '?', shiftKey: true }), false, false), true)
+check('? in a field is typed', isHelpKey(k({ key: '?', shiftKey: true }), true, false), false)
+check('? with the palette or the help open: nothing', isHelpKey(k({ key: '?' }), false, true), false)
+check('Ctrl+? and Alt+? are left alone', [isHelpKey(k({ key: '?', ctrlKey: true }), false, false), isHelpKey(k({ key: '?', altKey: true }), false, false)], [false, false])
+check('/ is still the palette\'s, not the help\'s', isHelpKey(k({ key: '/' }), false, false), false)
+const doc13 = readFileSync(new URL('../../../docs/13-dashboard.md', import.meta.url), 'utf8').replace(/\r\n/g, '\n')
+check('doc 13\'s Keyboard table is keysTable() verbatim', doc13.includes(`\n${keysTable()}\n`), true)
+check('the table names every key the code binds', ['Ctrl+P', '↓ / ↑', 'Home / End', 'Enter', 'Alt+↓', 'Esc', '?'].every((key) => KEYS.some((r) => r.keys.includes(key))), true)
+check('the palette finds Keyboard shortcuts', matchCommands([...commands([]), KEYS_COMMAND], 'keyboard').map((c) => c.label), ['Keyboard shortcuts'])
+check('… by "shortcuts" and by "help" too', [matchCommands([KEYS_COMMAND], 'shortcuts').length, matchCommands([KEYS_COMMAND], 'help').length], [1, 1])
+check('it is an action, not a page', [KEYS_COMMAND.action, entryHref({ kind: 'command', command: KEYS_COMMAND })], ['keys', null])
 console.log('\n── the command palette: what opens it, what matches, what Enter opens ───────')
 const key = (over) => ({ key: 'p', ctrlKey: false, metaKey: false, altKey: false, shiftKey: false, ...over })
 check('Ctrl+P opens', isPaletteChord(key({ ctrlKey: true })), true)

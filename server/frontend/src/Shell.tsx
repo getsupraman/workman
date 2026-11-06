@@ -14,6 +14,7 @@ import { PHONE_QUERY, closesOnMove, pageName } from './menu.ts'
 import { showSwitcher } from './admin.ts'
 import { switchFailure, switchWorkspace } from './tenant.ts'
 import Palette, { openPalette } from './Palette.tsx'
+import KeyHelp from './KeyHelp.tsx'
 import { chordLabel } from './palette.ts'
 import { archivedOpen, setArchivedOpen } from './archived.ts'
 import { openRuns, runMove, runOnPath, sideProjects, sideRuns, step } from './listnav.ts'
@@ -246,6 +247,7 @@ export default function Shell(props: ParentProps) {
       </main>
 
       <Palette />
+      <KeyHelp />
       <TipLayer />
     </div>
   )

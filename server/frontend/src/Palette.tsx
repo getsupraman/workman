@@ -8,6 +8,8 @@ import { Pill, ProjectName } from './ui.tsx'
 import { arrange, commands, entryHref, isPaletteChord, isSlash, matchCommands, type Entry, type PaletteAccount } from './palette.ts'
 import { switchWorkspace } from './tenant.ts'
 import { typingIn } from './listnav.ts'
+import { KEYS_COMMAND } from './keys.ts'
+import { openKeyHelp } from './KeyHelp.tsx'
 import { projectOnPath } from './sharing.ts'
 
 const DEBOUNCE_MS = 150
@@ -121,7 +123,7 @@ export default function Palette() {
     return a && { administers: a.user.administers, systemAdmin: a.user.systemAdmin, tenants: a.tenants }
   }
   const matched = createMemo(() =>
-    matchCommands(commands(overview()?.projects ?? [], paletteAccount(), projectOnPath(location.pathname)), query()),
+    matchCommands([...commands(overview()?.projects ?? [], paletteAccount(), projectOnPath(location.pathname)), KEYS_COMMAND], query()),
   )
   const layout = createMemo(() => arrange(matched(), query().trim() === '' ? [] : hits()))
   const entries = () => layout().entries
@@ -143,6 +145,7 @@ export default function Palette() {
     setOpen(false)
     if (href !== null) navigate(href)
     else if (entry.kind === 'command' && entry.command.action === 'theme') toggleTheme()
+    else if (entry.kind === 'command' && entry.command.action === 'keys') openKeyHelp()
     else if (entry.kind === 'command' && entry.command.action === 'tenant' && entry.command.tenant) void switchWorkspace(entry.command.tenant)
   }
 

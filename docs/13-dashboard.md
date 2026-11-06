@@ -35,29 +35,54 @@ returns focus where it was. One input filters two groups:
   title: go to Overview, Needs you, Activity, Sessions; go to Admin for a user who administers a
   workspace and to Users for a system administrator (from `GET /api/session/me`); open each project
   and its backlog (from `overview`); *Switch to workspace &lt;slug&gt;* for each other workspace the user
-  may enter; toggle the theme. An empty input shows the commands alone.
+  may enter; toggle the theme; *Keyboard shortcuts*, which opens the **?** dialog. An empty input shows the commands alone.
 - **Items**, from `GET /api/v1/search` (doc 10), 150 ms after the last keystroke; an answer for an
   input no longer typed is dropped. A row shows the item's `fullRef`, title, kind and state pill and
   its project; Enter opens it through `itemHref`. When the input is some item's exact ref, Items
   come first, so a typed ref and Enter open it. With no hits it names what was searched and that a
   ref works bare or as `run/ref` and `project/run/ref`.
 
-**Keyboard** (rules in `src/listnav.ts`, listeners in `src/listkeys.ts`). Global keys never act
-while focus is in an input, textarea, select or contenteditable, or while the palette or another
-modal is open, or once a handler before them took the key; they listen on the document in the bubble
-phase, so the palette's and the shell's capture handlers win. Ctrl+P, **/** and Esc keep their owners
-above; Alt+←/→ stay the browser's back and forward; the split handle keeps ←/→ while it has focus.
+**Keyboard** (the table in `src/keys.ts`, rules in `src/listnav.ts` and `src/lists.ts`, listeners in
+`src/listkeys.ts`). **?** opens a dialog listing every key (`src/KeyHelp.tsx`), and so does the
+palette's *Keyboard shortcuts* command; Esc or Close shuts it and returns focus. The table below is
+`keysTable()` verbatim, and the dialog renders the same rows (`verify/state-cases.mjs` fails when
+the two differ):
 
 | Key | Where | What it does |
 |---|---|---|
-| ↓ / ↑ | run page | selects the next / previous row of the plan as drawn (phase heads and rows, under the current filter and cancelled toggle) and shows it in the detail panel; the URL keeps filter, tab and cancelled. No selection: ↓ takes the first row, ↑ the last. The ends hold, no wrap. The row scrolls into view (`block: nearest`) |
-| Home / End | run page | the first / last row |
-| ↓ / ↑, Home / End | Backlog, Project, Activity | move focus along the page's row links (focus ring shown) in the order the page draws them (`src/lists.ts`: the backlog's origin links and items, cancelled last when shown; the project's run strips, open then the closed while expanded; the Activity lines that link an item, newest first); each link carries `data-row`. No row focused: ↓ the first, ↑ the last; the ends hold. A row comes into view only when it takes focus |
-| Enter | a focused row | opens it (the link's own behaviour) |
-| Alt+↓ / Alt+↑ (⌥ on macOS) | any page | opens the next / previous run in the sidebar's order (`sideRuns`: Active, Quiet, then Archived while expanded or searched; each project's open runs; the search box applies). From a run page it starts at that run; elsewhere, or on a run the sidebar does not list, Alt+↓ takes the first run and Alt+↑ the last. The ends hold. The run opens with no item selected, so ↓ then takes its first row |
+| Ctrl+P (⌘P on macOS), / | any page | opens the command palette; / only outside a text field |
+| ↓ / ↑ | run page | selects the next / previous row of the plan as drawn and shows it in the detail panel |
+| ↓ / ↑ | Backlog, Project, Activity | moves focus to the next / previous row |
+| Home / End | run page, Backlog, Project, Activity | the first / last row |
+| Enter | a focused row | opens it |
+| Alt+↓ / Alt+↑ (⌥ on macOS) | any page | opens the next / previous run in the sidebar |
+| Esc | palette, dialog, phone menu, detail sheet | closes it |
+| ? | any page | shows these keys |
 
-No modifier may be held for the plain keys; Alt+↑/↓ is the one modifier binding. Ctrl+↑/↓ are left
-alone (macOS takes them; in a field on Windows they move by paragraph).
+Global keys never act while focus is in an input, textarea, select or contenteditable, or while the
+palette or another modal is open, or once a handler before them took the key. They listen on the
+document in the bubble phase, so the palette's and the shell's capture handlers win. Ctrl+P, **/**
+and Esc keep their owners above. Alt+←/→ stay the browser's back and forward. The split handle keeps
+←/→ while it has focus. No modifier may be held for the plain keys; Alt+↑/↓ is the one modifier
+binding. Ctrl+↑/↓ are left alone (macOS takes them; in a field on Windows they move by paragraph).
+
+- **Run page.** ↓/↑ walk the plan as drawn: phase heads and rows, under the current filter and
+  cancelled toggle (`planOrder`). The URL keeps filter, tab and cancelled. With no selection, ↓ takes
+  the first row and ↑ the last. The ends hold, with no wrap. The row scrolls into view
+  (`block: nearest`).
+- **Backlog, Project, Activity.** These keys move focus along the page's row links, which carry
+  `data-row`, and the focus ring shows. The order is the one the page draws:
+  - Backlog: the origin links and their items, with cancelled items last when shown.
+  - Project: the run strips, open first, then the closed ones while expanded.
+  - Activity: the lines that link an item, newest first.
+
+  With no row focused, ↓ takes the first and ↑ the last; the ends hold. Enter is the link's own. A
+  row scrolls into view only when it takes focus.
+- **Alt+↓/↑** follow the sidebar's order (`sideRuns`): Active, Quiet, then Archived while it is
+  expanded or searched. Each project contributes its open runs, and the search box applies. From a
+  run page it starts at that run. Elsewhere, or on a run the sidebar does not list, Alt+↓ takes the
+  first run and Alt+↑ the last. The ends hold. The run opens with no item selected, so ↓ then takes
+  its first row.
 
 **The project list** (`src/Shell.tsx`, rules in `src/projects.ts`):
 
