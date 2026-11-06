@@ -5,6 +5,7 @@ import { rowState, type State, type StateKey } from './state.ts'
 import { UNKNOWN, projectName, projectRefIfDifferent } from './format.ts'
 import { copyValue } from './nav.ts'
 import { CopyIcon } from './icons.tsx'
+import { PHONE_QUERY } from './menu.ts'
 
 export const Dot = (props: { k: StateKey | 'note'; title?: string; style?: JSX.CSSProperties }) => (
   <span class={`dot s-${props.k}`} title={props.title} style={props.style} />
@@ -141,6 +142,46 @@ export const CancelledToggle = (props: { count: number; shown: boolean; href: st
     </A>
   </Show>
 )
+
+type TipContent = { title: string; sub: string }
+const TIP_ID = 'tip'
+const [tip, setTip] = createSignal<(TipContent & { x: number; y: number; owner: object }) | null>(null)
+
+/**
+ * A tip beside an element: its whole title in bold, a ref small below, vertically centred on the
+ * element's right edge. Spread the result on the element; it shows on hover and on keyboard focus.
+ * Fixed to the viewport by `TipLayer`, so the sidebar's overflow never clips it; not at phone width.
+ */
+export function tipFor(content: () => TipContent) {
+  const owner = {}
+  const show = (e: Event) => {
+    if (window.matchMedia(PHONE_QUERY).matches) return
+    const r = (e.currentTarget as HTMLElement).getBoundingClientRect()
+    setTip({ ...content(), x: r.right + 10, y: r.top + r.height / 2, owner })
+  }
+  const hide = () => {
+    if (tip()?.owner === owner) setTip(null)
+  }
+  onCleanup(hide)
+  return { onMouseEnter: show, onMouseLeave: hide, onFocus: show, onBlur: hide, 'aria-describedby': TIP_ID }
+}
+
+/** The one tip on the page, mounted once by the shell. A scroll moves its anchor, so it hides. */
+export function TipLayer() {
+  const hide = () => setTip(null)
+  document.addEventListener('scroll', hide, true)
+  onCleanup(() => document.removeEventListener('scroll', hide, true))
+  return (
+    <Show when={tip()}>
+      {(t) => (
+        <div id={TIP_ID} role="tooltip" class="tip" style={{ left: `${t().x}px`, top: `${t().y}px` }}>
+          <b>{t().title}</b>
+          <small>{t().sub}</small>
+        </div>
+      )}
+    </Show>
+  )
+}
 
 /** One segment per leaf, in board order. Gone leaves are already out of `leaves`. */
 export const Segs = (props: { leaves: BoardRow[]; style?: JSX.CSSProperties }) => (

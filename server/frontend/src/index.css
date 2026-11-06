@@ -210,7 +210,14 @@ a.row:hover { background: var(--bg); }
   background: var(--ink); color: var(--panel); font-size: 12px; line-height: 1.4; white-space: normal; overflow-wrap: anywhere;
   box-shadow: var(--shadow); pointer-events: none;
 }
-.members-hint { margin: 0; padding: 12px 18px; color: var(--ink-3); font-size: 12.5px; }
+/* The sidebar's tip (ui.tsx tipFor): fixed to the viewport, so the sidebar's overflow never clips it. */
+.tip { position: fixed; z-index: 45; transform: translateY(-50%); max-width: min(360px, 60vw); padding: 7px 11px; border-radius: 8px; background: var(--ink); color: var(--panel); box-shadow: var(--shadow); pointer-events: none; overflow-wrap: anywhere; }
+.tip::before { content: ''; position: absolute; left: -5px; top: calc(50% - 5px); border: 5px solid transparent; border-left: 0; border-right-color: var(--ink); }
+.tip b { display: block; font-size: 13px; font-weight: 600; line-height: 1.35; }
+.tip small { display: block; margin-top: 2px; font: 11.5px/1.3 var(--font-mono); opacity: 0.75; }
+@media (max-width: 760px) {
+  .tip { display: none; }
+}.members-hint { margin: 0; padding: 12px 18px; color: var(--ink-3); font-size: 12.5px; }
 .members h2:focus { outline: none; }
 .members h2:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .proj-act { border: 1px solid var(--line); border-radius: 8px; padding: 3px 10px; font-size: 12.5px; color: var(--ink-2); background: var(--panel); white-space: nowrap; }

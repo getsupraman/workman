@@ -70,6 +70,12 @@ alone (macOS takes them; in a field on Windows they move by paragraph).
   runs** only, each with a done/total count and a thin progress bar. A run is open unless its status
   is done, cancelled or superseded, or it has tasks and every one is finished (`runIsOpen`); an open
   run with no tasks yet stays. The rest are one muted row, *n closed*, linking to the project page.
+- Hovering or focusing a run or a project shows a **tip** centred vertically on the link's right
+  edge: the whole title in bold, its `fullRef` small below — the path the copy buttons copy and the
+  palette finds — for scanning refs without opening anything. One tip on the page (`src/ui.tsx`
+  `tipFor` / `TipLayer`), fixed to the viewport so the sidebar's overflow never clips it; a scroll
+  hides it, and it never shows at phone width, where the sidebar is the menu. The links carry no
+  `title`, so no native tooltip doubles it.
 
 | URL | Page | Reads |
 |---|---|---|
@@ -210,8 +216,8 @@ type. One helper holds the rule: `src/format.ts` `projectName` / `projectRefIfDi
 ### What may be cut
 
 Text may be shortened only in a one-line row of a list that links to a view showing it whole, and
-that row carries the full text in a `title` attribute (the sidebar run links, the overview run
-strips). A capped list says how much it left out and links to the whole list (the overview's
+that row carries the full text — in a tip for the sidebar's run and project links (below), in a
+`title` attribute for the overview run strips. A capped list says how much it left out and links to the whole list (the overview's
 *Needs you* shows five human rows, then *+N more in the inbox*). Nothing else is cut: detail views, headings,
 crumbs, chips and project names wrap, and anything meant to be copied or run — a commit, a ref,
 a tree — is always shown whole. A copy button copies its value whole, even

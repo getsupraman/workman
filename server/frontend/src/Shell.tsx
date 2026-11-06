@@ -7,7 +7,7 @@ import { toggleTheme } from './theme.ts'
 import { countTitle, counted, tally } from './state.ts'
 import { ACCOUNT, ADMIN, projectHref, runHref } from './nav.ts'
 import { clock, short } from './format.ts'
-import { ProjectName } from './ui.tsx'
+import { ProjectName, TipLayer, tipFor } from './ui.tsx'
 import { ActivityIcon, AdminIcon, InboxIcon, MenuIcon, OverviewIcon, SearchIcon, SessionsIcon } from './icons.tsx'
 import { Brand, BrandIcon } from './brand.tsx'
 import { PHONE_QUERY, closesOnMove, pageName } from './menu.ts'
@@ -246,6 +246,7 @@ export default function Shell(props: ParentProps) {
       </main>
 
       <Palette />
+      <TipLayer />
     </div>
   )
 }
@@ -324,7 +325,7 @@ function SideGroup(props: { label?: string; projects: ProjectOverview[]; path: s
               <A
                 href={href()}
                 class={`proj${project.archivedAt ? ' archived' : ''}${props.path === href() ? ' on' : ''}`}
-                title={project.item.title}
+                {...tipFor(() => ({ title: project.item.title, sub: project.item.fullRef }))}
               >
                 <ProjectName project={project.item} />
               </A>
@@ -360,7 +361,7 @@ function RunLink(props: { run: RunOverview; current: boolean }) {
     <A
       href={runHref(props.run.item.id)}
       class={`runlink${props.current ? ' on' : ''}${closed() ? ' closed' : ''}`}
-      title={props.run.item.title}
+      {...tipFor(() => ({ title: props.run.item.title, sub: props.run.item.fullRef }))}
     >
       <span class="rl-title">{short(props.run.item.title)}</span>
       <span class="rl-count" title={countTitle(counts() ?? counted(props.run.rollup))}>
