@@ -7,6 +7,8 @@ import { MEMBERS_ANCHOR } from '../sharing.ts'
 import { CopyRef, Known, Legend, ProjectName } from '../ui.tsx'
 import { ProjectPanel } from './Overview.tsx'
 import { MembersPanel } from './Members.tsx'
+import { projectOrder } from '../lists.ts'
+import { useFocusKeys } from '../listkeys.ts'
 
 /**
  * One project: its overview card, archived or not, with the Archive / Unarchive switch, and its Members. A
@@ -18,6 +20,10 @@ export default function Project() {
   const location = useLocation()
   const navigate = useNavigate()
   const project = () => overview()?.projects.find((p) => p.item.id === params.project)
+  useFocusKeys(() => {
+    const p = project()
+    return p ? projectOrder(p) : []
+  })
 
   const members = load(() => params.project, api.projectMembers)
   const [written, setWritten] = createSignal<api.ProjectMembers>()

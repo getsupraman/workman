@@ -52,6 +52,8 @@ above; Alt+←/→ stay the browser's back and forward; the split handle keeps �
 |---|---|---|
 | ↓ / ↑ | run page | selects the next / previous row of the plan as drawn (phase heads and rows, under the current filter and cancelled toggle) and shows it in the detail panel; the URL keeps filter, tab and cancelled. No selection: ↓ takes the first row, ↑ the last. The ends hold, no wrap. The row scrolls into view (`block: nearest`) |
 | Home / End | run page | the first / last row |
+| ↓ / ↑, Home / End | Backlog, Project, Activity | move focus along the page's row links (focus ring shown) in the order the page draws them (`src/lists.ts`: the backlog's origin links and items, cancelled last when shown; the project's run strips, open then the closed while expanded; the Activity lines that link an item, newest first); each link carries `data-row`. No row focused: ↓ the first, ↑ the last; the ends hold. A row comes into view only when it takes focus |
+| Enter | a focused row | opens it (the link's own behaviour) |
 | Alt+↓ / Alt+↑ (⌥ on macOS) | any page | opens the next / previous run in the sidebar's order (`sideRuns`: Active, Quiet, then Archived while expanded or searched; each project's open runs; the search box applies). From a run page it starts at that run; elsewhere, or on a run the sidebar does not list, Alt+↓ takes the first run and Alt+↑ the last. The ends hold. The run opens with no item selected, so ↓ then takes its first row |
 
 No modifier may be held for the plain keys; Alt+↑/↓ is the one modifier binding. Ctrl+↑/↓ are left

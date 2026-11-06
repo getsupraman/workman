@@ -1,5 +1,5 @@
 import { onCleanup, onMount } from 'solid-js'
-import { listMove, typingIn, type Key, type Move } from './listnav.ts'
+import { listMove, step, typingIn, type Key, type Move } from './listnav.ts'
 
 /** A dialog is open (the palette, the key help) or the phone menu covers the page: list keys stand down. */
 export const modalOpen = (): boolean =>
@@ -24,6 +24,24 @@ export function useListKeys(move: (m: Move) => boolean): void {
   useDocumentKeys((e, typing, modal) => {
     const m = listMove(e, typing, modal)
     return m !== null && move(m)
+  })
+}
+
+/**
+ * A list page with no side panel: ArrowUp/ArrowDown, Home/End move focus along the row links tagged
+ * `data-row`, in `order` (only the rows drawn now count); Enter on the focused link opens it.
+ */
+export function useFocusKeys(order: () => string[]): void {
+  const row = (key: string) => document.querySelector<HTMLElement>(`[data-row="${CSS.escape(key)}"]`)
+  useListKeys((m) => {
+    const keys = order().filter((k) => row(k) !== null)
+    const current = document.activeElement?.closest<HTMLElement>('[data-row]')?.dataset.row
+    const to = step(keys, current, m)
+    const el = to === undefined ? null : row(to)
+    if (el === null) return false
+    el.focus({ preventScroll: true })
+    el.scrollIntoView({ block: 'nearest' })
+    return true
   })
 }
 

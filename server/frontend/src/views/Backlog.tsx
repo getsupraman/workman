@@ -7,6 +7,8 @@ import { SHOW_CANCELLED, backlogHref, itemHref, runHref } from '../nav.ts'
 import { LEAF, refState } from '../state.ts'
 import { plural, short } from '../format.ts'
 import { CancelledToggle, CopyRef, Dot, Known, ProjectName } from '../ui.tsx'
+import { backlogOrder, itemRow, originRow } from '../lists.ts'
+import { useFocusKeys } from '../listkeys.ts'
 
 export default function Backlog() {
   const params = useParams<{ project: string }>()
@@ -23,6 +25,10 @@ export default function Backlog() {
   const board = load(() => (shown() ? runId() : undefined), api.board)
   const cancelledItems = () =>
     (board.data()?.rows ?? []).filter((r) => LEAF.has(r.item.kind) && r.item.status === 'cancelled').map((r) => r.item)
+  useFocusKeys(() => {
+    const b = page.data()
+    return b ? backlogOrder(b, shown() ? cancelledItems() : []) : []
+  })
   const toggle = () => `${backlogHref(params.project)}${shown() ? '' : `?cancelled=${SHOW_CANCELLED}`}`
 
   return (
@@ -76,7 +82,7 @@ export default function Backlog() {
                       fallback={<div class="group-h">Deferred from nowhere recorded</div>}
                     >
                       {(origin) => (
-                        <A class="group-h" href={itemHref(origin(), null)}>
+                        <A class="group-h" href={itemHref(origin(), null)} data-row={originRow(origin())}>
                           From {short(origin().title)}
                           <span class="gc">
                             {origin().qualifiedRef} <CopyRef item={origin()} />
@@ -103,7 +109,7 @@ export default function Backlog() {
 
 function BacklogItem(props: { item: ItemRef; run: ItemRef | null }) {
   return (
-    <A class={`item${props.item.status === 'cancelled' ? ' gone' : ''}`} href={itemHref(props.item, props.run)}>
+    <A class={`item${props.item.status === 'cancelled' ? ' gone' : ''}`} href={itemHref(props.item, props.run)} data-row={itemRow(props.item)}>
       <Dot k={refState(props.item).k} />
       <div class="item-t">
         <span class="item-ref">{props.item.qualifiedRef}</span>

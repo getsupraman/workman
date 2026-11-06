@@ -4,24 +4,12 @@ import * as api from '../api.ts'
 import type { JournalEvent } from '../api.ts'
 import { load } from '../store.ts'
 import { itemHref } from '../nav.ts'
-import { clock, day } from '../format.ts'
+import { clock } from '../format.ts'
+import { activityDays, activityOrder, eventRow } from '../lists.ts'
+import { useFocusKeys } from '../listkeys.ts'
 import { CopyRef, Known } from '../ui.tsx'
 
 const LIMIT = 300
-
-type Day = { day: string; events: JournalEvent[] }
-
-/** Newest first, one group per calendar day in the reader's zone. */
-function byDay(events: JournalEvent[]): Day[] {
-  const days: Day[] = []
-  for (const event of [...events].reverse()) {
-    const d = day(event.at)
-    const last = days[days.length - 1]
-    if (last?.day === d) last.events.push(event)
-    else days.push({ day: d, events: [event] })
-  }
-  return days
-}
 
 export function EventLine(props: { event: JournalEvent; withRef: boolean }) {
   const e = () => props.event
@@ -33,7 +21,7 @@ export function EventLine(props: { event: JournalEvent; withRef: boolean }) {
         <Show when={props.withRef && e().item}>
           {(item) => (
             <>
-              <A class="item-ref" href={itemHref(item(), e().run)}>
+              <A class="item-ref" href={itemHref(item(), e().run)} data-row={eventRow(e())}>
                 {item().qualifiedRef}
               </A>
               <CopyRef item={item()} />
@@ -48,6 +36,8 @@ export function EventLine(props: { event: JournalEvent; withRef: boolean }) {
 
 export default function Activity() {
   const page = load(() => 'all', () => api.journal(LIMIT))
+  const days = () => activityDays(page.data()?.events ?? [])
+  useFocusKeys(() => activityOrder(days()))
 
   return (
     <div class="page">
@@ -67,9 +57,9 @@ export default function Activity() {
       <Show when={page.error()}>{(e) => <div class="failure">{e()}</div>}</Show>
 
       <Known value={page.data()} class="panel empty">
-        {(p) => (
+        {() => (
           <div class="panel journal" style={{ 'padding-bottom': '8px' }}>
-            <For each={byDay(p().events)} fallback={<div class="empty">Nothing has happened yet.</div>}>
+            <For each={days()} fallback={<div class="empty">Nothing has happened yet.</div>}>
               {(group) => (
                 <>
                   <div class="group-h">{group.day}</div>

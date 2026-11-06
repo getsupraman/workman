@@ -7,6 +7,7 @@
  */
 import { CLOSED, LEAF, answer, countTitle, counted, findingsOpen, independent, progress, state, tally } from '../src/state.ts'
 import { DEFAULT_FILTER, FILTERS, asFilter, cancelledLines, plan, planOrder, planQuery, withoutCancelled } from '../src/plan.ts'
+import { activityDays, activityOrder, backlogOrder, projectOrder, projectRuns } from '../src/lists.ts'
 import { listMove, openRuns, runMove, runOnPath, sideProjects, sideRuns, step, typingIn } from '../src/listnav.ts'
 import { boardHref, copyValue, itemHref, pathCrumbs, routeReads } from '../src/nav.ts'
 import { appIconHref, consentForm, consentStep, consentView, hiddenFields, iconStep, initials, isConnectPath, returnTarget, scopeLines, signInHref, signInStart, signInStep } from '../src/connect.ts'
@@ -461,6 +462,22 @@ check('from a run: the next and the previous', [id(step(order, order[1], 'next')
 check('the ends hold: no wrap past the last or the first', [id(step(order, order[2], 'next')), id(step(order, order[0], 'prev'))], ['o1', 'n1'])
 check('off a run page: Down the first run, Up the last', [id(step(order, undefined, 'next')), id(step(order, undefined, 'prev'))], ['n1', 'o1'])
 check('the run a path is on', [runOnPath('/runs/r1'), runOnPath('/runs/r1/i2'), runOnPath('/projects/p'), runOnPath('/')], ['r1', 'r1', undefined, undefined])
+console.log('\n── list keys on Backlog, Project, Activity: each page\'s row order ─────────')
+const ev = (seq, at, item = { id: `i${seq}` }) => ({ seq, at, item, run: null, session: null, actor: 'a', role: 'worker', kind: 'note', summary: null })
+const journal = [ev(1, '2026-11-04T12:00:00Z'), ev(2, '2026-11-04T13:00:00Z', null), ev(3, '2026-11-05T12:00:00Z'), ev(4, '2026-11-05T13:00:00Z')]
+check('activity: newest day first, newest event first', activityDays(journal).map((d) => d.events.map((e) => e.seq)), [[4, 3], [2, 1]])
+check('activity: only the events that link an item are rows', activityOrder(activityDays(journal)), ['ev:4', 'ev:3', 'ev:1'])
+check('activity: nothing yet, no rows', activityOrder(activityDays([])), [])
+const backlogPage = { groups: [
+  { origin: { id: 'r1' }, items: [{ id: 'a' }, { id: 'b' }] },
+  { origin: null, items: [{ id: 'c' }] },
+] }
+check('backlog: each origin link, then its items', backlogOrder(backlogPage, []), ['from:r1', 'item:a', 'item:b', 'item:c'])
+check('backlog: the cancelled ones last, when shown', backlogOrder(backlogPage, [{ id: 'x' }]).slice(-2), ['item:c', 'item:x'])
+check('backlog: empty', backlogOrder({ groups: [] }, []), [])
+const proj = { runs: [sideRun('p1', 'done'), sideRun('p2'), sideRun('p3', 'in_progress', 0), sideRun('p4')] }
+check('project: the panel\'s open and closed split', Object.values(projectRuns(proj)).map((rs) => rs.map((r) => r.item.id)), [['p2', 'p4'], ['p1', 'p3']])
+check('project: open runs first, then the closed', projectOrder(proj), ['run:p2', 'run:p4', 'run:p1', 'run:p3'])
 console.log('\n── the command palette: what opens it, what matches, what Enter opens ───────')
 const key = (over) => ({ key: 'p', ctrlKey: false, metaKey: false, altKey: false, shiftKey: false, ...over })
 check('Ctrl+P opens', isPaletteChord(key({ ctrlKey: true })), true)

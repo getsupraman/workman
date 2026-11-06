@@ -5,7 +5,8 @@ import { account, boards, inbox, overview, refreshOverview } from '../store.ts'
 import { CLOSED, countTitle, counted, refState, tally } from '../state.ts'
 import { backlogHref, itemHref, projectHref, runHref } from '../nav.ts'
 import { forController, honestyCells, needsYou, needsYouCount, openTasks } from '../inbox.ts'
-import { byActivity, runIsOpen } from '../projects.ts'
+import { byActivity } from '../projects.ts'
+import { projectRuns, runRow } from '../lists.ts'
 import { UNKNOWN, ago, claimHolder, clock, day, plural, projectName, projectTagline, short } from '../format.ts'
 import { membersHref, shareMarker } from '../sharing.ts'
 import { CopyRef, Dot, Known, Legend, ProjectName, Segs } from '../ui.tsx'
@@ -179,8 +180,8 @@ function ClaimRow(props: { claim: Claim; asOf: string }) {
 /** One project's card — the overview's panel, and the whole of the project page. */
 export function ProjectPanel(props: { project: ProjectOverview }) {
   const tagline = () => projectTagline(props.project.item)
-  const open = () => props.project.runs.filter(runIsOpen)
-  const closed = () => props.project.runs.filter((r) => !runIsOpen(r))
+  const open = () => projectRuns(props.project).open
+  const closed = () => projectRuns(props.project).closed
   const [showClosed, setShowClosed] = createSignal(false)
 
   return (
@@ -332,7 +333,7 @@ function RunStrip(props: { run: RunOverview }) {
   }
 
   return (
-    <A class={`strip${closed() ? ' closed' : ''}`} href={runHref(props.run.item.id)}>
+    <A class={`strip${closed() ? ' closed' : ''}`} href={runHref(props.run.item.id)} data-row={runRow(props.run)}>
       <div>
         <div class="strip-t" title={props.run.item.title}>
           {short(props.run.item.title)}
