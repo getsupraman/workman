@@ -22,8 +22,9 @@ Send exactly these, and no progress chatter - the controller reads your transcri
 
 Open every message with your name '${name}'.
 ${minted ? `
-If your tools include no Workman work_report (a deferred mcp__workman__work_report counts), send
-BLOCKED no Workman tools to the controller and stop.
+If your tools include no Workman work_report (a deferred mcp__workman__work_report counts), a work_*
+call fails, or only authenticate tools appear: send BLOCKED no Workman tools to the controller and
+stop. Never call authenticate; never run claude mcp.
 ` : ''}
 If the controller sends you WRAP UP: stop at the next safe point, commit what is finished, and send
 DONE saying exactly where you stopped. Do not start anything new.

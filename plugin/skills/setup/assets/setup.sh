@@ -269,19 +269,31 @@ json_str() { printf '"%s"' "$(printf '%s' "$1" | sed 's/\\/\\\\/g; s/"/\\"/g')";
 registration="{\"type\":\"http\",\"url\":$(json_str "$mcp_url"),\"headersHelper\":$(json_str "node \"$helper_path\"")}"
 shown="claude mcp add-json --scope user $name '$registration'"
 
-write_server_json() { # rule C181: only setup writes it, atomically; readers never default to localhost
+write_server_json() { # $1 = origin; rule C181: only setup writes it, atomically; readers never default to localhost
     local tmp="$home_dir/.server.json.$$"
     mkdir -p "$home_dir"
-    printf '{"url": %s, "mcpName": %s}\n' "$(json_str "$base_url")" "$(json_str "$name")" >"$tmp"
+    printf '{"url": %s, "mcpName": %s}\n' "$(json_str "$1")" "$(json_str "$name")" >"$tmp"
     mv -f "$tmp" "$home_dir/server.json"
-    status "server" "$home_dir/server.json -> $base_url"
+    status "server" "$home_dir/server.json -> $1"
 }
 
 if [ "$keep" -eq 1 ] && [ "$url_differs" -eq 1 ]; then
     status "register" "kept the existing '$name' registration, which points at $existing_url, not $mcp_url (pass --force to re-point it)"
+    # server.json follows the registration sessions actually use, so agent_launch mints on that same server
+    kept_base="${existing_url%/}"; kept_base="${kept_base%/mcp}"; kept_origin=""
+    if [ "$kept_base" != "${existing_url%/}" ]; then
+        kept_origin="$(node -e 'try { const u = new URL(process.argv[1]); if (u.pathname === "/" && !u.search && !u.username && !u.password) process.stdout.write(u.origin) } catch {}' "$kept_base" 2>/dev/null || true)"
+    fi
+    if [ -z "$kept_origin" ]; then
+        status "server" "not written: the kept registration's url $existing_url is not <origin>/mcp, so agent_launch has no Workman server; run again with --force"
+    elif [ "$dry_run" -eq 1 ]; then
+        status "server" "dry run, would write $home_dir/server.json -> $kept_origin (the kept registration)"
+    else
+        write_server_json "$kept_origin"
+    fi
 elif [ "$keep" -eq 1 ]; then
     status "register" "kept the existing '$name' registration of $mcp_url (pass --force to replace it)"
-    if [ "$dry_run" -eq 1 ]; then status "server" "dry run, would write $home_dir/server.json -> $base_url"; else write_server_json; fi
+    if [ "$dry_run" -eq 1 ]; then status "server" "dry run, would write $home_dir/server.json -> $base_url"; else write_server_json "$base_url"; fi
 elif [ "$dry_run" -eq 1 ]; then
     status "register" "dry run, would run: $shown"
     status "server" "dry run, would write $home_dir/server.json -> $base_url"
@@ -292,11 +304,12 @@ else
     fi
     claude mcp add-json --scope user "$name" "$registration" >/dev/null 2>&1 || die "register  claude mcp add-json failed: $shown"
     status "register" "'$name' -> $mcp_url with OAuth sign-in, session helper (user scope; no token stored)"
-    write_server_json
+    write_server_json "$base_url"
 fi
 
-# the shadow check - a local or project entry of the same name wins over the user one; removing it is the user's call
-shadows="$(node "$script_dir/find-shadows.mjs" --name "$name" --dir "$here" 2>/dev/null || true)"
+# the shadow check - a local or project entry of the same name wins over the user one; removing it is the user's call.
+# --all: here and in every project directory the claude config lists, not only $PWD
+shadows="$(node "$script_dir/find-shadows.mjs" --name "$name" --dir "$here" --all 2>/dev/null || true)"
 found=(); unchecked=0
 while IFS= read -r line; do
     case "$line" in
@@ -309,7 +322,7 @@ if [ "${#found[@]}" -gt 0 ]; then
     status "shadows" "${#found[@]} '$name' entry(s) win over the user registration (local > project > user), so sessions there miss it and its session helper; this script removes nothing - run the command shown yourself:"
     for line in "${found[@]}"; do printf '          %s\n' "$line"; done
 elif [ "$unchecked" -eq 0 ]; then
-    status "shadows" "none: no local or project '$name' entry overrides it"
+    status "shadows" "none: no local or project '$name' entry overrides it, here or in any project Claude Code lists"
 fi
 
 # f. what the human needs next
@@ -320,6 +333,8 @@ else
 fi
 if [ "$keep" -eq 1 ] && [ "$url_differs" -eq 1 ]; then
     status "next" "nothing changed: '$name' still points at $existing_url; run again with --force to re-point it to $mcp_url"
+elif [ "$keep" -eq 1 ]; then
+    status "next" "already registered; sign in only if /mcp shows '$name' needs authentication"
 else
     status "next" "start a new Claude Code session, run /mcp, pick '$name', Authenticate, sign in in the browser and Approve: the work_* tools appear there, not in this one"
 fi

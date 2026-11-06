@@ -3,7 +3,7 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import fs from 'node:fs'
 import path from 'node:path'
-import { startServer, makeRepo, fakeWorkman, CONTROLLER, CONTROLLER_TOKEN, MINTED_TOKEN, tmp } from './helpers.mjs'
+import { startServer, makeRepo, fakeWorkman, CONTROLLER, CONTROLLER_TOKEN, MINTED_TOKEN, tmp, agentsDir } from './helpers.mjs'
 import { FIX_TOOLS, READONLY_TOOLS } from '../header.mjs'
 import { WORKMAN_TOOLS } from '../launch-args.mjs'
 import { normaliseRoot } from '../repo.mjs'
@@ -43,7 +43,7 @@ test('every parameter maps to its flag, variadics closed in order, prompt last',
         })
         assert.equal(r.isError, false, r.content[0].text)
         const { argv, cwd } = bgArgv(s)
-        const mcp = path.join(repo.briefs, 'mcp-unit-1.json')
+        const mcp = path.join(agentsDir(s), 'mcp-unit-1.json')
         assert.deepEqual(argv, [
             '--bg', '--name', 'unit-1',
             '--allowedTools', ...READONLY_TOOLS, WORKMAN_TOOLS, 'Bash(node --test:*)',
@@ -99,7 +99,7 @@ test('defaults: auto, fix profile, worker role; --permission-mode closes the las
         assert.deepEqual(argv, [
             '--bg', '--name', 'unit-2',
             '--allowedTools', ...FIX_TOOLS, WORKMAN_TOOLS,
-            '--mcp-config', path.join(repo.briefs, 'mcp-unit-2.json'),
+            '--mcp-config', path.join(agentsDir(s), 'mcp-unit-2.json'),
             '--permission-mode', 'auto',
             prompt(repo.briefs, 'unit-2'),
         ])
@@ -145,7 +145,7 @@ test('role none: no mint, no --mcp-config, no config file', async () => {
         assert.ok(!argv.includes('--mcp-config'))
         assert.ok(!argv.includes('--allowedTools'))
         assert.equal(ws.requests.length, 0)
-        assert.ok(!fs.existsSync(path.join(repo.briefs, 'mcp-unit-4.json')))
+        assert.ok(!fs.existsSync(path.join(agentsDir(s), 'mcp-unit-4.json')))
         assert.equal(r.structuredContent.workman, null)
     } finally {
         await s.close()
@@ -193,7 +193,7 @@ test('mint failure (4xx, server down) refuses and spawns nothing', async () => {
             const r = await c.server.call('agent_launch', { ...base, name: c.name, workman: {} })
             assert.equal(r.isError, true, c.name)
             assert.match(r.content[0].text, c.says, c.name)
-            assert.ok(!fs.existsSync(path.join(repo.briefs, `mcp-${c.name}.json`)), c.name)
+            assert.ok(!fs.existsSync(path.join(agentsDir(c.server), `mcp-${c.name}.json`)), c.name)
         }
         assert.equal(s.claudeCalls().length + down.claudeCalls().length, 0, 'claude must not be run when minting fails')
     } finally {
@@ -215,7 +215,7 @@ test('a failed claude --bg revokes the minted token and deletes its config', asy
         assert.equal(r.isError, true)
         assert.match(r.content[0].text, /could not read the background id[\s\S]*fake launch failure[\s\S]*revoked/)
         assert.ok(ws.requests.some((q) => q.method === 'DELETE' && q.url === '/api/agent-sessions/ws-42'))
-        assert.ok(!fs.existsSync(path.join(repo.briefs, 'mcp-unit-5.json')))
+        assert.ok(!fs.existsSync(path.join(agentsDir(s), 'mcp-unit-5.json')))
     } finally {
         await s.close()
         await ws.close()
@@ -228,7 +228,6 @@ test('validation refusals', async () => {
     fs.writeFileSync(path.join(notGit, 'task.md'), 'x')
     const outside = path.join(tmp('outside'), 'brief.md')
     fs.writeFileSync(outside, 'x')
-    const unignored = makeRepo({ ignoreBriefs: false })
     const s = startServer()
     try {
         const ok = { name: 'v', brief: 'task.md', repo_root: repo.root, controller: CONTROLLER, workman: { role: 'none' } }
@@ -255,7 +254,7 @@ test('validation refusals', async () => {
             ['ttl out of range', { ...ok, workman: { role: 'none', ttl_hours: 721 } }, /ttl_hours/],
             ['unknown parameter', { ...ok, permissionMode: 'auto' }, /unknown parameter/],
             ['the 1.x name workstate', { ...ok, workman: undefined, workstate: { role: 'none' } }, /unknown parameter/],
-            ['config not gitignored', { ...ok, repo_root: unignored.root, workman: {} }, /not gitignored/],
+            ['name with the mcp- prefix', { ...ok, name: 'mcp-x' }, /must not start with "mcp-"/],
         ]
         for (const [label, args, says] of cases) {
             const r = await s.call('agent_launch', args)
@@ -286,9 +285,9 @@ test('dry_run: argv returned with the token as <minted>; nothing minted, spawned
         assert.match(r.content[0].text, /Bearer <minted>/)
         assert.equal(ws.requests.length, 0)
         assert.equal(s.claudeCalls().length, 0)
-        assert.ok(!fs.existsSync(path.join(repo.briefs, 'mcp-unit-6.json')))
+        assert.ok(!fs.existsSync(path.join(agentsDir(s), 'mcp-unit-6.json')))
         assert.ok(fs.existsSync(path.join(repo.briefs, 'brief-unit-6.txt')))
-        const stateDir = path.join(s.data, 'agents')
+        const stateDir = agentsDir(s)
         assert.deepEqual(fs.existsSync(stateDir) ? fs.readdirSync(stateDir) : [], [])
     } finally {
         await s.close()

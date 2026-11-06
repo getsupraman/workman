@@ -3,11 +3,12 @@
 // one: a local-scope entry in the claude config (projects[<dir>].mcpServers[<name>]) and a
 // project-scope entry in <dir>/.mcp.json. Claude Code resolves local > project > user, so a session in
 // such a directory never sees the user registration or its headersHelper.
-//   node find-shadows.mjs [<claude config>] [--name <server>]... [--dir <dir>] [--own <dir>]
+//   node find-shadows.mjs [<claude config>] [--name <server>]... [--dir <dir>] [--own <dir>] [--all]
 //   node find-shadows.mjs [<claude config>] --registered [--name <server>]
 // Without --name it checks workman. Each --name replaces it; repeat it to check several.
 // <claude config> defaults to $CLAUDE_CONFIG_DIR/.claude.json, else ~/.claude.json. --dir also checks
-// that directory's .mcp.json. --own skips the local entry of that directory (the one -Agent wrote).
+// that directory's .mcp.json; --all also checks the .mcp.json of every project directory the config
+// lists. --own skips the local entry of that directory (the one -Agent wrote).
 // One line per shadowing entry with the command that removes it; nothing when none shadows; exit 0.
 // --registered instead prints the url of the user-scope entry (top-level mcpServers.<name>), or
 // nothing: setup reads the existing registration here, because `claude mcp get` health-checks it.
@@ -113,9 +114,39 @@ function readJson(file) {
     }
 }
 
+/** $CLAUDE_CONFIG_DIR/.claude.json, else ~/.claude.json. @param {NodeJS.ProcessEnv} [env] */
+export function defaultConfigFile(env = process.env) {
+    return path.join(env.CLAUDE_CONFIG_DIR || os.homedir(), '.claude.json')
+}
+
+/**
+ * The entries that shadow `name` for sessions started in `dir`: its local entry in the claude config
+ * and its .mcp.json entry. Reads only key names, urls and whether headersHelper is set.
+ * @param {string} dir @param {{configFile?: string, name?: string}} [opt]
+ * @returns {{shadows: Shadow[], unchecked: string[]}}
+ */
+export function shadowsForDir(dir, opt = {}) {
+    const name = opt.name ?? DEFAULT_NAMES[0]
+    const configFile = opt.configFile ?? defaultConfigFile()
+    /** @type {Shadow[]} */
+    const shadows = []
+    /** @type {string[]} */
+    const unchecked = []
+    const config = readJson(configFile)
+    if (config.ok) shadows.push(...localShadows(config.value, name, configFile).filter((s) => sameDir(s.dir) === sameDir(dir)))
+    else if (config.why !== 'missing') unchecked.push(`${configFile} is ${config.why}`)
+    const mcpFile = path.join(dir, '.mcp.json')
+    if (fs.existsSync(mcpFile)) {
+        const mcp = readJson(mcpFile)
+        if (mcp.ok) shadows.push(...projectShadows(mcp.value, name, dir, mcpFile))
+        else unchecked.push(`${mcpFile} is ${mcp.why}`)
+    }
+    return { shadows, unchecked }
+}
+
 /** @param {string[]} argv @returns {string[]} the lines to print */
 export function findShadows(argv) {
-    /** @type {{config?: string, names: string[], dir?: string, own?: string, registered?: boolean}} */
+    /** @type {{config?: string, names: string[], dir?: string, own?: string, registered?: boolean, all?: boolean}} */
     const opt = { names: [] }
     for (let i = 0; i < argv.length; i++) {
         const a = argv[i]
@@ -126,11 +157,11 @@ export function findShadows(argv) {
         else if (a === '--dir') opt.dir = argv[++i]
         else if (a === '--own') opt.own = argv[++i]
         else if (a === '--registered') opt.registered = true
+        else if (a === '--all') opt.all = true
         else if (!opt.config) opt.config = a
     }
     if (opt.names.length === 0) opt.names.push(...DEFAULT_NAMES)
-    const configFile = opt.config
-        ?? path.join(process.env.CLAUDE_CONFIG_DIR || os.homedir(), '.claude.json')
+    const configFile = opt.config ?? defaultConfigFile()
     /** @type {string[]} */
     const lines = []
     const config = readJson(configFile)
@@ -145,17 +176,24 @@ export function findShadows(argv) {
     } else {
         lines.push(`not checked: ${configFile} is ${config.why}`)
     }
-    if (opt.dir) {
-        const mcpFile = path.join(opt.dir, '.mcp.json')
-        if (fs.existsSync(mcpFile)) {
-            const mcp = readJson(mcpFile)
-            if (mcp.ok) {
-                for (const name of opt.names) {
-                    for (const s of projectShadows(mcp.value, name, opt.dir, mcpFile)) lines.push(formatShadow(s, name))
-                }
-            }
-            else lines.push(`not checked: ${mcpFile} is ${mcp.why}`)
+    /** @type {string[]} */
+    const dirs = opt.dir ? [opt.dir] : []
+    if (opt.all && config.ok) {
+        const projects = /** @type {any} */ (config.value)?.projects
+        for (const d of projects && typeof projects === 'object' ? Object.keys(projects) : []) {
+            if (!dirs.some((x) => sameDir(x) === sameDir(d))) dirs.push(d)
         }
+    }
+    for (const dir of dirs) {
+        const mcpFile = path.join(dir, '.mcp.json')
+        if (!fs.existsSync(mcpFile)) continue
+        const mcp = readJson(mcpFile)
+        if (mcp.ok) {
+            for (const name of opt.names) {
+                for (const s of projectShadows(mcp.value, name, dir, mcpFile)) lines.push(formatShadow(s, name))
+            }
+        }
+        else lines.push(`not checked: ${mcpFile} is ${mcp.why}`)
     }
     return lines
 }

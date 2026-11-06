@@ -6,7 +6,7 @@
 // @ts-check
 
 import { Refusal } from './launch-args.mjs'
-import { MCP_NAME } from './home.mjs'
+import { MCP_NAME, NEVER_PROBE } from './home.mjs'
 
 /**
  * @param {Response} res
@@ -68,7 +68,7 @@ export async function mintSession(a) {
     if (a.ttlHours !== undefined) body.ttlHours = a.ttlHours
     if (a.grants && a.grants.length > 0) body.grants = a.grants
     if (a.repo && (a.repo.remote || a.repo.root)) body.repo = a.repo
-    const failed = (/** @type {string} */ why) => new Refusal(`minting a Workman token failed: ${why} Nothing was launched.`)
+    const failed = (/** @type {string} */ why) => new Refusal(`minting a Workman token failed: ${why} Nothing was launched. ${NEVER_PROBE}`)
     let res
     try {
         res = await sessions(a, 'POST', undefined, body)
@@ -79,7 +79,7 @@ export async function mintSession(a) {
         const hint = res.status === 409
             ? ` A live token already exists for "${a.name}": agent_stop that agent first, or pick another name.`
             : res.status === 401 || res.status === 403
-                ? ' The sign-in was refused, or it may not mint this role (a role is never raised); if it was signed out, run agent_signin.'
+                ? ' The sign-in was refused, or it may not mint this role (a role is never raised); if it was signed out or expired, call agent_signin.'
                 : ''
         throw failed(`${await serverReason(res)}.${hint}`)
     }

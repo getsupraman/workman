@@ -1,13 +1,12 @@
 // tools.mjs — agent_launch, agent_stop, agent_list, agent_signin, agent_signout: schemas and handlers.
 //
-// Nothing returned from here, logged, or written outside mcp-<name>.json may hold a token. The
+// Nothing returned from here, logged, or written outside ~/.workman/agents/mcp-<name>.json may hold a token. The
 // access token lives in a local variable for the length of one call; the minted one is written to
 // its file and dropped.
 // @ts-check
 
 import fs from 'node:fs'
 import path from 'node:path'
-import { spawnSync } from 'node:child_process'
 import { protocolHeader } from './header.mjs'
 import {
     Refusal, validateLaunch, buildArgv, isObject, rejectUnknown, PERMISSION_MODES, TOOLSETS, EFFORTS, ROLES, GRANTS,
@@ -15,9 +14,10 @@ import {
 import { runClaude, parseBackgroundId, listLiveAgents, stripAnsi, resolveClaude } from './claude.mjs'
 import { mintSession, bindClaudeSession, revokeSession, mcpConfigJson } from './workman.mjs'
 import { signIn, signOut, accessToken, requireGrant, forgetAccessToken } from './oauth.mjs'
-import { serverUrl, clearAuthCacheEntry, writeFileAtomic, sleep } from './home.mjs'
+import { serverUrl, clearAuthCacheEntry, writeFileAtomic, sleep, mcpConfigFile, NEVER_PROBE } from './home.mjs'
 import { saveRecord, loadRecords, findRecord, deleteRecord } from './state.mjs'
 import { repoKeys } from './repo.mjs'
+import { shadowsForDir, formatShadow } from '../../setup/assets/find-shadows.mjs'
 
 /** @param {string} line */
 export function log(line) {
@@ -27,10 +27,12 @@ export function log(line) {
 const pathArray = { type: 'array', items: { type: 'string' } }
 const noParams = { type: 'object', properties: {}, additionalProperties: false }
 
+export const INSTRUCTIONS = `Launch, list and stop nested Claude Code background sessions. The Workman server comes from ~/.workman/server.json (written by /workman:setup); agent_signin once lets agent_launch mint. See the /workman:agents skill. ${NEVER_PROBE} No work_* tools in this session: the human runs /mcp → workman.`
+
 export const TOOLS = [
     {
         name: 'agent_launch',
-        description: 'Launch a nested Claude Code session in the background (claude --bg) with the protocol header prepended to its brief and, unless workman.role is "none", its own Workman token, minted with the agent_signin grant for the server in ~/.workman/server.json (written by /workman:setup). Returns name, id, sessionId and brief; never a token.',
+        description: `Launch a nested Claude Code session in the background (claude --bg) with the protocol header prepended to its brief and, unless workman.role is "none", its own Workman token, minted with the agent_signin grant for the server in ~/.workman/server.json (written by /workman:setup). Returns name, id, sessionId and brief; never a token. ${NEVER_PROBE}`,
         inputSchema: {
             type: 'object',
             properties: {
@@ -51,7 +53,7 @@ export const TOOLS = [
                     type: 'object',
                     description: 'The per-session Workman token. Default {role: "worker"}',
                     properties: {
-                        role: { type: 'string', enum: ROLES, default: 'worker', description: '"none" mints nothing and passes no --mcp-config' },
+                        role: { type: 'string', enum: ROLES, default: 'worker', description: '"none" mints nothing and passes no --mcp-config: the worker runs with your own Claude Code MCP servers and identity' },
                         ttl_hours: { type: 'integer', minimum: 1, maximum: 720, description: 'Idle window in hours (server default 72): the token lapses after this long unused; every use renews it, no hard cap' },
                         grants: { type: 'array', items: { type: 'string', enum: GRANTS }, description: 'Capabilities on the minted token. "import" shows work_import; the server allows it only on role orchestrator or controller' },
                     },
@@ -131,18 +133,15 @@ function noArgs(tool, args) {
 }
 
 /**
- * A file holding a secret must not be committable: refuse unless git says it is ignored.
+ * A local-scope (~/.claude.json projects[repo_root]) or project-scope (<repo_root>/.mcp.json)
+ * "workman" entry wins over the worker's --mcp-config one, and the worker would run without its
+ * minted token: refuse.
  * @param {string} repoRoot
- * @param {string} file
  */
-function ensureIgnored(repoRoot, file) {
-    const rel = path.relative(repoRoot, file).split(path.sep).join('/')
-    const r = spawnSync('git', ['check-ignore', '-q', rel], { cwd: repoRoot, windowsHide: true })
-    if (r.status === 0) return
-    if (r.status === 1) {
-        throw new Refusal(`${rel} is not gitignored in ${repoRoot}, and it would hold a Workman token. Add .claude/briefs/ to that repo's .gitignore.`)
-    }
-    throw new Refusal(`could not confirm with git check-ignore that ${rel} is gitignored (${r.error?.message ?? `exit ${r.status}`}); it would hold a Workman token`)
+function refuseShadows(repoRoot) {
+    const { shadows } = shadowsForDir(repoRoot)
+    if (shadows.length === 0) return
+    throw new Refusal(`repo_root has a "workman" entry that would replace the worker's minted one (local > project > --mcp-config); nothing was minted:\n${shadows.map((s) => formatShadow(s, 'workman')).join('\n')}`)
 }
 
 /**
@@ -171,12 +170,17 @@ async function agentLaunch(input) {
     const briefDir = path.join(p.repoRoot, '.claude', 'briefs')
     const briefPath = path.join(briefDir, `brief-${p.name}.txt`)
     const mints = p.workman.role !== 'none'
-    const mcpConfigPath = mints ? path.join(briefDir, `mcp-${p.name}.json`) : undefined
+    if (findRecord({ name: p.name })) {
+        throw new Refusal(`an agent named "${p.name}" is already recorded: agent_stop it first (a stopped one too, to clear its record), or pick another name`)
+    }
+    const mcpConfigPath = mints ? mcpConfigFile(p.name) : undefined
+    // The env the worker is spawned with: the auth-cache clear edits that config dir's cache.
+    const spawnEnv = process.env
 
     let url = ''
     let token = ''
     if (mints) {
-        ensureIgnored(p.repoRoot, /** @type {string} */ (mcpConfigPath))
+        refuseShadows(p.repoRoot)
         url = serverUrl()
         if (p.dryRun) requireGrant(url)
         else token = await accessToken(url)
@@ -221,7 +225,7 @@ async function agentLaunch(input) {
     /** @type {string[]} */
     const warnings = []
     if (minted) {
-        const w = clearAuthCacheEntry()
+        const w = clearAuthCacheEntry(spawnEnv)
         if (w) warnings.push(w)
     }
 
@@ -229,7 +233,7 @@ async function agentLaunch(input) {
     try {
         if (minted) writeFileAtomic(/** @type {string} */ (mcpConfigPath), mcpConfigJson(url, minted.token), 0o600)
         fs.writeFileSync(briefPath, briefText)
-        const run = await runClaude(argv, { cwd: p.repoRoot })
+        const run = await runClaude(argv, { cwd: p.repoRoot, env: spawnEnv })
         id = parseBackgroundId(run.stdout + '\n' + run.stderr)
         if (!id) {
             const output = stripAnsi(`${run.stdout}\n${run.stderr}`).trim().slice(0, 2000)
@@ -242,7 +246,7 @@ async function agentLaunch(input) {
             fs.rmSync(/** @type {string} */ (mcpConfigPath), { force: true })
             cleanup = err ? ` The minted token could NOT be revoked (${err}); it lapses once unused past its idle window (current expiry ${minted.expiresAt ?? 'unknown'}, renewed on each use).` : ' The minted token was revoked and its config deleted.'
         }
-        throw new Refusal(`${/** @type {Error} */ (e).message}${cleanup}`)
+        throw new Refusal(`${/** @type {Error} */ (e).message}${cleanup} ${NEVER_PROBE}`)
     }
 
     /** @type {import('./state.mjs').AgentRecord} */

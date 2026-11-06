@@ -1,6 +1,6 @@
 // home.mjs — the files this server reads or writes outside a repo: ~/.workman/server.json (which
-// Workman, written only by /workman:setup), ~/.workman/grants.json's directory, and Claude Code's
-// mcp-needs-auth-cache.json.
+// Workman, written only by /workman:setup), ~/.workman/grants.json's directory, ~/.workman/agents/
+// (launch records and minted mcp configs), and Claude Code's mcp-needs-auth-cache.json.
 // @ts-check
 
 import fs from 'node:fs'
@@ -12,19 +12,36 @@ import { Refusal, isObject } from './launch-args.mjs'
 /** The name of the Workman server in the user's config, in a worker's --mcp-config and in the cache. */
 export const MCP_NAME = 'workman'
 
+/** Appended where a stuck session looks for what to do next. */
+export const NEVER_PROBE = 'Never run claude mcp get/list or a claude process to check Workman.'
+
 export const workmanDir = () => path.join(os.homedir(), '.workman')
+
+/** Launch records and minted mcp configs: owner-only (0700; on Windows the profile already is). */
+export function agentsDir() {
+    const dir = path.join(workmanDir(), 'agents')
+    fs.mkdirSync(dir, { recursive: true, mode: 0o700 })
+    try {
+        fs.chmodSync(dir, 0o700)
+    } catch {}
+    return dir
+}
+
+/** @param {string} name */
+export const mcpConfigFile = (name) => path.join(agentsDir(), `mcp-${name}.json`)
 
 /** @param {number} ms */
 export const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
 
 /**
- * The Workman origin from ~/.workman/server.json, {"url": "<origin, no path>", "mcpName": "workman"}.
- * Never a default: a missing or unusable file refuses with the setup call.
+ * The Workman origin from ~/.workman/server.json, {"url": "<origin>", "mcpName": "workman"}, as
+ * new URL(url).origin: a trailing slash, an upper-case host or a default port are fine; a path,
+ * query or credentials are not. Never a default: a missing or unusable file refuses with the setup call.
  * @returns {string}
  */
 export function serverUrl() {
     const file = path.join(workmanDir(), 'server.json')
-    const refuse = (/** @type {string} */ why) => new Refusal(`${file} ${why}. Run /workman:setup: it writes the Workman server this machine uses.`)
+    const refuse = (/** @type {string} */ why) => new Refusal(`${file} ${why}. Run /workman:setup: it writes the Workman server this machine uses. ${NEVER_PROBE}`)
     let j
     try {
         j = JSON.parse(fs.readFileSync(file, 'utf8').replace(/^﻿/, ''))
@@ -34,14 +51,18 @@ export function serverUrl() {
     }
     const url = isObject(j) ? j.url : undefined
     if (typeof url !== 'string') throw refuse('has no "url"')
-    let origin
+    if (isObject(j) && j.mcpName !== undefined && j.mcpName !== MCP_NAME) throw refuse(`has "mcpName" ${JSON.stringify(j.mcpName)}; only "${MCP_NAME}" is supported`)
+    let u
     try {
-        origin = new URL(url).origin
+        u = new URL(url)
     } catch {
         throw refuse(`has a "url" that is not a URL (${url})`)
     }
-    if (!/^https?:/.test(url) || origin !== url) throw refuse(`has "url" ${url}, which is not an http(s) origin without a path or trailing slash`)
-    return url
+    if (!/^https?:$/.test(u.protocol)) throw refuse(`has "url" ${url}, which is not http(s)`)
+    if (u.username || u.password || u.search || u.hash || /[?#]/.test(url) || u.pathname !== '/') {
+        throw refuse(`has "url" ${u.origin}…, which carries a path, query or credentials; it must be an origin`)
+    }
+    return u.origin
 }
 
 /**
@@ -74,32 +95,43 @@ export function writeFileAtomic(file, text, mode) {
 }
 
 /**
- * Remove the "workman" entry from Claude Code's mcp-needs-auth-cache.json. While it is younger than
+ * Remove the "workman" entry from Claude Code's mcp-needs-auth-cache.json in the config dir the
+ * worker is spawned with (env.CLAUDE_CONFIG_DIR, else ~/.claude). While the entry is younger than
  * 15 minutes Claude Code skips connecting a server of that name, the worker's own --mcp-config one
- * included, and the worker gets no work_* tools. Every other key is kept. Never throws.
+ * included, and the worker gets no work_* tools. Every other key is kept, and the file is re-read
+ * just before the rename, so only a write landing in that instant is lost. Never throws.
+ * @param {NodeJS.ProcessEnv} [env] the environment the worker is spawned with
  * @returns {string|undefined} a warning when the entry could not be removed
  */
-export function clearAuthCacheEntry() {
-    const file = path.join(process.env.CLAUDE_CONFIG_DIR || path.join(os.homedir(), '.claude'), 'mcp-needs-auth-cache.json')
+export function clearAuthCacheEntry(env = process.env) {
+    const file = path.join(env.CLAUDE_CONFIG_DIR || path.join(os.homedir(), '.claude'), 'mcp-needs-auth-cache.json')
     let age = ''
-    try {
+    /** @returns {Record<string, any>|undefined|null} null: no file */
+    const read = () => {
         let text
         try {
             text = fs.readFileSync(file, 'utf8')
         } catch (e) {
-            if (/** @type {NodeJS.ErrnoException} */ (e).code === 'ENOENT') return undefined
+            if (/** @type {NodeJS.ErrnoException} */ (e).code === 'ENOENT') return null
             throw e
         }
-        let cache
         try {
-            cache = JSON.parse(text)
+            const v = JSON.parse(text)
+            return isObject(v) ? v : undefined
         } catch {
-            cache = undefined
+            return undefined
         }
-        if (!isObject(cache)) return `${file} is not a JSON object; left it untouched, so a stale "${MCP_NAME}" entry there may hide this worker's Workman tools`
+    }
+    try {
+        let cache = read()
+        if (cache === null) return undefined
+        if (cache === undefined) return `${file} is not a JSON object; left it untouched, so a stale "${MCP_NAME}" entry there may hide this worker's Workman tools`
         if (!(MCP_NAME in cache)) return undefined
         const ts = cache[MCP_NAME]?.timestamp
         if (typeof ts === 'number') age = ` (entry ${Math.round((Date.now() - ts) / 1000)} s old)`
+        const fresh = read()
+        if (isObject(fresh)) cache = fresh
+        if (!(MCP_NAME in cache)) return undefined
         delete cache[MCP_NAME]
         writeFileAtomic(file, JSON.stringify(cache))
         return undefined

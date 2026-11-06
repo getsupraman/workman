@@ -72,7 +72,7 @@ function sandbox() {
 
 /**
  * An existing registration is seeded into the sandbox's Claude config, where setup reads it.
- * @param {'sh'} kind @param {string[]} args @param {{ existingUrl?: string, docker?: boolean }} [opts]
+ * @param {'sh'} kind @param {string[]} args @param {{ existingUrl?: string, docker?: boolean, projectShadow?: boolean }} [opts]
  * @returns {Promise<{ code: number, stdout: string, stderr: string, calls: { tool: string, args: string[] }[], box: ReturnType<typeof sandbox> }>}
  */
 function run(kind, args, opts = {}) {
@@ -80,6 +80,12 @@ function run(kind, args, opts = {}) {
     if (opts.existingUrl) {
         const entry = { type: 'http', url: opts.existingUrl, headers: { Authorization: 'Bearer SENTINEL-TOKEN-x' } }
         writeFileSync(path.join(box.home, '.claude.json'), JSON.stringify({ mcpServers: { workman: entry } }))
+    }
+    if (opts.projectShadow) {
+        const elsewhere = path.join(box.root, 'elsewhere')
+        mkdirSync(elsewhere)
+        writeFileSync(path.join(elsewhere, '.mcp.json'), JSON.stringify({ mcpServers: { workman: { type: 'http', url: 'https://team.example.test/mcp' } } }))
+        writeFileSync(path.join(box.home, '.claude.json'), JSON.stringify({ projects: { [elsewhere]: {} } }))
     }
     const env = {
         ...process.env,
@@ -294,16 +300,38 @@ for (const kind of /** @type {const} */ (['sh'])) {
             assert.deepEqual(claudeCalls(r.calls, 'add-json'), [])
             assert.match(r.stdout, /^register  kept the existing 'workman' registration of /m)
             assertServerJson(r.box, origin)
+            assert.match(r.stdout, /^next {6}already registered; sign in only if \/mcp shows 'workman' needs authentication$/m)
+            assert.doesNotMatch(r.stdout, /start a new Claude Code session/)
         } finally { rmSync(r.box.root, { recursive: true, force: true }) }
     })
 
-    test(`${kind}: a registration kept pointing elsewhere writes no server.json and reads no header`, { skip }, async () => {
+    test(`${kind}: a registration kept pointing elsewhere writes server.json for that registration and reads no header`, { skip }, async () => {
         mode = 'ok'
-        const r = await run(kind, ['--url', origin], { existingUrl: 'https://old.example/mcp' })
+        const r = await run(kind, ['--url', origin], { existingUrl: 'https://OLD.example/mcp' })
+        try {
+            assert.equal(r.code, 0, r.stderr)
+            assertServerJson(r.box, 'https://old.example')
+            assert.ok(!r.stdout.includes('SENTINEL') && !r.stderr.includes('SENTINEL'), 'no header in the output')
+        } finally { rmSync(r.box.root, { recursive: true, force: true }) }
+    })
+
+    test(`${kind}: a kept registration whose url is not <origin>/mcp writes no server.json and says why`, { skip }, async () => {
+        mode = 'ok'
+        const r = await run(kind, ['--url', origin], { existingUrl: 'https://old.example/other' })
         try {
             assert.equal(r.code, 0, r.stderr)
             assert.ok(!existsSync(serverJson(r.box)))
-            assert.ok(!r.stdout.includes('SENTINEL') && !r.stderr.includes('SENTINEL'), 'no header in the output')
+            assert.match(r.stdout, /^server {4}not written: the kept registration's url https:\/\/old\.example\/other is not <origin>\/mcp/m)
+        } finally { rmSync(r.box.root, { recursive: true, force: true }) }
+    })
+
+    test(`${kind}: the shadow check covers every project the claude config lists, not only the current directory`, { skip }, async () => {
+        mode = 'ok'
+        const r = await run(kind, ['--url', origin], { projectShadow: true })
+        try {
+            assert.equal(r.code, 0, r.stderr)
+            assert.match(r.stdout, /^shadows   1 'workman' entry\(s\) win/m)
+            assert.match(r.stdout, /project .*elsewhere.*\.mcp\.json/)
         } finally { rmSync(r.box.root, { recursive: true, force: true }) }
     })
 }

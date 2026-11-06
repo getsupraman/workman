@@ -139,6 +139,7 @@ export function validateLaunch(input) {
         throw new Refusal('name is required: 1-64 characters of letters, digits, ".", "_" or "-", starting with a letter or digit')
     }
     const name = a.name
+    if (/^mcp-/i.test(name)) throw new Refusal('name must not start with "mcp-": that prefix names the mcp config files beside the launch records')
 
     if (typeof a.repo_root !== 'string' || a.repo_root.trim() === '') throw new Refusal('repo_root is required: the absolute path of the git working tree the agent works in')
     if (!path.isAbsolute(a.repo_root)) throw new Refusal(`repo_root must be an absolute path (got ${a.repo_root})`)

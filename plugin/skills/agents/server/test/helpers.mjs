@@ -191,6 +191,9 @@ export function startServer(env = {}, opts = {}) {
     return { request, notify, call, claudeCalls, close, data, home, output: () => ({ stdout, stderr }) }
 }
 
+/** ~/.workman/agents of a started server: launch records and minted mcp configs. @param {{home: string}} s */
+export const agentsDir = (s) => path.join(s.home, '.workman', 'agents')
+
 /**
  * @param {string} dir
  * @returns {string[]} every file under dir

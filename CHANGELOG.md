@@ -7,6 +7,33 @@ All notable changes to the Workman server and the `workman` plugin are recorded 
 
 ## [Unreleased]
 
+## [3.0.1] — 2026-11-06
+
+### Plugin 3.0.1
+
+- **Minted tokens and launch records move to `~/.workman/agents/`** (directory `0700`, files `0600`):
+  `mcp-<name>.json` and `<name>.json`. Nothing secret is written into the repo any more, so the
+  `.claude/briefs/` gitignore check is gone; `agent_stop` and a failed launch delete the config. The old
+  `.claude/briefs/mcp-<name>.json` and `os.tmpdir()`/`CLAUDE_PLUGIN_DATA` locations are not read (no
+  migration). A name that is still recorded is refused until `agent_stop`; names may not start with `mcp-`.
+- **`agent_launch` refuses a shadowed `repo_root`**: a local-scope (`~/.claude.json`) or project-scope
+  (`.mcp.json`) `workman` entry there would replace the worker's minted one. The check is
+  `find-shadows.mjs`'s, shared with setup.
+- **`server.json` is read as `new URL(url).origin`**: a trailing slash, an upper-case host or a default port
+  are accepted; a path, query or credentials, or an `mcpName` other than `workman`, are refused.
+- **Never-probe where a stuck agent looks**: the agents server instructions, the `agent_launch` description
+  and the server.json, sign-in, mint and launch refusals carry it, each naming its next step
+  (`/workman:setup`, `agent_signin`, or the human runs `/mcp` → workman). The worker header says: a failing
+  `work_*` call or only authenticate tools also mean `BLOCKED no Workman tools`; never authenticate, never
+  `claude mcp`. `workman.role` `"none"` says it runs with your own MCP servers and identity.
+- **Auth-cache clear** edits the cache in the `CLAUDE_CONFIG_DIR` the worker is spawned with, and re-reads it
+  just before writing.
+- **setup.sh**: a kept registration that points elsewhere now writes `server.json` for that registration's
+  origin (or says why not), so `server.json` matches the registration in use; `next` says `already registered`
+  for a kept one; the shadow check also reads the `.mcp.json` of every project `~/.claude.json` lists.
+- **session-header.mjs** kills its lookups' whole process tree on its time budget (`taskkill /T /F` on
+  Windows, the process group elsewhere).
+
 ## [3.0.0] — 2026-11-06
 
 Server 3.0.0 and plugin 3.0.0. No migration.

@@ -5,7 +5,7 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import fs from 'node:fs'
 import path from 'node:path'
-import { startServer, makeRepo, fakeWorkman, walk, tmp, homeEnv, CONTROLLER, CONTROLLER_TOKEN, MINTED_TOKEN } from './helpers.mjs'
+import { startServer, makeRepo, fakeWorkman, walk, tmp, homeEnv, CONTROLLER, CONTROLLER_TOKEN, MINTED_TOKEN, agentsDir } from './helpers.mjs'
 import { fakeOAuthWorkman } from './fake-oauth.mjs'
 
 /** @param {string} where @param {string} text */
@@ -27,16 +27,17 @@ test('launch, list, failed launch and stop leak no token anywhere but mcp-<name>
         results.push(await failing.call('agent_launch', { ...args, name: 'leak-fail' }))
         results.push(await s.call('agent_list', {}))
 
-        const mcp = path.join(repo.briefs, 'mcp-leak-1.json')
+        const mcp = path.join(agentsDir(s), 'mcp-leak-1.json')
         assert.ok(fs.readFileSync(mcp, 'utf8').includes(MINTED_TOKEN), 'the config is the one place the token belongs')
 
         for (const f of walk(s.data)) if (!f.endsWith('claude-argv.jsonl')) assertClean(f, fs.readFileSync(f, 'utf8'))
         assertClean('claude argv', fs.readFileSync(path.join(s.data, 'claude-argv.jsonl'), 'utf8'))
         for (const f of walk(repo.briefs)) if (f !== mcp) assertClean(f, fs.readFileSync(f, 'utf8'))
+        for (const f of [...walk(agentsDir(s)), ...walk(agentsDir(failing))]) if (f !== mcp) assertClean(f, fs.readFileSync(f, 'utf8'))
 
         results.push(await s.call('agent_stop', { name: 'leak-1', keep_brief: true }))
         for (const r of results) assertClean('a tool result', JSON.stringify(r))
-        for (const f of walk(repo.briefs)) assertClean(f, fs.readFileSync(f, 'utf8'))
+        for (const f of [...walk(repo.briefs), ...walk(agentsDir(s))]) assertClean(f, fs.readFileSync(f, 'utf8'))
     } finally {
         await s.close()
         await failing.close()
@@ -70,20 +71,20 @@ test('sign-in, launch, list, failed launch, stop and sign-out leak no OAuth toke
         results.push(await s.call('agent_list', {}))
         for (const r of results) assert.equal(r.isError, r === results[3], r.content[0].text)
 
-        const mcp = path.join(repo.briefs, 'mcp-oleak-1.json')
+        const mcp = path.join(agentsDir(s), 'mcp-oleak-1.json')
         const [minted] = ws.minted()
         assert.ok(fs.readFileSync(mcp, 'utf8').includes(minted), 'the config is the one place the minted token belongs')
         const refresh = JSON.parse(fs.readFileSync(grants, 'utf8'))[ws.url].refresh_token
         clean(grants, fs.readFileSync(grants, 'utf8'), [refresh])
         for (const f of walk(s.data)) clean(f, fs.readFileSync(f, 'utf8'))
         for (const f of walk(failing.data)) clean(f, fs.readFileSync(f, 'utf8'))
-        for (const f of walk(repo.briefs)) clean(f, fs.readFileSync(f, 'utf8'), f === mcp ? [minted] : [])
+        for (const f of [...walk(repo.briefs), ...walk(agentsDir(s)), ...walk(agentsDir(failing))]) clean(f, fs.readFileSync(f, 'utf8'), f === mcp ? [minted] : [])
 
         results.push(await s.call('agent_stop', { name: 'oleak-1', keep_brief: true }))
         results.push(await s.call('agent_signout', {}))
         results.push(await s.call('agent_launch', { ...args, name: 'oleak-out' }))
         for (const r of results) clean('a tool result', JSON.stringify(r))
-        for (const f of walk(repo.briefs)) clean(f, fs.readFileSync(f, 'utf8'))
+        for (const f of [...walk(repo.briefs), ...walk(agentsDir(s))]) clean(f, fs.readFileSync(f, 'utf8'))
         clean(grants, fs.readFileSync(grants, 'utf8'))
     } finally {
         await s.close()

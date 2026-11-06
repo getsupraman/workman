@@ -7,7 +7,7 @@
 // @ts-check
 
 import readline from 'node:readline'
-import { TOOLS, callTool, log } from './tools.mjs'
+import { TOOLS, INSTRUCTIONS, callTool, log } from './tools.mjs'
 
 const SERVER_VERSION = '0.1.0'
 const LATEST = '2025-11-25'
@@ -39,7 +39,7 @@ async function dispatch(method, params) {
                 protocolVersion: SUPPORTED.includes(asked) ? asked : LATEST,
                 capabilities: { tools: { listChanged: false } },
                 serverInfo: { name: 'agents', version: SERVER_VERSION },
-                instructions: 'Launch, list and stop nested Claude Code background sessions. The Workman server comes from ~/.workman/server.json (written by /workman:setup); agent_signin once lets agent_launch mint. See the /workman:agents skill.',
+                instructions: INSTRUCTIONS,
             }
         }
         case 'ping':

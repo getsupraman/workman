@@ -1,10 +1,11 @@
-// state.mjs — one JSON file per launched agent, so agent_stop and agent_list survive a restart.
-// Holds paths, ids and the Workman url only: no token or grant is ever written here.
+// state.mjs — one JSON file per launched agent in ~/.workman/agents/<name>.json, so agent_stop and
+// agent_list survive a restart. Holds paths, ids and the Workman url only: no token or grant is ever
+// written here (the token is in mcp-<name>.json beside it, which loadRecords skips).
 // @ts-check
 
 import fs from 'node:fs'
-import os from 'node:os'
 import path from 'node:path'
+import { agentsDir, writeFileAtomic } from './home.mjs'
 
 /**
  * @typedef {object} AgentRecord
@@ -19,30 +20,23 @@ import path from 'node:path'
  * @property {string} launchedAt
  */
 
-/** @param {NodeJS.ProcessEnv} [env] @param {string} [tmp] */
-export function stateDir(env = process.env, tmp = os.tmpdir()) {
-    const dir = path.join(env.CLAUDE_PLUGIN_DATA || path.join(tmp, 'workman-agents'), 'agents')
-    fs.mkdirSync(dir, { recursive: true })
-    return dir
-}
-
 /** @param {string} name */
 function fileFor(name) {
-    return path.join(stateDir(), `${name}.json`)
+    return path.join(agentsDir(), `${name}.json`)
 }
 
 /** @param {AgentRecord} rec */
 export function saveRecord(rec) {
-    fs.writeFileSync(fileFor(rec.name), JSON.stringify(rec, null, 2) + '\n')
+    writeFileAtomic(fileFor(rec.name), JSON.stringify(rec, null, 2) + '\n', 0o600)
 }
 
 /** @returns {AgentRecord[]} */
 export function loadRecords() {
-    const dir = stateDir()
+    const dir = agentsDir()
     /** @type {AgentRecord[]} */
     const out = []
     for (const f of fs.readdirSync(dir)) {
-        if (!f.endsWith('.json')) continue
+        if (!f.endsWith('.json') || f.startsWith('mcp-')) continue
         try {
             out.push(JSON.parse(fs.readFileSync(path.join(dir, f), 'utf8')))
         } catch {}

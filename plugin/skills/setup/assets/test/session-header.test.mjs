@@ -76,3 +76,30 @@ test('ps output parses, and a native claude or a node running Claude Code is cla
     assert.ok(isClaude(rows[3]))
     assert.ok(!isClaude(rows[2]))
 })
+
+test('a lookup past its time budget is killed with every process it started', async () => {
+    const { run } = await import('../session-header.mjs')
+    const { mkdtempSync, readFileSync, writeFileSync, existsSync } = await import('node:fs')
+    const dir = mkdtempSync(path.join(os.tmpdir(), 'ws-helper-kill-'))
+    const pidFile = path.join(dir, 'grandchild.pid')
+    const script = path.join(dir, 'grandchild.cjs')
+    writeFileSync(script, `require('fs').writeFileSync(${JSON.stringify(pidFile)}, String(process.pid)); setTimeout(() => {}, 30000)`)
+    // A non-node shell in between, as powershell.exe or claude.exe is: killing it alone leaves node running.
+    const [cmd, args] = process.platform === 'win32'
+        ? ['cmd.exe', ['/d', '/c', process.execPath, script]]
+        : ['sh', ['-c', `"${process.execPath}" "${script}"; :`]]
+    await assert.rejects(run(cmd, args, 2000), /timed out/)
+    assert.ok(existsSync(pidFile), 'the grandchild had started')
+    const pid = Number(readFileSync(pidFile, 'utf8'))
+    let alive = true
+    for (let i = 0; i < 40 && alive; i++) {
+        try {
+            process.kill(pid, 0)
+            await new Promise((r) => setTimeout(r, 50))
+        } catch {
+            alive = false
+        }
+    }
+    if (alive) process.kill(pid)
+    assert.equal(alive, false, 'the grandchild was killed with its parent')
+})

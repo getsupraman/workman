@@ -13,7 +13,7 @@
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
-import { spawn } from 'node:child_process'
+import { spawn, spawnSync } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
 
 const BUDGET_MS = 8000
@@ -114,24 +114,55 @@ const WINDOWS_TABLE = [
     'x = $_.ExecutablePath } } | ConvertTo-Json -Compress',
 ].join(' ')
 
+/** @type {Set<import('node:child_process').ChildProcess>} */
+const running = new Set()
+
+/**
+ * Kill a child and everything it started: on Windows powershell.exe and claude.exe spawn their own
+ * children, which child.kill() would leave running.
+ * @param {import('node:child_process').ChildProcess} child
+ */
+export function killTree(child) {
+    running.delete(child)
+    if (child.exitCode !== null || child.signalCode !== null || !child.pid) return
+    if (process.platform === 'win32') {
+        spawnSync('taskkill', ['/T', '/F', '/PID', String(child.pid)], { stdio: 'ignore', windowsHide: true })
+    } else {
+        try {
+            process.kill(-child.pid, 'SIGKILL')
+        } catch {
+            child.kill('SIGKILL')
+        }
+    }
+}
+
+/** Every child still running, e.g. when the overall budget runs out. */
+export function killAll() {
+    for (const child of [...running]) killTree(child)
+}
+
 /**
  * @param {string} cmd @param {string[]} args @param {number} timeoutMs @param {NodeJS.ProcessEnv} [env]
  * @returns {Promise<string>} stdout, or a rejection on error, non-zero exit or timeout
  */
-function run(cmd, args, timeoutMs, env) {
+export function run(cmd, args, timeoutMs, env) {
     return new Promise((resolve, reject) => {
         let out = ''
-        const child = spawn(cmd, args, { stdio: ['ignore', 'pipe', 'ignore'], windowsHide: true, shell: false, env: env ?? process.env })
+        // POSIX: its own process group, so killTree reaches its children too.
+        const child = spawn(cmd, args, { stdio: ['ignore', 'pipe', 'ignore'], windowsHide: true, shell: false, env: env ?? process.env, detached: process.platform !== 'win32' })
+        running.add(child)
         const timer = setTimeout(() => {
-            child.kill()
+            killTree(child)
             reject(new Error(`${cmd} timed out`))
         }, Math.max(timeoutMs, 1))
         child.stdout.setEncoding('utf8').on('data', (d) => (out += d))
         child.on('error', (e) => {
+            running.delete(child)
             clearTimeout(timer)
             reject(e)
         })
         child.on('close', (code) => {
+            running.delete(child)
             clearTimeout(timer)
             code === 0 ? resolve(out) : reject(new Error(`${cmd} exited ${code}`))
         })
@@ -184,6 +215,7 @@ function emit(headers) {
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
     const timer = setTimeout(() => {
+        killAll()
         emit({})
         process.exit(0)
     }, BUDGET_MS)

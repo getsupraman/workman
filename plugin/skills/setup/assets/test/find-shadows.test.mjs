@@ -92,3 +92,23 @@ test('no header value or token ever reaches stdout or stderr', () => {
         }
     }
 })
+
+test('--all also checks the .mcp.json of every project directory the config lists; shadowsForDir sees one directory only', async () => {
+    const { mkdtempSync, writeFileSync } = await import('node:fs')
+    const os = await import('node:os')
+    const { shadowsForDir } = await import('../find-shadows.mjs')
+    const root = mkdtempSync(path.join(os.tmpdir(), 'shadows-all-'))
+    const config = path.join(root, 'claude.json')
+    writeFileSync(config, JSON.stringify({ projects: { [REPO]: { mcpServers: {} }, [path.join(root, 'gone')]: {} } }))
+    assert.deepEqual(finder([config]).lines, [], 'without --all only --dir reads a .mcp.json')
+    const all = finder([config, '--all']).lines
+    assert.equal(all.length, 1)
+    assert.match(all[0], /^project\s/)
+    assert.ok(all[0].includes(path.join(REPO, '.mcp.json')))
+    assert.equal(finder([config, '--all', '--dir', REPO]).lines.length, 1, 'a directory is checked once')
+
+    assert.deepEqual(shadowsForDir(REPO, { configFile: config }).shadows.map((s) => s.scope), ['project'])
+    assert.deepEqual(shadowsForDir(path.join(root, 'gone'), { configFile: config }).shadows, [])
+    const local = shadowsForDir('P:/Projects/Acme/Skills', { configFile: CONFIG }).shadows
+    assert.deepEqual(local.map((s) => [s.scope, s.url]), [['local', 'http://localhost:5290/mcp']])
+})

@@ -72,10 +72,14 @@ agent_launch(name: "fix-B-08", brief: ".claude/briefs/B-08.md", repo_root: "P:/r
              add_dirs: ["P:/packages/nuget"], workman: {role: "worker"})
 ```
 
-With `workman.role` other than `none`, the token goes into `.claude/briefs/mcp-<name>.json` (refused
-unless git says that path is ignored) and reaches the agent through `--mcp-config`. **If minting
-fails the launch is refused** — it never falls back to your own registration. `role: "none"` mints
-nothing and passes no `--mcp-config`. `agent_list` joins `claude agents --json` with what was launched.
+With `workman.role` other than `none`, the token goes into `~/.workman/agents/mcp-<name>.json`
+(directory `0700`, file `0600`; on Windows the user profile is already owner-only) and reaches the
+agent through `--mcp-config`; `agent_stop` deletes it. The launch record sits beside it as
+`<name>.json`, so a name that is still recorded is refused until `agent_stop`. **If minting fails
+the launch is refused** — it never falls back to your own registration. A minted launch is also
+refused when `repo_root` has its own `workman` entry (local scope in `~/.claude.json`, or project
+scope in its `.mcp.json`), which would replace the worker's. `role: "none"` mints nothing and passes
+no `--mcp-config`. `agent_list` joins `claude agents --json` with what was launched.
 
 Just before a minted worker starts, `agent_launch` deletes the `workman` entry from Claude Code's
 `mcp-needs-auth-cache.json` (in `$CLAUDE_CONFIG_DIR`, else `~/.claude`): while that entry is younger

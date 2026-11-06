@@ -5,7 +5,7 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import fs from 'node:fs'
 import path from 'node:path'
-import { startServer, makeRepo, fakeWorkman, tmp, CONTROLLER } from './helpers.mjs'
+import { startServer, makeRepo, fakeWorkman, tmp, CONTROLLER, agentsDir } from './helpers.mjs'
 
 /** @param {ReturnType<typeof makeRepo>} repo @param {string} name @param {Record<string, unknown>} [extra] */
 const launchArgs = (repo, name, extra = {}) => ({ name, brief: 'task.md', repo_root: repo.root, controller: CONTROLLER, ...extra })
@@ -32,7 +32,9 @@ test('server.json missing, unreadable, without url, or with a url that is not a 
             ['not JSON', '{nope'],
             ['no url', { mcpName: 'workman' }],
             ['url with a path', { url: `${ws.url}/mcp`, mcpName: 'workman' }],
-            ['url with a trailing slash', { url: `${ws.url}/`, mcpName: 'workman' }],
+            ['url with a query', { url: `${ws.url}/?x=1`, mcpName: 'workman' }],
+            ['url with credentials', { url: ws.url.replace('//', '//u:p@'), mcpName: 'workman' }],
+            ['another mcpName', { url: ws.url, mcpName: 'workman-agent' }],
             ['not http', { url: 'ftp://127.0.0.1', mcpName: 'workman' }],
         ]
         for (const [label, content] of bad) {
@@ -58,7 +60,7 @@ test('server.json missing, unreadable, without url, or with a url that is not a 
         fs.writeFileSync(file, good)
         const ok = await s.call('agent_launch', launchArgs(repo, 'sj-ok'))
         assert.equal(ok.isError, false, ok.content[0].text)
-        assert.equal(JSON.parse(fs.readFileSync(path.join(repo.briefs, 'mcp-sj-ok.json'), 'utf8')).mcpServers.workman.url, `${ws.url}/mcp`)
+        assert.equal(JSON.parse(fs.readFileSync(path.join(agentsDir(s), 'mcp-sj-ok.json'), 'utf8')).mcpServers.workman.url, `${ws.url}/mcp`)
     } finally {
         await s.close()
         await ws.close()
@@ -156,7 +158,7 @@ test('the header tells a minted worker to stop when it has no Workman tools; rol
         assert.equal((await s.call('agent_launch', launchArgs(repo, 'h-none', { dry_run: true, workman: { role: 'none' } }))).isError, false)
         const minted = fs.readFileSync(path.join(repo.briefs, 'brief-h-minted.txt'), 'utf8')
         const none = fs.readFileSync(path.join(repo.briefs, 'brief-h-none.txt'), 'utf8')
-        assert.match(minted, /no Workman work_report \(a deferred mcp__workman__work_report counts\), send\nBLOCKED no Workman tools to the controller and stop\./)
+        assert.match(minted, /no Workman work_report \(a deferred mcp__workman__work_report counts\), a work_\*\ncall fails, or only authenticate tools appear: send BLOCKED no Workman tools to the controller and\nstop\. Never call authenticate; never run claude mcp\./)
         assert.doesNotMatch(none, /Workman/)
         assert.doesNotMatch(minted + none, /\r/)
     } finally {

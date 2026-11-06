@@ -3,7 +3,7 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import fs from 'node:fs'
 import path from 'node:path'
-import { startServer, makeRepo, fakeWorkman, CONTROLLER, CONTROLLER_TOKEN } from './helpers.mjs'
+import { startServer, makeRepo, fakeWorkman, CONTROLLER, CONTROLLER_TOKEN, agentsDir } from './helpers.mjs'
 
 /** @param {ReturnType<typeof startServer>} s @param {string} url @param {ReturnType<typeof makeRepo>} repo @param {string} name */
 async function launch(s, url, repo, name) {
@@ -21,7 +21,7 @@ test('stop with keep_brief: claude stop, DELETE with the controller token, confi
     const s = startServer()
     try {
         await launch(s, ws.url, repo, 'unit-s1')
-        const mcp = path.join(repo.briefs, 'mcp-unit-s1.json')
+        const mcp = path.join(agentsDir(s), 'mcp-unit-s1.json')
         const brief = path.join(repo.briefs, 'brief-unit-s1.txt')
         assert.ok(fs.existsSync(mcp))
 
@@ -35,7 +35,7 @@ test('stop with keep_brief: claude stop, DELETE with the controller token, confi
         assert.ok(!fs.existsSync(mcp), 'config must be deleted even with keep_brief')
         assert.ok(fs.existsSync(brief))
         assert.equal(r.structuredContent.revoked, true)
-        assert.deepEqual(fs.readdirSync(path.join(s.data, 'agents')), [])
+        assert.deepEqual(fs.readdirSync(agentsDir(s)), [])
     } finally {
         await s.close()
         await ws.close()
@@ -54,7 +54,7 @@ test('stop by id with remove: claude stop and rm, brief deleted', async () => {
         assert.ok(argvs.includes('stop abc12345'))
         assert.ok(argvs.includes('rm abc12345'))
         assert.ok(!fs.existsSync(path.join(repo.briefs, 'brief-unit-s2.txt')))
-        assert.ok(!fs.existsSync(path.join(repo.briefs, 'mcp-unit-s2.json')))
+        assert.ok(!fs.existsSync(path.join(agentsDir(s), 'mcp-unit-s2.json')))
     } finally {
         await s.close()
         await ws.close()
@@ -71,8 +71,8 @@ test('a failed revoke is an error, and the record is kept for a retry; the confi
         const r = await s.call('agent_stop', { name: 'unit-s3' })
         assert.equal(r.isError, true)
         assert.match(r.content[0].text, /could not revoke/)
-        assert.ok(!fs.existsSync(path.join(repo.briefs, 'mcp-unit-s3.json')))
-        assert.deepEqual(fs.readdirSync(path.join(s.data, 'agents')), ['unit-s3.json'])
+        assert.ok(!fs.existsSync(path.join(agentsDir(s), 'mcp-unit-s3.json')))
+        assert.deepEqual(fs.readdirSync(agentsDir(s)), ['unit-s3.json'])
     } finally {
         await s.close()
     }

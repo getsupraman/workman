@@ -5,7 +5,7 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import fs from 'node:fs'
 import path from 'node:path'
-import { startServer, makeRepo, tmp, homeEnv, CONTROLLER } from './helpers.mjs'
+import { startServer, makeRepo, tmp, homeEnv, CONTROLLER, agentsDir } from './helpers.mjs'
 import { fakeOAuthWorkman } from './fake-oauth.mjs'
 
 function grantsHome() {
@@ -86,7 +86,7 @@ test('agent_launch mints with the stored grant in a new process; PATCH and agent
         assert.match(mint?.auth ?? '', /^Bearer eyJ/, 'minted with the OAuth access token')
         assert.equal(mint?.body.role, 'worker')
         const [minted] = ws.minted()
-        const mcp = JSON.parse(fs.readFileSync(path.join(repo.briefs, 'mcp-oa-1.json'), 'utf8'))
+        const mcp = JSON.parse(fs.readFileSync(path.join(agentsDir(s), 'mcp-oa-1.json'), 'utf8'))
         assert.equal(mcp.mcpServers.workman.headers.Authorization, `Bearer ${minted}`, 'the agent gets the minted wss_ token, unchanged')
         assert.equal(await mcpAnswers(ws, minted), 200, 'the worker can report into that server')
         assert.equal(ws.requests.find((q) => q.method === 'PATCH')?.auth, mint?.auth)
@@ -150,7 +150,7 @@ test('no grant, or a refresh refused with invalid_grant, refuses the launch nami
         assert.match(r.content[0].text, /invalid_grant/)
         assert.match(r.content[0].text, signin)
         assert.equal(readGrants(home.file)[ws.url].refresh_token, undefined, 'the dead grant is forgotten')
-        assert.ok(!fs.existsSync(path.join(repo.briefs, 'mcp-ng-2.json')))
+        assert.ok(!fs.existsSync(path.join(agentsDir(later), 'mcp-ng-2.json')))
         assert.equal(later.claudeCalls().length + s.claudeCalls().length, 0)
         assert.equal(ws.minted().length, 0)
     } finally {

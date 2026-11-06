@@ -12,7 +12,7 @@ import crypto from 'node:crypto'
 import { spawn } from 'node:child_process'
 import { Refusal } from './launch-args.mjs'
 import { call, serverReason } from './workman.mjs'
-import { workmanDir, writeFileAtomic, sleep } from './home.mjs'
+import { workmanDir, writeFileAtomic, sleep, NEVER_PROBE } from './home.mjs'
 
 export const SCOPE = 'workman.sessions offline_access'
 const SIGNIN_TIMEOUT_MS = 5 * 60 * 1000
@@ -471,7 +471,7 @@ export function forgetAccessToken(url) {
 }
 
 /** @param {string} url */
-const notSignedIn = (url) => new Refusal(`not signed in to ${originOf(url)}: run agent_signin once to sign in in the browser.`)
+const notSignedIn = (url) => new Refusal(`not signed in to ${originOf(url)}: call agent_signin once to sign in in the browser. ${NEVER_PROBE}`)
 
 /**
  * Throws the agent_signin refusal unless a grant is stored for url. Reads the disk only.
@@ -508,7 +508,7 @@ export async function accessToken(url) {
             if (j.error === 'invalid_grant') {
                 grants[origin] = { client_id: g.client_id }
                 writeGrants(grants)
-                throw new Refusal(`the stored sign-in for ${origin} was refused (invalid_grant: expired or revoked) and is forgotten: run agent_signin to sign in again.`)
+                throw new Refusal(`the stored sign-in for ${origin} was refused (invalid_grant: expired or revoked) and is forgotten: call agent_signin to sign in again. ${NEVER_PROBE}`)
             }
             throw new Refusal(`refreshing the Workman sign-in failed: ${oauthReason(j, res.status)}. Nothing was launched.`)
         }

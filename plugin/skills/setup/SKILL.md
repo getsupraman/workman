@@ -95,7 +95,7 @@ auth      oauth: --url: a remote server is signed in to with OAuth, no token sto
 prove     POST /mcp without a token: 401 with resource_metadata=https://work.supraman.ai/.well-known/oauth-protected-resource/mcp, which answers 200 - Claude Code finds the sign-in from there
 register  'workman' -> https://work.supraman.ai/mcp with OAuth sign-in, session helper (user scope; no token stored)
 server    /home/u/.workman/server.json -> https://work.supraman.ai
-shadows   none: no local or project 'workman' entry overrides it
+shadows   none: no local or project 'workman' entry overrides it, here or in any project Claude Code lists
 dashboard https://work.supraman.ai - sign in with your account there
 next      start a new Claude Code session, run /mcp, pick 'workman', Authenticate, sign in in the browser and Approve: the work_* tools appear there, not in this one
 ```
@@ -147,10 +147,13 @@ the browser: in a new session, `/mcp`, pick the server, **Authenticate**, sign i
 **dashboard user** (`WORKMAN_DASHBOARD_USERNAME` / `_PASSWORD` from the `.env`) and **Approve**.
 The server remembers the approval, so a later sign-in skips the consent page. A server image older
 than OAuth (an old pull of `latest`) does not offer it: the `prove` line stops and names `--update`.
-An existing registration is kept as it is unless you pass `--force`.
+An existing registration is kept as it is unless you pass `--force`; then `next` says `already
+registered; sign in only if /mcp shows 'workman' needs authentication`.
 
 Every registration also writes `~/.workman/server.json` — `{"url": "<origin>", "mcpName": "workman"}`,
-atomically — which is how the rest of Workman finds the server; `--dry-run` writes nothing.
+atomically — which is how the rest of Workman finds the server; `--dry-run` writes nothing. A kept
+registration that points elsewhere writes that registration's origin, so `server.json` always names
+the server sessions actually use (or says `not written` when its url is not `<origin>/mcp`).
 
 **Register `127.0.0.1`, never `localhost`.** The server binds IPv4 loopback only, and the sign-in is
 bound to the host it was reached on. The script always writes `http://127.0.0.1:<port>/mcp`; do not
@@ -173,7 +176,7 @@ auth      oauth: sign in as the dashboard user, no token stored
 prove     POST /mcp without a token: 401 with resource_metadata=http://127.0.0.1:5290/.well-known/oauth-protected-resource/mcp, which answers 200 - Claude Code finds the sign-in from there
 register  'workman' -> http://127.0.0.1:5290/mcp with OAuth sign-in, session helper (user scope; no token stored)
 server    /home/u/.workman/server.json -> http://127.0.0.1:5290
-shadows   none: no local or project 'workman' entry overrides it
+shadows   none: no local or project 'workman' entry overrides it, here or in any project Claude Code lists
 dashboard http://127.0.0.1:5290 - sign in with WORKMAN_DASHBOARD_USERNAME / _PASSWORD from /home/u/.workman/.env
 next      start a new Claude Code session, run /mcp, pick 'workman', Authenticate, sign in in the browser and Approve: the work_* tools appear there, not in this one
 ```
@@ -188,8 +191,8 @@ failing proof registers nothing and its line names the `docker compose … logs 
 next session (§5).
 
 `shadows` lists every other entry of the same name that wins over the one just registered — a
-local-scope entry in `~/.claude.json` for some project, or a project-scope one in this directory's
-`.mcp.json` (Claude Code resolves local > project > user). Sessions in that directory then use the
+local-scope entry in `~/.claude.json` for some project, or a project-scope one in the `.mcp.json` of
+this directory or of any project `~/.claude.json` lists (Claude Code resolves local > project > user). Sessions in that directory then use the
 old entry: no session helper, often an old token, while `register` and `prove` look fine. Each line
 names the directory, url and whether it has a helper, never a header value, and ends with the
 command that removes it. The script removes nothing: **show the user the lines and let them run the
