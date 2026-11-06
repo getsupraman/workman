@@ -11,7 +11,7 @@
     {
       "name": "workman",
       "source": "./plugin",
-      "description": "Plan, orchestrate and control coding agents against WorkState, the self-hosted work tracker: six skills and the agents MCP server."
+      "description": "Plan, orchestrate and control coding agents against Workman, the self-hosted work tracker: six skills and the agents MCP server."
     }
   ]
 }

@@ -221,7 +221,7 @@ Any other open child still fails condition 3 as before, and the refusal rolls ba
 | | |
 |---|---|
 | **TTL** | 30 min default, from `workspace.settings`. |
-| **Holder** | the session that took it; with no session, the agent name **and** the user (`holder_user_id`). OAuth users share role names, so a name alone would make user A's claim user B's. A claim with no user — a static or local token — is the caller's only if the caller has no user either. |
+| **Holder** | the session that took it; with no session, the agent name **and** the user (`holder_user_id`). OAuth users share role names, so a name alone would make user A's claim user B's. A claim with no user is the caller's only if the caller has no user either. |
 | **Heartbeat** | any write by the claim holder extends it. No separate heartbeat call — a tool that needs a keep-alive gets forgotten. |
 | **Expiry** | the lease lapses; the item stays `in_progress` but the claim shows expired. |
 | **Sweep** | on any `work_brief`/`work_next`/`work_status`, expired claims are released with a `claim_expired` event and the item returns to `ready`. |
@@ -234,7 +234,7 @@ Two Postgres guarantees from U1 carry this, and both are tested in **both direct
   scoped to its workspace, and a path to its user as well: a path names a folder on one person's
   machine, so user A's claim on `p:/projects/x` does not block user B on theirs, and still blocks A's
   other sessions. A name — a branch, the ref-scope fallback — blocks across users in the workspace; a
-  path claimed by a credential with no user is the workspace's, as before m60 — doc 02 §10).
+  path claim with no user is the workspace's — doc 02 §10).
 
 That second is the parallel-orchestrator rule: **two units in different worktrees proceed
 concurrently, even in one run; two sharing a working tree do not.** Read-only claims (recon) do not

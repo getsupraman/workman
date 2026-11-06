@@ -15,9 +15,10 @@ the plugin (below), then connect Claude Code to it once, at user scope so every 
 
 It touches no Docker and writes no `.env`: it copies the session helper to `~/.workman/`, proves the
 server asks for sign-in (`POST /mcp` without a token answers `401` with a `resource_metadata=` link
-that answers), and registers `https://work.supraman.ai/mcp` with browser sign-in. Restart Claude Code,
-run `/mcp`, pick `workman` and **Authenticate**; there is no token to paste or store. Do the same on
-each machine you work from: they all write to the same record.
+that answers), registers `https://work.supraman.ai/mcp` with browser sign-in and writes
+`~/.workman/server.json`. Restart Claude Code, run `/mcp`, pick `workman` and **Authenticate**; there
+is no token to paste or store. Do the same on each machine you work from: they all write to the same
+record.
 
 An existing `workman` registration that points at another server is kept; `--force` re-points it,
 which is how you move from one server to another. Without the plugin, the same registration by hand
@@ -42,18 +43,21 @@ changes; `/plugin` shows the installed one.
 
 Install the plugin, then run `/workman:setup`. A machine needs **Docker and nothing else**.
 
-The skill finds which state the machine is in and runs one shipped script
-([`setup.sh`](../plugin/skills/setup/assets/setup.sh) or
-[`setup.ps1`](../plugin/skills/setup/assets/setup.ps1)) that does only the part that is missing:
+The skill finds which state the machine is in and runs one shipped script,
+[`setup.sh`](../plugin/skills/setup/assets/setup.sh) (bash; Git Bash on Windows), that does only the
+part that is missing:
 
-1. writes a local `.env` with random tokens and a dashboard password, in `~/.workman/`;
+1. writes a local `.env` with a random dashboard password and Postgres password, in `~/.workman/`;
 2. pulls the published image `ghcr.io/getsupraman/workman` and starts it with its Postgres 17;
-3. registers `http://127.0.0.1:5290/mcp` with Claude Code as `workman`, with browser sign-in by default;
-4. proves the server answers the way that registration needs.
+3. proves the server asks for sign-in the way Claude Code discovers it;
+4. registers `http://127.0.0.1:5290/mcp` with Claude Code as `workman` at user scope, with browser
+   sign-in and the session helper, and writes `~/.workman/server.json`, which tells the other Workman
+   tools which server this machine uses.
 
-The model never reads the `.env` and never sees a token. The dashboard is at
-`http://127.0.0.1:5290`; its password is in the `.env` the script names. Restart Claude Code once the
-script is done: MCP servers are resolved at session start.
+The model never reads the `.env`, and no token is stored anywhere. The dashboard is at
+`http://127.0.0.1:5290`; its user and password are in the `.env` the script names. Restart Claude
+Code once the script is done (MCP servers are resolved at session start), run `/mcp`, pick `workman`,
+**Authenticate** and sign in as that dashboard user.
 
 The same skill keeps the install running:
 

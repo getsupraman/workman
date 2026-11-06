@@ -9,7 +9,25 @@ All notable changes to the Workman server and the `workman` plugin are recorded 
 
 ## [3.0.0] — 2026-11-06
 
-Server 3.0.0. No migration.
+Server 3.0.0 and plugin 3.0.0. No migration.
+
+### Plugin
+
+- **Setup is OAuth only.** `/workman:setup` registers `workman` with OAuth sign-in and writes
+  `~/.workman/server.json` (`{"url", "mcpName"}`), which every plugin tool reads; there is no default server.
+  `--auth` and `--role` are gone, and so is `setup.ps1` (`setup.sh` runs under Git Bash on Windows). The
+  install's `.env` holds the dashboard and Postgres passwords only. `--dry-run` reads the existing registration
+  from Claude Code's config file instead of `claude mcp get/list`.
+- **agents server.** `agent_launch` takes the Workman server from `server.json` only: `workman.env_file` and
+  `workman.url` are removed, and `agent_signin`/`agent_signout` take no parameters. Before a minted launch it
+  deletes the stale `workman` entry from Claude Code's `mcp-needs-auth-cache.json`, and the protocol header
+  tells a worker without `work_report` to send `BLOCKED no Workman tools`. The fallback launch scripts
+  (`Start-NestedAgent.ps1`, `start-nested-agent.sh` and their `Stop-` twins) are deleted.
+- **Never probe.** The agents, controller and setup skills tell agents never to run `claude mcp get`,
+  `claude mcp list` or a `claude` process to check Workman: a token-less request leaves a needs-auth entry
+  that makes Claude Code skip every server named `workman` for 15 minutes, launched workers included.
+- **Skills rewritten** for size: legacy text removed, restatements of the server instructions and of
+  `/workman:agents` cut from the other skills.
 
 ### Removed
 

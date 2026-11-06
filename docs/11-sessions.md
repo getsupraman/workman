@@ -20,8 +20,8 @@ is called*. Identity never grants a role; it labels, and it is the unit the tree
 - `X-Workman-Origin` (free text, e.g. "foreman/orion/Orion"), `X-Workman-Cwd`,
   `X-Workman-Foreman-Role` (platform|repo|worker, kept when it differs from the token role).
 
-Foreman launches each session with `--mcp-config` carrying its role token, so it adds these per
-launch; a user can put them on `claude mcp add --header`. They ride on every request, so they survive
+An OAuth caller sends them from its registration (`claude mcp add --header`, or the session helper
+below). They ride on every request, so they survive
 reconnects, resumes and compaction.
 
 **Or from a minted token (doc 14 §2).** A launcher can mint a session instead of naming it:
@@ -48,10 +48,9 @@ the token and releases the session's live claims (`release_reason = 'revoked'`; 
 `ready`, as an expired claim's do). Header-named sessions keep working for anything that cannot mint.
 
 **A user's sessions are theirs (2026-10-28, m51).** A session named or minted with an OAuth token, or
-with a `wss_` token a user minted, records that user (`agent_session.user_id`); a static token's have
-none. The name is unique per (workspace, user) — `NULLS NOT DISTINCT`, so every static token's sessions
-still share one name per workspace, exactly as before. Two users of one tenant may each mint
-`worker-1`; one user cannot hold it twice (409, as before). The user's token works only while that
+with a `wss_` token a user minted, records that user (`agent_session.user_id`). The name is unique per (workspace, user) —
+`NULLS NOT DISTINCT`, so rows with no user share one name per workspace. Two users of one tenant may
+each mint `worker-1`; one user cannot hold it twice (409). The user's token works only while that
 user may enter the workspace: their membership removed or their account disabled, it fails on its next
 use. `PATCH` / `DELETE` / `release` keep the role rule above, and a credential that names a user adds
 one: a member changes only the sessions they minted; an admin of the tenant, or a system
@@ -65,7 +64,7 @@ claims are released and journalled, with the user as the actor and `human` as th
 `/connect/revoke` ends the authorization the same way, and its sessions stop authenticating.
 
 **Or by naming itself (2026-10-26, unit `mature/session-names`).** A hand-started session shares the
-user-scope static registration, so it has no header of its own — and a fixed `X-Workman-Agent` in
+user-scope OAuth registration, so it has no header of its own — and a fixed `X-Workman-Agent` in
 `~/.claude.json` would give every session the same name. The registration's `headersHelper`,
 `session-header.mjs` (installed by `/workman:setup`), sends `X-Workman-Client:
 <host>/<pid>/<start epoch s>` of the nearest Claude Code ancestor process — found in the process table,
@@ -98,8 +97,7 @@ travels on every request can name a session. No tool parameter was added (tools/
 
 ## The row key survives a resume
 `claude --bg --resume <id>`, auto-compaction and the daemon's respawn keep the name and the headers.
-- **A session is keyed by (workspace, user, name)** — the user is the credential's, none for a static
-  token — so a resumed session lands on its own row and keeps its claims and its tree. A header or a
+- **A session is keyed by (workspace, user, name)** — the user is the credential's — so a resumed session lands on its own row and keeps its claims and its tree. A header or a
   client key resolves only among the caller's own user's sessions.
 - **Name collisions:** names are labels; Foreman guarantees uniqueness among its own sessions. A name
   already held by a row with a *different* `launched_by` (including one set against one unset) is
@@ -109,7 +107,7 @@ travels on every request can name a session. No tool parameter was added (tools/
 
 ## Releasing a name
 A row with no Claude session id cannot prove who it was, so no launcher can take it over. The operator
-frees its name instead: `POST /api/agent-sessions/{id}/release` (a controller bearer, or an OAuth
+frees its name instead: `POST /api/agent-sessions/{id}/release` (a controller `wss_` session, or an OAuth
 token with `workman.sessions`; doc 14 §2), or **Release** on the dashboard's Sessions page (cookie,
 `POST /api/sessions/{id}/release`, doc 10). The row is **not deleted** — claims, events and evidence
 point at it. It is renamed to `<name>~released~<its id, 32 hex>`, which its own id makes unique; its

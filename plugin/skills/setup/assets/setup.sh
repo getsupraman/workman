@@ -100,18 +100,18 @@ if [ -n "$clone" ]; then
     [ -f "$clone/server/compose.yml" ] || die "home      $clone/server/compose.yml not found: --clone must be the repo root"
     clone="$(cd "$clone" && pwd)"
     compose_file="$clone/server/compose.yml"
-    env_file="$clone/server/.env"
+    env_path="$clone/server/.env"
     if ! git -C "$clone" check-ignore -q server/.env 2>/dev/null; then
         die "home      $clone/server/.env is NOT gitignored: stop and tell the user; a git add would publish the passwords"
     fi
 else
     compose_file="$home_dir/compose.yml"
-    env_file="$home_dir/.env"
+    env_path="$home_dir/.env"
 fi
-base_dir="$(dirname "$env_file")"
+base_dir="$(dirname "$env_path")"
 where_logs="docker compose -p $project logs api"
 
-dc() { docker compose -p "$project" -f "$compose_file" --env-file "$env_file" "$@"; }
+dc() { docker compose -p "$project" -f "$compose_file" --env-file "$env_path" "$@"; }
 find_container() { # $1 = compose service
     docker ps -q --filter "label=com.docker.compose.project=$project" --filter "label=com.docker.compose.service=$1" | head -n 1
 }
@@ -161,19 +161,19 @@ fi
 
 # b. the .env - written once, never overwritten; it holds the dashboard and Postgres passwords
 random_hex() { od -An -N32 -tx1 /dev/urandom | tr -d ' \n'; }
-if [ -f "$env_file" ]; then
-    status "env" "kept $env_file (exists; never overwritten)"
-    env_port="$(sed -n 's/^WORKMAN_API_PORT=//p' "$env_file" | tail -n 1 | tr -d '\r')"
+if [ -f "$env_path" ]; then
+    status "env" "kept $env_path (exists; never overwritten)"
+    env_port="$(sed -n 's/^WORKMAN_API_PORT=//p' "$env_path" | tail -n 1 | tr -d '\r')"
     port="${env_port:-5290}"
 elif [ -n "$(docker volume ls -q --filter "name=^${project}_workman-db-data\$")" ]; then
-    die "env       $env_file is missing but project '$project' already has a database volume, created with another .env: pass --clone <path> for that install, or copy its .env here, and run again"
+    die "env       $env_path is missing but project '$project' already has a database volume, created with another .env: pass --clone <path> for that install, or copy its .env here, and run again"
 elif [ "$dry_run" -eq 1 ]; then
-    status "env" "dry run, would write $env_file: dashboard and Postgres passwords"
+    status "env" "dry run, would write $env_path: dashboard and Postgres passwords"
 else
     mkdir -p "$base_dir"
     (
         umask 077
-        cat >"$env_file" <<EOF
+        cat >"$env_path" <<EOF
 # Written by /workman:setup. Local-only throwaway credentials for a loopback service; never commit.
 WORKMAN_DASHBOARD_USERNAME=operator
 WORKMAN_DASHBOARD_PASSWORD=local-dashboard-$(random_hex)
@@ -186,8 +186,8 @@ POSTGRES_USER=workman
 POSTGRES_PASSWORD=local-$(random_hex)
 EOF
     )
-    chmod 600 "$env_file" 2>/dev/null || true
-    status "env" "wrote $env_file: dashboard and Postgres passwords (values not shown, mode 600)"
+    chmod 600 "$env_path" 2>/dev/null || true
+    status "env" "wrote $env_path: dashboard and Postgres passwords (values not shown, mode 600)"
 fi
 
 install_helper
@@ -316,7 +316,7 @@ fi
 if [ -n "$url" ]; then
     status "dashboard" "$base_url - sign in with your account there"
 else
-    status "dashboard" "$base_url - sign in with WORKMAN_DASHBOARD_USERNAME / _PASSWORD from $env_file"
+    status "dashboard" "$base_url - sign in with WORKMAN_DASHBOARD_USERNAME / _PASSWORD from $env_path"
 fi
 if [ "$keep" -eq 1 ] && [ "$url_differs" -eq 1 ]; then
     status "next" "nothing changed: '$name' still points at $existing_url; run again with --force to re-point it to $mcp_url"

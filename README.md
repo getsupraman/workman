@@ -156,7 +156,7 @@ box; in a file, nothing checks that.
 - **A report is a claim.** A task closes only when its criteria are checked and an orchestrator ran
   its verification. The refusal names exactly what's missing, as in the terminal at the top.
 - **Nothing closes quietly.** A forced close is allowed, but `work_audit` lists it permanently.
-- **Roles are enforced by the server.** A worker's token sees six tools: it can report and verify,
+- **Roles are enforced by the server.** A worker session sees six tools: it can report and verify,
   but it can't close, create or re-plan.
 
 ### Coming
@@ -305,16 +305,18 @@ work_brief → work_next → work_status(in_progress) → do the work
 - **Every result ends with an `attention` block**: expired claims, assumptions past their revisit
   point, notes for the item you're about to brief.
 
-Roles come from the token or the sign-in: workers report and verify; orchestrators and controllers
-plan, judge, close and commit. The concepts are explained in [docs/concepts.md](docs/concepts.md).
+Roles come from the credential: a signed-in person is a controller, and an agent holds the role it
+was launched with. Workers report and verify; orchestrators and controllers plan, judge, close and
+commit. The concepts are explained in [docs/concepts.md](docs/concepts.md).
 
 ## Self-hosting
 
-`/workman:setup` is the supported path. It writes a local `.env` with random tokens, pulls
-`ghcr.io/getsupraman/workman` (or builds from a clone), starts the server and Postgres with Docker
-Compose, and registers `http://127.0.0.1:5290/mcp` as `workman`. The dashboard is on the same port.
-The model never reads or pastes a token. [docs/install.md](docs/install.md) covers the hosted server,
-self-hosting and serving one server on several hosts; to run the server from source, see
+`/workman:setup` is the supported path. It writes a local `.env` with random dashboard and Postgres
+passwords, pulls `ghcr.io/getsupraman/workman` (or builds from a clone), starts the server and
+Postgres with Docker Compose, and registers `http://127.0.0.1:5290/mcp` as `workman` with browser
+sign-in. The dashboard is on the same port. No token is stored, and the model never reads the `.env`.
+[docs/install.md](docs/install.md) covers the hosted server, self-hosting and serving one server on
+several hosts; to run the server from source, see
 [CONTRIBUTING.md](CONTRIBUTING.md) and [server/frontend/README.md](server/frontend/README.md).
 
 ## Supraman

@@ -1,6 +1,6 @@
 # Retro — how this skill improves itself
 
-**This file is the contract.** It defines when the orchestrator files a retrospective issue, what that issue must contain, and the exact commands to file it. The repo-local command that later reads those issues and opens a PR is told to read the schema *from here* rather than restate it. If the schema changes, it changes in this file and nowhere else.
+**This file is the contract**: when the orchestrator files a retrospective issue, what it must contain, and the commands to file it. The repo command that later applies those issues reads the schema from here.
 
 The subject of a retro is **this skill**, never the undertaking. "The migration was harder than planned" is not a finding. "`references/briefs.md` let a worker ship an unverified claim" is.
 
@@ -8,17 +8,17 @@ The subject of a retro is **this skill**, never the undertaking. "The migration 
 
 ## The retro must be cheap
 
-It runs at the very end of a long run, against a context that is nearly full. It is built **only** from what you already hold:
+It is built **only** from what you already hold:
 
 - the run's record in the store — `work_history(scope: "<run ref>")` for the closures, resolutions and verifications, `work_threads(scope: "<run ref>")` for what was left open;
 - the worker and reviewer reports you already read;
 - the verification output you already ran.
 
-**Do not** re-read source files, re-run recon, re-run verification, spawn a review agent to write or check the retro, or re-read worker output you summarized. A retro that costs a review agent has already destroyed more than it can return — this is a token-saving skill.
+**Do not** re-read source files, re-run recon or verification, spawn a review agent, or re-read worker output you summarized.
 
-*One read is permitted, and only one:* the single skill file you are proposing to edit, so you can quote its current text verbatim. Skip even that when the file is already in context. If quoting it would cost a read you can't afford, file nothing — a vague proposal the consumer can't apply is worse than silence.
+*One read is permitted:* the single skill file you are proposing to edit, to quote its current text verbatim — skip it when the file is already in context. If you can't afford that read, file nothing; a proposal the consumer can't apply is worse than silence.
 
-Target cost for the whole step: **under ~2k tokens**. If it is costing more than that, you are researching, not retrospecting.
+Target cost for the whole step: **under ~2k tokens**.
 
 ---
 
@@ -36,25 +36,9 @@ Target cost for the whole step: **under ~2k tokens**. If it is costing more than
 
 Otherwise **skip entirely**. No issue, no comment, no prose — one note: `work_note(kind: "decision", from: "<run ref>", body: "Retro: skipped — no reworks, no re-plans, no failed verifications.")`. Then stop.
 
-A run with no reworks, no re-plans and no failed verifications produced no evidence that the skill malfunctioned. Anything you wrote about it would be speculation, and speculation is exactly what bloats a skill.
+**At most one issue per run.** Pick the single highest-value finding; two findings that share a root cause are one finding.
 
-The 10k floor is set at roughly one recon agent (see the price table in `SKILL.md`). Below that, the owner's time reading the issue costs more than the waste it describes.
-
-**At most one issue per run.** Pick the single highest-value finding and drop the rest; two findings that share a root cause are one finding. This cap is the main defence against the failure mode described below — it is not a soft guideline.
-
----
-
-## Why this is designed to fire rarely
-
-The way this mechanism fails is not that it breaks. It is that it files a plausible-sounding issue after every run, the owner stops reading them, and the skill slowly accumulates advice until it costs more than it saves — a self-improvement loop that destroys the thing it protects.
-
-Three rules exist against that, and they are load-bearing:
-
-1. the noise floor above, with **skip as the default**;
-2. one issue per run, maximum;
-3. every proposed edit carries a **token delta**, and additive edits are the suspect case.
-
-If you find yourself reaching for a trigger to justify an issue you already want to file, that is the failure mode, in progress. File nothing.
+This mechanism fails by filing a plausible issue after every run until the skill accumulates advice that costs more than it saves. If you find yourself reaching for a trigger to justify an issue you already want to file, file nothing.
 
 ---
 
@@ -71,19 +55,17 @@ If you cannot name the section, you do not have a finding — you have an observ
 
 | Not a finding | A finding |
 |---|---|
-| "Recon was wasteful this run." | "`briefs.md` › *Recon agents* should require an asserted capability to be checked against `--help` before it reaches a user-facing doc." |
-| "The plan was too coarse." | "`decompose.md` › *Watch for the mis-sized task* names the contract-question failure but gives no test; add the two-word test `is the real content 'decide the rule'?`" |
 | "Reviews cost a lot." | "`SKILL.md` › *The risk dial* lists six review triggers; the equivalence-claim one fired on a doc-only task. Narrow it to code." |
 
 ### Token delta, and the bias against adding
 
 State the delta on every proposal. **Prefer replacing or tightening existing text over appending new text.**
 
-- `-N` or `±0` — the good case. The skill already almost said it; the sentence was too weak, in the wrong file, or in a section the orchestrator doesn't read at that step.
-- `+1..+60` — acceptable if you can say why the same effect cannot be had by tightening what is already there.
-- `+60` or more — **do not file it.** A fix you cannot express in sixty tokens is a fix you do not yet understand.
+- `-N` or `±0` — the good case: the sentence was too weak, in the wrong file, or in a section not read at that step.
+- `+1..+60` — acceptable if you can say why tightening existing text cannot do it.
+- `+60` or more — **do not file it.**
 
-**A finding whose fix is "add another paragraph of advice" is usually a bad finding.** The skill is dense on purpose. If your proposal reads like general wisdom rather than a correction of a specific sentence, it is advice, not a fix — drop it.
+A proposal that reads like general wisdom rather than a correction of a specific sentence is advice, not a fix — drop it.
 
 Mark the proposal's mode explicitly: `replace`, `tighten`, `move`, or `add`. `add` is the one that needs an argument.
 
@@ -91,23 +73,21 @@ Mark the proposal's mode explicitly: `replace`, `tighten`, `move`, or `add`. `ad
 
 ## Safety — post only where you can push
 
-You are running inside **someone else's repo**, usually private. The retro's subject is this skill, which lives in `getsupraman/workman` — a repo most installers have no write access to. An unattended `gh issue create` there is then either dropped on the floor or a public post arising from a private engagement. So posting is gated on capability, not on asking. Check it once, before any write:
+This skill lives in `getsupraman/workman`, a public repo most installers cannot write to, and you are usually running inside a private one. Posting is gated on capability, not on asking. Check it once, before any write:
 
 ```bash
 gh repo view getsupraman/workman --json viewerPermission --jq .viewerPermission
 ```
 
 - **`ADMIN`, `MAINTAIN` or `WRITE`** → **post automatically, no confirmation prompt.** That is deliberate: do not add one, and do not ask "shall I file this?" — either the triggers fired and you file, or they didn't and you skip.
-- **Anything else** (`READ`, `NONE`, blank), or `gh` is absent, unauthenticated, or the command errors → **write the retro to `.claude/retro/<run ref>/RETRO.md` and post nothing.** Same body, same headings as the issue schema below. Tell the user in one line where it is and that they can open an issue upstream if they think the finding generalises. This is a normal outcome, not a failure — do not retry, do not escalate, do not fall back to any other repo.
+- **Anything else** (`READ`, `NONE`, blank), or `gh` is absent, unauthenticated, or the command errors → step 5: write it locally and post nothing. A normal outcome — do not retry, escalate, or fall back to any other repo.
 
-**`getsupraman/workman` is a public repository, so every retro filed there is public.** Before you file, strip every private detail from the body: client and product names, absolute paths, host names and URLs of private systems, and code. Then read the body once more as a stranger would; if it still identifies the engagement it came from, cut more.
-
-Either way the body carries **findings and record excerpts only** — the local file is written to be pasteable upstream, so the same redaction rules apply:
+**Every retro filed there is public.** Either way — the local file is meant to be pasteable upstream — the body carries **findings and record excerpts only**:
 
 - **Allowed:** journal events, resolutions, verify commands and their result lines, worker-report lines (`DEVIATIONS`, `RED-CHECK`), and verbatim text from this skill's own files.
 - **Never:** source file contents, diffs, code from the repo being worked on, credentials, tokens, connection strings, absolute paths outside the repo, host names of private systems, customer or client names, anything from a private codebase.
 
-If an event you want to quote contains any of that, redact the part and keep the shape (`… tenant `<redacted>` …`), or pick different evidence. When in doubt, cut the excerpt — the finding stands on the proposed edit, not on the quote.
+Redact the part and keep the shape (`… tenant `<redacted>` …`), or pick different evidence. Then read the body once as a stranger: if it still identifies the engagement, cut more.
 
 ---
 
@@ -115,11 +95,11 @@ If an event you want to quote contains any of that, redact the part and keep the
 
 ### 0. Check the noise floor
 
-Read the run's journal. If no trigger fired, write the skip note and stop. This is the common outcome, and it costs nothing — do it before the access check.
+Read the run's journal. If no trigger fired, write the skip note and stop — before the access check.
 
 ### 1. Check access, then bootstrap the label
 
-Run the `viewerPermission` check above. If it does not come back `ADMIN` / `MAINTAIN` / `WRITE`, skip straight to step 5 — steps 1–4 all end in a write you cannot make, so the dedupe search in step 2 would buy you nothing but tokens.
+Run the `viewerPermission` check above. Not `ADMIN` / `MAINTAIN` / `WRITE` → skip straight to step 5.
 
 On the push path only, create the label once per repo:
 
@@ -130,11 +110,11 @@ gh label create orchestrate-retro \
   --color 5319E7
 ```
 
-*Already exists* is the expected steady state on every run after the first — do not retry it, and do not add `--force`, which would overwrite the owner's colour and description. **`HTTP 403` is a different thing and is not normal:** the permission check was wrong or the token lacks the scope. Do not continue to `gh issue create`; take the no-access path in step 5.
+*Already exists* is the expected steady state — do not retry, do not add `--force`. **`HTTP 403`** → do not continue to `gh issue create`; take step 5.
 
 ### 2. Search for an existing issue with the same root cause
 
-**Required before creating anything.** `--state all`, not `--state open`: `/apply-retro` closes a rejected proposal, and a search that sees only open issues would re-file that same idea every run, forever, against an owner who already said no.
+**Required before creating anything.** `--state all`, not `--state open`: a rejected proposal is closed, and an open-only search would re-file it every run.
 
 ```bash
 gh issue list \
@@ -154,9 +134,7 @@ Match on **root cause, not wording** — the same `## Target` (same file *and* s
 | **`CLOSED` / `NOT_PLANNED`** — rejected | **File nothing and comment nothing.** The owner judged this proposal and stated a reason. One `work_note(kind: "decision", from: "<run ref>", body: "Retro: skipped — #<n> already rejected (<reason>).")`. Then stop. |
 | **`CLOSED` / `COMPLETED`** — applied | A genuine recurrence: the edit landed and the failure happened anyway. File a new issue (step 3), and say in `## Symptom` that #`<n>` was applied and did not hold. |
 
-A rejection is the only judgment in this loop that did not come from a model reasoning about its own instructions. Re-filing past it is the mechanism arguing with its owner, and you have no budget to litigate it.
-
-If an **open** match exists, **comment; do not open a near-duplicate**:
+An **open** match — comment:
 
 ```bash
 gh issue comment <number> \
@@ -173,7 +151,7 @@ Evidence: <one journal event or verify line>
 Proposal: unchanged | revised — <what changed and the new token delta>
 ```
 
-If the issue already carries two recurrence comments, add yours and record with `work_note(kind: "observation", from: "<run ref>", …)` that this finding has now recurred three times. A third recurrence is the owner's signal that the proposed edit is under-specified, not that it is unimportant.
+If the issue already carries two recurrence comments, add yours and record with `work_note(kind: "observation", from: "<run ref>", …)` that this finding has now recurred three times.
 
 ### 3. No match, or a `COMPLETED` one — create the issue
 
@@ -193,13 +171,13 @@ One `work_note(kind: "decision", from: "<run ref>", body: "Retro: filed <issue U
 
 ### 5. No push access — write it locally instead
 
-Write the body — same headings, same schema, nothing extra — to `.claude/retro/<run ref>/RETRO.md`. Post nothing. One `work_note(kind: "decision", from: "<run ref>", body: "Retro: no push access to getsupraman/workman — written to .claude/retro/<run ref>/RETRO.md")` and one line to the user naming the path and saying they can open an issue upstream if they think it generalises. The file is theirs: do not commit it. Then stop; this outcome is finished, not degraded.
+Write the body — same headings, same schema, nothing extra — to `.claude/retro/<run ref>/RETRO.md`. Post nothing. One `work_note(kind: "decision", from: "<run ref>", body: "Retro: no push access to getsupraman/workman — written to .claude/retro/<run ref>/RETRO.md")` and one line to the user naming the path and saying they can open an issue upstream if they think it generalises. Do not commit the file. Then stop.
 
 ---
 
 ## The issue schema
 
-Both halves of this mechanism depend on this being exact: the retro **writes** it, the repo command **parses** it.
+Exact: the retro **writes** it, the repo command **parses** it.
 
 ### Label
 
@@ -230,8 +208,6 @@ No other headings. No preamble above `## Target`. Nothing below `## Run`.
 ---
 
 ## Worked example
-
-This is a real finding from the run that produced this file, filed in full. That run predates the store, so its evidence cites a ledger and a conventions file; today the same lines would be journal events and a constraint.
 
 **Title:** `retro: references/briefs.md#recon-agents — recon claim nearly shipped unverified`
 
@@ -273,12 +249,9 @@ claim provenance to strengthen, and the same 27 tokens would have saved the ~15k
 disproving one hallucinated setting.
 
 ## Evidence
-Ledger exception "Phase 0 — recon": the spec recon agent asserted `skillDirectories`;
+Decision note, Phase 0 recon: the spec recon agent asserted `skillDirectories`;
 binary string extraction disproved it before it reached `upgrade_guide.md`.
-Standing rule then added to this run's CONVENTIONS.md — a per-run patch for a skill-level gap.
 
 ## Run
 Repo: getsupraman/workman · Slug: one-plugin · Date: 2026-08-06 · Reworks: 0 · Re-plans: 1 · Failed verifications: 0
 ````
-
-Note what makes it fileable: it names one section, quotes the exact line it changes, states a delta, and its evidence is two lines of the run's record — no source files, no diffs, no second read of anything.

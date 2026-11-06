@@ -13,22 +13,21 @@
 Always `run_in_background: false` for writers and reviewers — you need the result before the next step.
 
 **Fresh worker vs. resumed agent:**
-- **Rework after a correctness failure → a fresh worker**, with a narrow brief naming exactly what's wrong. The original's context is anchored on what it *intended* to write; a fresh context reads the code as it actually is. Continue the original only for genuinely additive work ("also handle the null case").
-- **Re-verifying a reviewer's own findings → resume that reviewer via `SendMessage`.** It still holds its reproduction harness, so confirming a fix costs a fraction of the original review. Spawning a fresh reviewer to re-check work the first reviewer already understands is paying twice.
+- **Rework after a correctness failure → a fresh worker** with a narrow brief naming what's wrong; its context reads the code as it is, not as intended. Continue the original only for genuinely additive work ("also handle the null case").
+- **Re-verifying a reviewer's own findings → resume that reviewer via `SendMessage`.** It still holds its reproduction harness.
 
 ---
 
 ## The worker brief
 
-Copy this shape. The done-criteria, the verification command and the run's binding rules come from the store — `work_brief(scope: "<task ref>", for: "worker")` — pasted verbatim, never retyped: a retyped rule drifts from the one you will judge by. The store cannot refuse a task without criteria or a command, so if that output is missing either, the task was created wrong — fix it with `work_update` before spawning.
+Copy this shape. The done-criteria, the verification command and the run's binding rules come from `work_brief(scope: "<task ref>", for: "worker")`, pasted verbatim, never retyped — a retyped rule drifts from the one you judge by. If that output lacks criteria or a command, fix the task with `work_update` before spawning.
 
-What the store does **not** hold is what stops a worker parking: which commands its session may run, the shell shapes that match no allow-list, the facts you already established, and the environment's benign noise. `work_brief` renders an item's state; it knows nothing about the session that will read it. Those sections are yours to write, every time.
+The store does **not** hold what stops a worker parking: which commands its session may run, the shell shapes that match no allow-list, the facts you already established, the environment's benign noise. Write those every time.
 
 ```markdown
 ## Context
-<2–4 sentences. The high-level goal of the undertaking, and where this task sits
-in it. Workers who understand the destination make better local calls than
-workers following instructions. Include what previous tasks already delivered.>
+<2–4 sentences: the goal of the undertaking, where this task sits in it, and
+what previous tasks already delivered.>
 
 ## Binding — from the store
 <Paste the output of work_brief(scope: "<task ref>", for: "worker") here, verbatim:
@@ -41,13 +40,11 @@ the call chain, which of two similar methods is the right one, the baseline
 counts. Every fact withheld is a chance to guess.>
 
 ## If the premise is wrong, stop and say so
-This brief may be factually wrong about the code. If you find that it is — the
-method has no caller, the component doesn't do what I claimed, the approach
-can't work — **stop and report that instead of forcing it through.** A correct
-"this doesn't work because X" is worth more than a plausible-looking
-implementation, and it is the single most useful thing you can return.
-Anything marked `unverified` is a claim I did not check — check it before
-you build on it.
+This brief may be wrong about the code. If the method has no caller, the
+component doesn't do what I claimed, or the approach can't work — **stop and
+report that instead of forcing it through.** A correct "this doesn't work
+because X" is the most useful thing you can return. Anything marked
+`unverified` is a claim I did not check — check it before you build on it.
 
 ## Your task
 <One or two sentences of intent — the outcome, not a keystroke script.>
@@ -74,11 +71,11 @@ report done. Run it yourself, and read the actual result line, not an exit code
 from the end of a pipe. Put that line, verbatim, in VERIFY.
 
 ## Red-check — required for any test defending a fix or a "no behaviour change" claim
-Revert your change (stash it, or temporarily restore the old behaviour), run the
-test, and confirm it **fails**. Report the failure count. A test that passes
-against the broken code cannot catch the regression it claims to defend —
-delete it rather than keep it. If your change has several distinct guards or
-placements, red-check each one; the placement is often the actual decision.
+Revert your change (or temporarily restore the old behaviour), run the test,
+and confirm it **fails**. Report the failure count. A test that passes against
+the broken code is deleted, not kept. Name the wrong implementations your
+fixture would still pass, and defeat them. If your change has several distinct
+guards or placements, red-check each one.
 
 ## How to think
 Think critically about the approach, but with a budget: if a design question is
@@ -109,13 +106,11 @@ NOT DONE: <anything in scope you did not finish, and why> | nothing
 Keep it under 25 lines. Prose beyond this format is noise.
 ```
 
-**Documentation tasks: enumerate by category, not by filename.** "Update `CLAUDE.md` and `.plans/`" reliably forgets the README that is the repo's front page. Say *"every document a reader could follow to use this"* and let the worker find them.
+**Documentation tasks: enumerate by category, not by filename** — *"every document a reader could follow to use this"*, not a file list that forgets the README.
 
 ---
 
 ## The review brief
-
-Reviews cost 60–150k. Make each one cheap as well as justified: bound the diff, forbid exploration, cap the output.
 
 ```markdown
 ## What to review
@@ -152,13 +147,11 @@ GOAL FIT: <one or two sentences>
 No code blocks. Under 20 lines.
 ```
 
-**For an equivalence claim** ("no behaviour change"), replace the judging section with a field-by-field comparison of old vs. new output for the same input, and say so explicitly. The worker's own tests are worthless as evidence here — they were written against the new code.
+**For an equivalence claim** ("no behaviour change"), replace the judging section with a field-by-field comparison of old vs. new output for the same input, and say so explicitly.
 
 ---
 
 ## The phase gate brief
-
-The gate is a **composition review**. Its job is the question no per-task review can answer.
 
 ```markdown
 ## What this is
@@ -193,13 +186,11 @@ Under 25 lines. No code blocks.
 
 ## The plan audit brief
 
-Fires on the cadence in `SKILL.md` › *The plan audit*. Use the `Plan` agent, **read-only**: it audits, you change the plan in the store. It reads the plan with `work_tree` and `work_get`; it writes nothing.
+Fires on the cadence in `SKILL.md` › *The plan audit*. Use the `Plan` agent, **read-only**: it audits, you change the plan in the store.
 
-Three rules separate an audit that pays from one that returns an essay:
-
-- **Hand it the facts, marked as established.** Everything recon and the completed phases already proved goes into the brief as *take these as established, do not re-verify* — and so does the output of the `work_audit` you ran first. An audit that re-derives what you already hold charges full price for information you had.
-- **Give it the real controls.** It must be able to run the verification commands and probe the real system. That is how it proves a verification filter is decorative, and how it checks a claim against the data rather than against the document asserting it.
-- **Point it at the history and forbid reading it through.** A mature run's journal is thousands of events. Say: *use `work_search` for specific claims and `work_history(scope: …)` for one item; do not page the whole journal.*
+- **Hand it the facts, marked as established** — everything recon and the completed phases proved, and the `work_audit` output. Re-deriving them charges full price for what you had.
+- **Give it the real controls**: it must be able to run the verification commands and probe the real system.
+- **Forbid paging the journal**: `work_search` for specific claims, `work_history(scope: …)` for one item.
 
 ```markdown
 ## What this is
@@ -272,31 +263,25 @@ Under 30 lines. No code blocks.
 
 ### Handling the result
 
-Record every finding with `work_finding(findings: [{target: "<ref>", title, severity, source: "plan_audit"}])` — a blocker then holds its target open, so it cannot be closed past.
+Record every finding with `work_finding(findings: [{target: "<ref>", title, severity, source: "plan_audit"}])`.
 
-- **BLOCKER** → change the items (`work_update`, `work_create`, `work_link`) or the rules (`work_constrain`) before the next task runs; it is a re-plan — `references/decompose.md` › *Re-planning*.
-- **MINOR** → leave it as an open minor finding. Don't stop the phase.
-- **Re-audit after fixing blockers** → `SendMessage` the same agent rather than spawning a new one; it still holds the plan and whatever harness it built, so confirming the fixes costs a fraction of the first pass. **Not optional when the fix reshaped a phase** — the round that repairs blockers is the round most likely to introduce one.
-- **not-ready twice on the same axis** → the shape is the problem, not the details. Escalate; do not audit a third time.
+- **BLOCKER** → change the items or the rules before the next task runs; it is a re-plan — `references/decompose.md` › *Re-planning*.
+- **MINOR** → an open minor finding. Don't stop the phase.
+- **Re-audit after fixing blockers** → `SendMessage` the same agent; it still holds the plan and its harness. **Not optional when the fix reshaped a phase.**
+- **not-ready twice on the same axis** → escalate; do not audit a third time.
 
 ---
 
 ## Recon agents
 
-Use `Explore` when you need to *know* something, not change it.
+Use `Explore` when you need to *know* something, not change it. When to run it: `SKILL.md` › *Phase 0*.
 
-- **Just-in-time.** At the start of the phase that needs it — never more than one phase ahead. Intel about code that doesn't exist yet is stale before you use it.
-- One question per agent, disjoint from the others. Overlapping questions produce redundant reading and answers you have to reconcile.
+- One question per agent, disjoint from the others.
 - Ask for **≤15 lines with file paths**. Coordinates, not content.
-- **An asserted capability or behaviour is not evidence — yours included.** Confirm it against `--help`, the code, or a probe before it reaches a brief or a doc, or mark it `unverified` so the worker checks it rather than builds on it.
-- Max 4 at once, one round. If the answers raise new questions, that's usually the evidence budget telling you to decide and move on.
-- **Run recon anyway, even when the plan names files**, if the plan predates commits on this branch or targets a system you don't control. Stale `file:line` references are the most confident-looking wrong information a plan can contain.
+- **An asserted capability or behaviour is not evidence — yours included.** Confirm it against `--help`, the code, or a probe before it reaches a brief or a doc, or mark it `unverified` so the worker checks it.
+- Max 4 at once, one round. New questions from the answers usually mean: decide and move on.
 
-Good recon questions are answerable and bounded:
-- "Where is tenant filtering applied for `X` entities, and what's the canonical helper? Paths + the helper's signature."
-- "Does this repo have an existing pattern for background job registration? One example path and how it's wired."
-
-Bad recon questions return essays: *"Tell me about the auth system."* → 200 lines, and you still won't know what you needed.
+Ask bounded questions — *"Where is tenant filtering applied for `X` entities, and what's the canonical helper? Paths + signature."* — not *"Tell me about the auth system."*
 
 ---
 
@@ -314,9 +299,9 @@ Bad recon questions return essays: *"Tell me about the auth system."* → 200 li
 - Anything requiring a live third-party service or real network.
 - UI rendering details that will churn next week.
 
-**Don't build the harness.** If an area has no test infrastructure, do not have a worker invent one mid-task — that's its own task, planned deliberately, or explicitly out of scope. Where the repo has an established testing style, follow it; two competing styles is worse than one imperfect one.
+**Don't build the harness.** No test infrastructure in an area → a worker does not invent one mid-task; that's its own planned task, or out of scope. Follow the repo's established testing style.
 
-**A test that can't fail is worse than no test.** A red-check proves only that the test fails against the one bug you fixed — not that the fixture can discriminate the rule. If a proposed test would pass against a deliberately broken implementation, drop it.
+**A test that would pass against a deliberately broken implementation is dropped.**
 
 ---
 
@@ -324,8 +309,8 @@ Bad recon questions return essays: *"Tell me about the auth system."* → 200 li
 
 Record the findings first: `work_finding(findings: [{target: "<task ref>", title, severity, source: "review"}])`.
 
-- **BLOCKER** → rework task, fresh worker, narrow brief quoting the finding. The finding holds the task open until it is closed.
-- **MINOR** → an open minor finding. Do not stop the phase for minors. Batch them into one cleanup task at the end of the phase if there are enough to be worth an agent — one brief, not one agent per fix.
+- **BLOCKER** → rework task, fresh worker, narrow brief quoting the finding.
+- **MINOR** → an open minor finding; do not stop the phase. Batch enough of them into one cleanup task at the end of the phase.
 - **Re-verifying the fix** → `SendMessage` the original reviewer, don't spawn a new one.
-- **Reviewer and worker disagree** → you decide, using the reversibility test. Log the call and why. Do not run a third agent to break the tie; that's the paralysis loop.
-- **Reviewer returns nothing** → a legitimate, common result. Accept and move on.
+- **Reviewer and worker disagree** → you decide, using the reversibility test, and log why. No third agent to break the tie.
+- **Reviewer returns nothing** → a legitimate result. Accept and move on.

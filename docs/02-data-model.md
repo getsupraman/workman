@@ -101,7 +101,7 @@ CREATE TABLE project_repo (
   id              uuid PRIMARY KEY,
   workspace_id    uuid NOT NULL REFERENCES workspace ON DELETE CASCADE,
   project_item_id uuid NOT NULL REFERENCES item ON DELETE CASCADE,   -- kind = 'project'
-  user_id         uuid,              -- a root: the binder's user; a remote, or a credential with no user: NULL
+  user_id         uuid,              -- a root: the binder's user; a remote, or a writer with no user: NULL
   kind            text NOT NULL CHECK (kind IN ('remote','root')),
   key             text NOT NULL,                                     -- normalised, below
   added_at        timestamptz NOT NULL DEFAULT now(),
@@ -129,8 +129,8 @@ receives. The rule exists twice — `RepoKeys` in `Workman.Core/Domain/Repos.cs`
 
 **Binding.** `work_create(items:[{kind:"project", …, repo:{remote, root}}])` binds the keys it is
 given; `work_update(ref:"<project>", repo:{…})` adds more. A root is bound for the caller's user
-(`Actor.UserId`; NULL for a static token or a local credential, which is how every row was before
-m60); a remote always with NULL. A key already bound to another project — a remote by anyone, a root
+(`Actor.UserId`; NULL for a writer with no user, as every row bound before m60 is); a remote always
+with NULL. A key already bound to another project — a remote by anyone, a root
 by the same user — is refused, naming it: *this repo is project X — `work_brief(scope:"X")`*, and
 the call that moves it. `work_update(ref:"<project>", repo:{…}, take:true)` moves the keys named from
 the project that holds them, every row for them — each user's root keeps its user, so that user's
@@ -146,7 +146,7 @@ overview carries them, filtered the same way, as `projects[].repos`.
 **Resolution — `work_brief` with no `scope`:**
 
 1. `repo:` given → the **project brief** of the project bound to it ([06 §4a](06-rendering.md)) — a
-   remote anyone bound, a root the caller bound (a caller with no user: a root bound with none),
+   remote anyone bound, a root the caller bound or one bound with no user,
    and only a project the caller may see (§15b) —
    whose `NEXT` names the run to resume — the open run with the most unfinished work — or the call
    that starts one. When the two keys name different projects, the remote wins.
@@ -182,8 +182,7 @@ busiest run of the workspace. `work_get`'s attention block is that of the run it
 > their own checkout at that path to another project. Migration `MachineKeys` adds `user_id` and
 > rebuilds the unique key as `(workspace_id, user_id, key) NULLS NOT DISTINCT`. Every existing root is
 > copied to every user who can see its project — its members, or every member of the workspace when it
-> has none — and the NULL row stays, so a user finds their copy and a credential with no user the
-> original: nothing that resolved before stops resolving. Remotes are untouched.
+> has none — and the NULL row stays: nothing that resolved before stops resolving. Remotes are untouched.
 
 ### Archived projects — `item.archived_at`
 
@@ -769,7 +768,7 @@ CREATE TABLE claim (
   item_id      uuid NOT NULL REFERENCES item ON DELETE CASCADE,
   serialization_key text NOT NULL,   -- the tree: work_status's tree:, else run_config, else repo_root, else ref scope
   key_workspace_id uuid,             -- the workspace the lock is held in, for every key
-  key_user_id  uuid,                 -- a path key: the claimer's user; a name, or a caller with no user: NULL
+  key_user_id  uuid,                 -- a path key: the claimer's user; a name, or a holder with no user: NULL
   tree         text,                 -- the normalised tree: the caller passed, if any
   writes       boolean NOT NULL DEFAULT true,   -- read-only recon claims do not serialize
   agent_name   text NOT NULL,
@@ -807,15 +806,15 @@ its workspace** (`key_workspace_id`), a path as much as a name: a path is a plac
 — the `tree:` given, or a fallback key that parses as one, such as `repo_root` — is also a folder on one
 person's machine, so it locks per **user** too (`key_user_id`, the caller's `Actor.UserId`): user B's
 `p:/projects/x` is not user A's, and neither blocks the other. A **name** — a branch, the ref-scope
-fallback — is the workspace's and blocks across users. A path claimed by a credential with no user keeps
-NULL and is the workspace's, as every path was before m60 (migration `MachineKeys`, which also gave a live
-path claim taken by a session with a user that user).
+fallback — is the workspace's and blocks across users. A path claim with no user (one taken before m60 by a
+session that had none) keeps NULL and is the workspace's; migration `MachineKeys` gave every live path claim
+taken by a session with a user that user.
 
 **The holder.** `holder_user_id` is who took the claim, apart from what it locks: `key_user_id` is the
 lock's key and is NULL for a name, while users share role names (every OAuth controller is
 `controller`). A claim with a session is that session's; one without is the caller's only for the same
 `agent_name` and the same `holder_user_id` (`IS NOT DISTINCT FROM`), so NULL matches only a caller
-with no user — a static or local token, as before. Migration `ClaimHolderUser` (m62) set it on every
+with no user. Migration `ClaimHolderUser` (m62) set it on every
 live claim with a session from `agent_session.user_id`; the rest keep NULL.
 
 > **Changed 2026-10-22 (ws/8).** Claims were per run: with no `tree` parameter, every unit of a run
@@ -911,13 +910,13 @@ CREATE TABLE tenant_membership (       -- a tenant is a workspace
 ```
 
 The people who sign in to the dashboard (doc 08 §4). The first row is created from the configured
-dashboard credential on the first sign-in, and is the only row anything creates so far. Memberships
-are recorded but not yet enforced: every request still acts in the configured workspace.
+dashboard credential on the first sign-in, and is the only row anything creates so far. A request
+acts in the tenant its credential names (`RequestTenant`), never one a header or a setting names.
 
 `agent_session.user_id` (m51, migration `AgentSessionUser`; nullable, no foreign key) is the user whose
-OAuth token, or whose minted `wss_` token, named or minted the session; a static token's sessions have
-none. `agent_session_name_unique` is `(workspace_id, user_id, name) NULLS NOT DISTINCT`, so a name is
-unique among one user's sessions and the static tokens share one namespace per workspace (doc 11).
+OAuth token, or whose minted `wss_` token, named or minted the session; NULL on rows written before m51 and on sessions minted from one.
+`agent_session_name_unique` is `(workspace_id, user_id, name) NULLS NOT DISTINCT`, so a name is
+unique among one user's sessions, and the rows with no user share one namespace per workspace (doc 11).
 
 ### 12b. Project members — `project_member`
 
@@ -926,7 +925,7 @@ CREATE TABLE project_member (          -- who may work in a project (m58, migrat
   project_item_id uuid NOT NULL REFERENCES item ON DELETE CASCADE,       -- an item of kind project
   user_id         uuid NOT NULL,
   workspace_id    uuid NOT NULL,                                          -- the project's; RLS reads it
-  added_by        uuid REFERENCES app_user ON DELETE SET NULL,           -- null: migration or static token
+  added_by        uuid REFERENCES app_user ON DELETE SET NULL,           -- null: a migration or the importer
   added_at        timestamptz NOT NULL DEFAULT now(),
   PRIMARY KEY (project_item_id, user_id),
   FOREIGN KEY (user_id, workspace_id) REFERENCES tenant_membership ON DELETE CASCADE
@@ -943,8 +942,8 @@ project with every member of its workspace is the tenant-wide one (doc 08 §4 "P
   project's is the writer's: every insert copies it from the item, and the policy below keeps it in
   the caller's tenant.
 - **New projects are private.** `work_create(kind:"project")` makes the caller's user its one member
-  (`CallerIdentity.UserId`: an OAuth token or a user-minted `wss_` session). With no user — a static
-  token, the offline importer — every current member of the workspace becomes a member instead. A user
+  (`CallerIdentity.UserId`: an OAuth token or a user-minted `wss_` session). With no user — the offline
+  importer — every current member of the workspace becomes a member instead. A user
   who is not in the workspace (a system administrator visiting it) is refused (m59): they could not be a
   member, so the project would be hidden from them the moment it existed (§15b).
 - **The migration** gave every project that existed every member of its workspace (`added_by` null):
@@ -1149,7 +1148,7 @@ schema owner, OpenIddict's registration and the offline importer.
 | `Bypass` | path | why it cannot run as the tenant |
 |---|---|---|
 | `Authentication` | `SessionStore.AuthenticateAsync` (a `wss_` token → its session) | the token is what names the tenant; there is none yet |
-| `WorkspaceBinding` | `BoardQueries.WorkspaceAsync`, `WorkWriter.EnsureWorkspaceAsync` (the static tokens' `StaticTokenTenant`) | the configured workspace is looked up, or created on first use, during authentication (C62) |
+| `WorkspaceBinding` | `BoardQueries.WorkspaceAsync`, `WorkWriter.EnsureWorkspaceAsync` | a workspace is looked up by slug, or created on first use, before any tenant is entered (C62) |
 | `Users` | `UserStore`: sign-in, the cookie's stamp check, the OAuth user, the tenant switcher, password change | a user and their memberships span workspaces |
 | `Administration` | `AdminStore` (`/api/admin/*`) | it acts on the workspace its path names; the caller's rights are read from the table on every call (C62) |
 | `Links` | `UserLinkStore` (invite and reset links) | opened by token before anyone signs in; a reset link has no workspace |
@@ -1214,10 +1213,8 @@ tenant and in each other one it looks in. The server enters a scope only with
 `TenantScope.EnterAs(tenant, user)`; `Enter(tenant)`, which has no user, is the test suite's
 (`ProjectAccessRlsTests` guards it).
 
-**A credential with no user sees every project of its tenant**: a static role token, the reader token,
-the offline importer (the owner) and the test suite's direct store calls. Static role tokens are for a
-local single-user install (doc 08 §4); the server deploy configures none. A reader token configured on a
-shared server reads every project of its workspace.
+**A scope with no user sees every project of its tenant**: the offline importer (the owner) and the
+test suite's direct store calls; on a request, only a `wss_` session whose row has no user (§12a).
 
 ### What is hidden, and what stays the tenant's
 
@@ -1225,8 +1222,7 @@ A project is **hidden** from the caller when it has members and the caller is no
 to its root — the project at the top of its tree, or itself — so a whole subtree is hidden or not with
 its project. Hidden from no one:
 
-- **A project with no member** — a static token's project on an install that has no user yet, or one
-  the importer wrote into an empty tenant. It is the tenant's until its first member joins, which makes
+- **A project with no member** — one the importer wrote into a tenant with no member. It is the tenant's until its first member joins, which makes
   it private from the next statement on; so it is never orphaned.
 - **A root that is no project**, which has no members: a parentless feature and everything under it. No
   writer creates one since m63 (only a project is a root, see "Kinds are data"); one stored before stays visible.

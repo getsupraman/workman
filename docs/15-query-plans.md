@@ -373,9 +373,9 @@ the ProjectMembers seed and one of none), postgres:17 in Docker Desktop on Windo
 policy, `project_access`, on every table whose rows belong to a project. This section measures what that
 costs and how the shipped design came to be.
 
-**Method.** `ProjectAccessPerfTests` (opt-in) calls §7's reads as the owner, as a static token (the tenant
-role with no user) and as a member (the tenant role as the user who is a member of the most projects),
-60 rounds after 3 warm-ups each. The static token and the member run as the same role, so each mode is a
+**Method.** `ProjectAccessPerfTests` (opt-in) calls §7's reads as the owner, with no user (the tenant
+role in a scope with no user, as the importer reads) and as a member (the tenant role as the user who is a member of the most projects),
+60 rounds after 3 warm-ups each. The no-user pass and the member run as the same role, so each mode is a
 pass of its own, with `pg_stat_statements` reset before it and read after it:
 
 ```
@@ -422,20 +422,20 @@ the machine's load moved between runs — the owner's board ranged 6.97–9.30 m
 | read | mode | 1.0.1 | m59 | median Δ |
 |---|---|---|---|---|
 | board | member | 5.147 / 6.093 / 7.459 | 5.863 / 6.007 / 8.134 | **−1%** |
-| board | static | 5.346 / 5.441 / 8.567 | 5.500 / 6.245 / 6.162 | +13% |
+| board | no user | 5.346 / 5.441 / 8.567 | 5.500 / 6.245 / 6.162 | +13% |
 | frontier | member | 1.886 / 2.174 / 2.339 | 1.919 / 1.981 / 2.254 | **−9%** |
-| frontier | static | 1.950 / 1.999 / 2.801 | 1.858 / 1.905 / 1.903 | −5% |
+| frontier | no user | 1.950 / 1.999 / 2.801 | 1.858 / 1.905 / 1.903 | −5% |
 | rollup | member | 0.172 / 0.222 / 0.263 | 0.234 / 0.245 / 0.251 | **+10%** |
-| rollup | static | 0.192 / 0.193 / 0.288 | 0.203 / 0.221 / 0.211 | +9% |
+| rollup | no user | 0.192 / 0.193 / 0.288 | 0.203 / 0.221 / 0.211 | +9% |
 | subtree | member | 1.806 / 2.075 / 2.190 | 1.786 / 1.785 / 1.814 | −14% |
-| subtree | static | 1.856 / 1.926 / 2.337 | 1.686 / 1.820 / 1.720 | −11% |
+| subtree | no user | 1.856 / 1.926 / 2.337 | 1.686 / 1.820 / 1.720 | −11% |
 | default scope | member | 1.533 / 1.875 / 1.993 | 1.905 / 1.919 / 1.952 | +2% |
 | projects | member | 2.579 / 2.905 / 3.207 | 2.990 / 3.104 / 3.411 | +7% |
 | threads | member | 2.096 / 2.622 / 2.545 | 2.465 / 2.350 / 2.478 | −3% |
 | search | member | 9.422 / 10.564 / 11.583 | 10.133 / 9.746 / 11.696 | −4% |
 | journal head | member | 0.193 / 0.258 / 0.241 | 0.233 / 0.228 / 0.253 | −3% |
 
-**Verdict on server time: passes.** Every read is within 20% for the member and the static token, and the
+**Verdict on server time: passes.** Every read is within 20% for the member and with no user, and the
 gate's three are −1% (board), −9% (frontier) and +10% (rollup). The owner's own numbers moved by up to
 ±15% between runs, so a single run's delta below that says little. Besides the reads, a transaction whose
 request has a user runs `workman_project_access` inside the `set_config` statement the tenant helper

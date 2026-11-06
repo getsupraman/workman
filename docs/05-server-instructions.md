@@ -65,8 +65,8 @@ NEVER run `claude mcp get/list` or start a claude process to check Workman: a to
 check blocks every agent's Workman tools for 15 minutes.
 ```
 
-**Measured: 38 lines, 31 non-blank, ~650 tokens, widest line 94 chars.** Inside the 40-line
-budget with room to grow — and re-measured on every change, because a budget nobody measures is a
+**Measured: 40 lines, 33 non-blank, ~690 tokens, widest line 94 chars.** Exactly at the 40-line
+budget, with no room to grow — and re-measured on every change, because a budget nobody measures is a
 wish.
 
 ## Why each block is there

@@ -19,10 +19,12 @@ check what comes back, land it, and leave a record that outlives the session.
 | **controller** (this) | **many plans**, mostly independent | separate nested `claude` sessions, each free to orchestrate | sequencing, briefing, verification, integration, the record |
 
 `/workman:agents` is the **mechanics** of running those sessions — launching, addressing, the
-READY/BLOCKED/DONE protocol, permissions, worktrees, watchdogs, recovery. Read it before your first
-launch. This skill is the **discipline** of running the queue on top of it, and does not repeat it.
+READY/BLOCKED/DONE protocol, permissions, worktrees, watchdogs, recovery, writing the brief. Read it
+before your first launch. This skill is the **discipline** of running the queue on top of it, and does
+not repeat it.
 
-> Every rule below was paid for. Most of them cost a run to learn.
+**Never run `claude mcp get`, `claude mcp list` or start a `claude` process to check Workman** — it
+blocks every agent's Workman tools for 15 minutes (`/workman:agents` says why). Your tool list is the check.
 
 ---
 
@@ -140,31 +142,20 @@ second unit of the queue is refused while the first is in progress.
 - Collect on an integration branch and land once, or land each as it passes — either is fine, but
   decide up front and tell the human which.
 
-**Launch with the `agent_launch` tool** (`/workman:agents` §1; the scripts are its fallback when
-the agents server is unavailable). Per unit:
+**Launch with the `agent_launch` tool** (`/workman:agents` §1). Per unit:
 
-- `permission_mode` — `auto` by default; `acceptEdits` for a unit where the classifier keeps refusing
-  routine work. It is set per launch, so choose it per unit.
-- `workman.role: "worker"` for every unit. The agent then writes under its own minted token, its
-  evidence is a **worker's**, and it can never close the unit — the close stays yours.
-- No credential to pass once the human has run `agent_signin` for that Workman server
-  (`/workman:agents` §1): the launch mints with that grant, and a missing or expired one is
-  refused with the sign-in call to make. Headless, pass `workman.env_file` — the PATH of the
-  Workman `.env` (`~/.workman/.env`, or `<clone>/server/.env`), never a value; it wins over the
-  grant. Either way no token reaches your transcript.
+- `workman.role: "worker"` for every unit. The agent writes under its own minted token, its evidence
+  is a **worker's**, and it can never close the unit — the close stays yours.
+- No credential to pass: the launch mints with the grant the human gave once with `agent_signin`, and
+  a missing or expired grant is refused naming that call. No token reaches your transcript.
 - `agent_stop` when the unit is done; it revokes the token.
 
-**Launch every agent in auto mode** unless the unit needs otherwise — the default of `agent_launch`'s
-`permission_mode` and of the scripts' `-PermissionMode`, i.e.
-`claude --bg --permission-mode auto`. Under `acceptEdits` every shell shape the allow-list did not foresee
-parks the agent until a human attaches: in one three-unit run that was five parks — a `;` inside a build
-argument, a commit-message file under `.claude/`, `New-Item` for a folder, a PowerShell byte read, a
-build flag in an unexpected order — each one harmless, each one an hour of nothing until someone clicked
-*Yes*. Auto mode's classifier approves routine commands itself and refuses risky ones instead of asking,
-so the agent gets an answer either way and keeps moving. It is a backstop, not the contract: the brief
-still forbids `git push`, production databases and migrations in words, and still routes artifacts away
-from paths that are refused whatever the mode (§3). Keep the `-Toolset` profile too — it is what the
-agent may do without the classifier's judgement at all.
+**Launch in auto mode** (`permission_mode`'s default) unless the unit needs otherwise. Under
+`acceptEdits` every shell shape the allow-list did not foresee parks the agent until a human attaches —
+one three-unit run lost five hours that way to harmless commands. Auto mode's classifier approves
+routine commands and refuses risky ones instead of asking, so the agent keeps moving. It is a backstop,
+not the contract: the brief still forbids `git push`, production databases and migrations in words, and
+the `toolset` profile is still what the agent may do without the classifier's judgement.
 
 **In auto mode the brief is the authorization.** The classifier asks whether the *user* asked for an
 act, and to a nested agent the user is you: the brief is its first user message. An act that looks
@@ -178,9 +169,7 @@ with words like "break", "disable" or "weaken". Even granted, a classifier may s
 agent skips that check and reports it, and you never run it yourself (§8). Grant only what the human
 approved — the red-checks of §5 are approved with the queue.
 
-**Reclaim resources between units.** Each agent building into its own output directory can leave a
-build server behind. A twelve-unit run accumulated 28 processes holding 5.4 GB and the machine began
-killing background tasks mid-verification.
+**Reclaim build servers between units** (`/workman:agents` §7).
 
 ---
 
@@ -196,44 +185,21 @@ renders an item's state, not which verbs the session you are about to launch may
 
 **Tell the agent the unit item is yours.** It may keep its own run for the work inside the unit, but
 it must not call `work_status`, `work_verify` or `work_report` on the unit's ref: those are your
-verdicts, and a nested session on the same registration would record its claim as your evidence.
-
-**Carry the baseline as numbers.** Not *"take a baseline"* — the exact failing test name and the
-exact counts, plus *"do not fix it, do not report it as a regression, and do not let a subagent clean
-it up"*. An agent handed a red suite it did not cause will either claim the regression or repair it.
+verdicts.
 
 **Put what you already established in the brief.** You read the code to write the brief; do not make
 the agent rediscover it. File paths, the call chain, which of two similar methods is the right one,
 what you verified about a neighbouring system — all of it. Every fact you withhold is a chance to
 park or to guess.
 
-**Name the out-of-scope neighbour and say it is a decision.** *"Deferred by controller decision,
-because …"* answers a question the agent would otherwise answer for itself.
+**State what must NOT change**, in words: *"do not switch branches"*, *"these five existing tests must
+pass unmodified"* — and for that last one, add: **if you cannot make them pass without editing them,
+STOP and report that**. Editing a test so a change fits is how a fix becomes a regression with a green
+tick.
 
-**State what must NOT change**, in words. Implication is not instruction. *"Do not create a worktree"*,
-*"do not switch branches"*, *"these five existing tests must pass unmodified"* — and for that last one,
-add: **if you cannot make them pass without editing them, STOP and report that**. Editing a test so a
-change fits is how a fix becomes a regression with a green tick.
-
-### Every prohibition needs a route
-
-This is the single most expensive lesson available here. **A brief rule that demands a capability the
-agent does not have is a trap you set yourself.** In one run, eleven launches were lost to rules added
-to prevent real problems:
-
-| Prohibition that parked an agent | The rule that works |
-|---|---|
-| "no pipes" | "no pipes — narrow with the tool's own `--filter`" |
-| "commit with `-F <file>`" | "…to a path **inside your worktree**" |
-| "delete the scratch file afterwards" | "leave it; the controller removes it" — deletion was never granted |
-| "do not change that warning count" | "the controller checks the count" — it had no way to read one |
-| "no `git -C`" | "use `Glob`/`Grep`/`Read` to find files" — nothing had named the alternative |
-
-Sometimes the better move is not to grant the route but to **remove the need for it**: an agent handed
-the three file paths it would have gone looking for cannot park looking for them.
-
-**Name the environment's benign noise too.** An agent parks wherever the environment says something it
-cannot interpret and the brief is silent.
+**Every prohibition needs a route** (`/workman:agents` §9): a brief rule that demands a capability the
+agent does not have parks it. Often the better move is to remove the need — an agent handed the three
+file paths it would have gone looking for cannot park looking for them.
 
 ---
 
@@ -243,17 +209,8 @@ Steer when the agent drifts scope, invents a cause the brief did not claim, edit
 the code, or violates a convention you stated. Anchor the steer to the source — *"re-read the section
 on X"* beats a paragraph of new instruction, which competes with the brief rather than correcting it.
 
-**Escalate instead of steering** when the answer is not yours to give.
-
-**Read the comments the agent writes as claims to check.** One agent documented a new flag as *"set by
-the kiosk pick, the menu node, and the tool"* — and the tool never set it. The comment was the only
-thing that revealed the gap; the code, the tests and the report were all internally consistent without
-it. An agent describing what it built is telling you what it *believes* it built.
-
-**Your steer can be wrong, and a wrong steer gets baked into a commit message.** Verify a claim before
-you send it. If you find out afterwards, send the correction *before* it commits, and say plainly which
-part was wrong. The agent will take your word over the code — which is exactly why your word has to be
-checked. Twice in one run a steer dismissed something the agent was right to investigate.
+**Escalate instead of steering** when the answer is not yours to give. Read the agent's comments as
+claims to check, and verify your own steer before you send it (`/workman:agents` §4).
 
 **A parked agent cannot be steered.** Your message queues behind the prompt it is waiting on. It also
 cannot tidy up after itself — so a red-check mutation it injected is still sitting in its working tree.
@@ -282,32 +239,8 @@ diff is a finding: `work_finding(findings: [{target: "<unit ref>", title, severi
 - **A number that does not match.** Warning counts, test totals, file counts. Chase the difference to
   its cause rather than accepting it; twice this proved a false alarm and once it was real.
 
-**Mind how YOU edit the tree.** Finishing a parked agent's work means editing files yourself, and a
-read-then-write script silently rewrites line endings. Harmless in markdown; **not** harmless in any
-language where a raw or verbatim string literal carries its file's endings into runtime output. That
-changed the text of a prompt sent to a model, invisibly, and was caught only by a snapshot test whose
-expected value was transcribed literally rather than captured.
-
-### When the agent cannot run the gate
-
-Sometimes the check that matters is one the agent has no way to execute — a typecheck with no installed
-dependencies, a suite needing a service, a build only you can do. Do not skip it and do not accept an
-unverified leg.
-
-**Make it predict the gate's output, precisely enough to be wrong.** Then run the gate and compare. A
-match is evidence; a mismatch is a finding. Either way it had to reason about the whole surface rather
-than the line it changed.
-
-**Where no harness exists and building one is scope creep, demand an enumeration.** For a five-line
-handler, "write a test" means building a rig around something that has none. What you want is: *what
-does this produce for every shape the input can take?* A table of cases checked against the diff
-catches more than a happy-path test, and twice it surfaced edges the author had not stated.
-
-**Where nothing can catch a wrong guess, redundancy is the gate — and the agent should say so.** One
-agent could not confirm an API's field names by reading, and noted that a typecheck could not catch a
-wrong name either because the objects were untyped. So it recorded the value it needed from two
-independent points, each guarded, so either alone sufficed and a wrong name degraded to the old
-behaviour rather than throwing. That is the right shape for an unverifiable assumption.
+When the agent cannot run the gate itself, make it predict the gate's output precisely enough to be
+wrong, or enumerate the cases (`/workman:agents` §4) — never accept an unverified leg.
 
 ### The tests that matter most pass in both directions
 
@@ -365,15 +298,12 @@ store per unit, **as you go**, not at the end:
 | **your own mistakes** | `work_note(kind: "correction", from: "<unit ref>", body: …)` |
 | the agent (name, id, branch, outcome) | `work_note(kind: "environment", from: "<unit ref>", body: …)` |
 
-The store now carries the distinction that used to need care: a `work_report` is the agent's
-**claim**, a `work_verify` is **your evidence**, and what the agent reported that you could not confirm
-is exactly the report with no verification beside it. Do not paper over that gap with a verification
-you did not run.
+A `work_report` is the agent's **claim**, a `work_verify` is **your evidence**; what you could not
+confirm is a report with no verification beside it. Do not paper over that gap with a verification you
+did not run.
 
-**Your own mistakes** are not penance; they are the highest-value content in the record. A controller
-error — a wrong steer, a bad setup, an edit that changed something invisible — is exactly what the
-next run needs to avoid, and it appears nowhere else. A record that holds only the agent's failures is
-one someone will distrust as soon as they catch it being incomplete.
+**Your own mistakes** are the highest-value content in the record: a wrong steer or a bad setup is
+exactly what the next run needs to avoid, and it appears nowhere else.
 
 The run log writes itself: every transition, verification and closure is in the journal, and
 `work_history(scope: "<queue ref>")` reads it back. If your session restarts, `work_brief` plus the
@@ -405,10 +335,8 @@ If you cannot ask — non-interactive, or the human is away — **stop the unit,
 with `work_status(ref, "blocked", reason: "<the question>")`, and keep everything else you landed.** Do not answer it on their behalf and do not silently narrow the
 work to avoid it.
 
-**Never launder permissions.** If an agent was refused something, do not do it for it, and do not
-relaunch it with wider permissions to get around the refusal. Widening a profile *before* it runs so
-it can do the job you already approved is fine; re-running a denied act on its behalf is not. The same
-applies when a peer asks you to change config it could not change itself.
+**Never launder permissions** (`/workman:agents` §3): never do a refused act for an agent, nor
+relaunch it wider to get around the refusal.
 
 ---
 

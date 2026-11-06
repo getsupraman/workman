@@ -90,7 +90,7 @@ under 12 characters. The user's other cookies are signed out at their next reque
 
 ### `GET /api/session/apps` · `POST /api/session/apps/{id}/revoke` (outside v1)
 
-Cookie only: a bearer token, static or OAuth, gets 401, as on `/api/session/password`. The cookie's user's valid OAuth approvals in the
+Cookie only: a bearer token, `wss_` or OAuth, gets 401, as on `/api/session/password`. The cookie's user's valid OAuth approvals in the
 cookie's tenant, never another user's or another tenant's (m65). `GET` answers `200 { "asOf", "apps": [{ "id",
 "clientId", "name", "scopes", "createdAt", "lastUsedAt", "sessions" }] }`, most recently used first: `name` is the
 client's display name, else its client id; `lastUsedAt` is when the newest token under the approval was issued (a
@@ -166,9 +166,8 @@ characters. A used, replaced, expired or unknown token is `404 {error}` on both.
 4. **Additive only after freeze.** New fields and endpoints may appear; nothing is renamed or removed
    without `/api/v2`. Clients ignore unknown fields. Every response carries the header
    `X-Workman-Api: 1`.
-5. **Auth — any of:** the dashboard cookie; `Authorization: Bearer <token>` with any agent token
-   (controller/orchestrator/worker); a **reader** token — a token kind that can call nothing but
-   `GET /api/v1/*` and `/api/stream` (no MCP tools at all); or an **OAuth access token for the
+5. **Auth — any of:** the dashboard cookie; `Authorization: Bearer <token>` with a minted `wss_`
+   session token of any role; or an **OAuth access token for the
    resource `<origin>/api`** with scope `workman.read`. Foreman signs in with OAuth only (below).
 
    **OAuth on `/api`** (foreman-oauth). `/api` is a second protected resource beside `/mcp`
@@ -180,11 +179,11 @@ characters. A used, replaced, expired or unknown token is `404 {error}` on both.
    "offline_access"]}`, and an unauthenticated request to `/api/v1/*`, `/api/stream` or
    `/api/agent-sessions` is the usual `401` with an empty body plus
    `WWW-Authenticate: Bearer resource_metadata="<origin>/.well-known/oauth-protected-resource/api"`
-   (a wrong static or `wss_` token still gets the bare `401`). Scopes: `workman.read` for
+   (a wrong `wss_` token still gets the bare `401`). Scopes: `workman.read` for
    `GET /api/v1/*` and `/api/stream`, `workman.sessions` for the agent-session group (doc 14 §2).
    The 1.x scope names `workstate.read` and `workstate.sessions` are refused (`invalid_scope`) since server 2.1;
    a valid `/api` token without the route's scope is `403`. The scopes bind the OAuth principal only:
-   the cookie, static tokens and `wss_` tokens need no scope. The user behind the token is the
+   the cookie and `wss_` tokens need no scope. The user behind the token is the
    signed-in dashboard user, in the one tenant they approved it in (doc 08 §4), mapped to the
    controller role as on `/mcp`. Registration is a client-ID
    metadata document (an https `client_id`; Foreman's) or DCR (`POST /connect/register`, for
@@ -203,14 +202,14 @@ characters. A used, replaced, expired or unknown token is `404 {error}` on both.
    resolution; it is the `forced` flag (from the `forced_transition` record).
 7. **The tenant.** Every request acts in one workspace, its credential's (doc 08 §4): the cookie's
    current tenant, a `wss_` token's session's, an OAuth token's (its `workman:tenant` claim, else its
-   user's only membership), or the one a static or reader token is bound to. No header or query
+   user's only membership). No header or query
    parameter selects it. Everything a response names is in it: an id from another workspace is 404
    like a typo, `/resolve` and `/search` look nowhere else, and `/api/stream` carries only its events.
    A credential with no tenant — an OAuth token whose user is a member of several workspaces, or of
    none — is `403 {"error": "…"}`, the error saying what to do.
 8. **The project.** Within its tenant, a request whose credential names a user sees the projects that
    user is a member of, and the workspace's projects no one has joined yet (doc 02 §15b, doc 08 §4); a
-   static or reader token, which names none, sees every project of its workspace. To a user who is not a
+   `wss_` session whose row names no user (doc 02 §12a) sees every project of its workspace. To a user who is not a
    member, a project's items, runs and events do not exist, and the answer is the one a typo gets: an id
    of theirs is `404` with the unknown id's body, `/overview` and `/inbox` leave the project out,
    `/resolve` and `/search` find nothing in it, `/journal` without a scope leaves its events out, and
@@ -231,7 +230,7 @@ Session = { "id": "uuid", "name": "aw-m1", "role": "worker", "externalRole": "re
             "origin": "foreman/orion/Orion" | null, "launchedBy": "skills-5d" | null,
             "claudeSessionId": "…" | null, "cwd": "…" | null, "tree": "…" | null,
             "client": "claude-code 2.x" | null, "firstSeenAt": "…", "lastSeenAt": "…" }
-          // doc 11: a session exists only when named by the X-Workman-Agent header;
+          // doc 11: a session exists when minted, or named by X-Workman-Agent or work_session;
           // unnamed calls carry "session": null and are identified by actor/role alone
 Claim   = { "item": ItemRef, "run": ItemRef, "session": Session | null, "agent": "controller",  // agent = legacy label
             "role": "worker", "tree": "P:/…/m1-tool-args" | null, "acquiredAt": "…", "heartbeatAt": "…",
@@ -239,7 +238,7 @@ Claim   = { "item": ItemRef, "run": ItemRef, "session": Session | null, "agent":
             "heldBySession": "aw-m4-2b" | null }
           // heldBySession: the holding session's name (claim.session_id → agent_session.name), so a
           // client shows "aw-m4-2b · controller" without reaching into session; null for a claim
-          // taken without a session (a static token with no X-Workman-Agent), shown by role alone.
+          // taken without a session (an OAuth caller that named none), shown by role alone.
           // Every Claim carries it: overview workingNow, board rows, the item page, /sessions.
 JournalEvent = { "seq": 1, "at": "…", "item": ItemRef | null, "run": ItemRef | null, "session": Session | null,
                  "actor": "controller", "role": "controller", "kind": "…", "summary": "…", "payload": { } }
@@ -269,8 +268,8 @@ Everything a human needs on landing, in one call.
 
 `sharing` (added for the dashboard's sharing marker, additive) is who shares the project (doc 02 §12b):
 `members` its member count, `0` when no one has joined it and so it is open to the whole workspace; `you`
-whether the caller is one of them — false for such a project, and always false for a static or reader
-token, which names no user; `names` the members by name (case-insensitive order), so the marker names them
+whether the caller is one of them — false for such a project, and always false for a caller
+with no user; `names` the members by name (case-insensitive order), so the marker names them
 without a call per project. Read in one statement under the caller's own tenant transaction, so it says
 nothing about a project rule 8 leaves out — the response does not list one, and its member rows are not read.
 
@@ -386,8 +385,8 @@ under its tombstone name with `revoked`.
 **Whose sessions (m62).** A session belongs to no project, so project access does not cover it; it
 belongs to the user it was minted under (`agent_session.user_id`). A **member** sees only their own
 sessions. A **tenant admin** or a **system administrator** sees every session of the tenant (the
-Sessions page releases stuck names with it), and so does a credential with **no user** (a static or
-local token). The rule reads the principal only, like the tenant (rule 7). `claudeSessionId=` and
+Sessions page releases stuck names with it), and so does a credential with **no user** (a `wss_`
+session whose row names none). The rule reads the principal only, like the tenant (rule 7). `claudeSessionId=` and
 `name=` filter within what the caller sees, so Foreman, calling with the OAuth token of the user who
 minted its sessions, still finds its own. Each session's `claims` follow project access as every claim
 does: a claim on an item of a project the caller may not see is not listed.

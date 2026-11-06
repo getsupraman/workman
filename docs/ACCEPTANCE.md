@@ -24,7 +24,7 @@ dotnet run --project server/tools/WorkState.Import -- --migrate --connection "Ho
 
 **Empty** — same database, no import. Bring it up clean, or drop the project row.
 
-Start the server (Development profile reads the 55433 connection and the three role tokens):
+Start the server (Development profile reads the 55433 connection and the dashboard user the OAuth sign-in runs through):
 
 ```
 dotnet run --project server/WorkState.Api
@@ -33,10 +33,12 @@ dotnet run --project server/WorkState.Api
 ## 2. Register it
 
 ```
-claude mcp add --transport http workman http://localhost:5290/mcp --header "Authorization: Bearer dev-orchestrator-token"
+/workman:setup --url http://127.0.0.1:5290
 ```
 
-Remove with `claude mcp remove workman` afterwards.
+It registers `workman` at user scope with no `Authorization` header and writes `~/.workman/server.json`.
+Sign in once through `/mcp` → `workman` → Authenticate, as the dashboard user. Remove with
+`claude mcp remove workman` afterwards.
 
 ## 3. The prompts — frozen, and the only thing the agent is told about the subject
 
@@ -54,7 +56,7 @@ server-less agent what to do, it is contaminated.*
 
 ## 4. The one known contaminant, stated rather than hidden
 
-The agent is launched by `/workman:agents`'s `Start-NestedAgent.ps1`, which **prepends ~20 lines** to
+The agent is launched by `/workman:agents`'s `agent_launch`, which **prepends ~20 lines** to
 every brief: who its controller is, the `READY` / `BLOCKED` / `DONE` protocol, and *"if you hit a
 permission prompt you cannot clear, send BLOCKED naming the exact operation."*
 

@@ -339,13 +339,13 @@ would revisit it; until then, a missing token scope is a design choice, not a de
 **Grants — capabilities beside the role.** A minted session may carry `grants` (doc 14 §2); `import`
 is the one there is. The `importer` policy needs the orchestrator role **and** the `import` grant
 claim, which only a minted token can carry, so `work_import` is listed for a session launched for an
-import and for nobody else: every static token's and every ungranted session's `tools/list` is
-byte-for-byte what it was before the tool existed (pinned by `ImportVisibilityTests`). The tool costs
+import and for nobody else: every OAuth caller's and every ungranted session's `tools/list` is
+byte-for-byte what it would be without the tool (pinned by `ImportVisibilityTests`). The tool costs
 538 tokens of `tools/list`; a granted orchestrator's `work_*` list is 6,849.
 
 **Self-naming — `work_session(name, claude_session_id?)`** (doc 11). Hidden the same way: the
 `self-namer` policy needs any agent role **and** a `workman:client-key` claim, which the bearer
-handler adds only for a **static** token on a request carrying `X-Workman-Client` (the session
+handler adds only for an **OAuth** token on a request carrying `X-Workman-Client` (the session
 helper's key). A minted session never lists it — its name is its credential's — and neither does a
 session without the helper, whose `work_brief` names `/workman:setup` instead. Every other
 `tools/list` is unchanged bytes. Measured 2026-10-26 (chars/4): the tool costs 147–148 tokens; to keep
@@ -369,8 +369,8 @@ writing at once.
 
 **Implementation — measured end-to-end, 2026-09-18.** `AddAuthorizationFilters()` makes the SDK honour
 `[Authorize]` on tool methods, so each profile is an ASP.NET Core policy and each tool carries an
-attribute. **That alone narrows `tools/list`**: a reader token saw 2 tools, a writer token saw 3, and
-the reader could not even *attempt* the writer-only call — the client refused locally with *"No such
+attribute. **That alone narrows `tools/list`**: in the measurement a read-only role saw 2 tools, a writer role saw 3, and
+the read-only role could not even *attempt* the writer-only call — the client refused locally with *"No such
 tool available"*, so no request reached the server.
 
 ⛔ **`WithListToolsHandler` is therefore NOT needed.** The earlier plan to wire it as a second
@@ -604,7 +604,7 @@ with no fighting the framework.
 | ~~`WithCompleteHandler`~~ | **Exists, NOT used.** The client offers no completion mechanism at all (measured, §8). |
 | `WithSubscriptionsListenHandler` | SEP-2575 subscription stream, if we later push `resources/updated` to a watching controller. |
 | `WithSetLoggingLevelHandler` | `[Obsolete]` — confirms the Logging deprecation. Do not wire it. |
-| `AddMcp()` on `AuthenticationBuilder` | OAuth protected-resource-metadata handler. **Not needed** for a static bearer token; keep in reserve if this is ever exposed beyond localhost. |
+| `AddMcp()` on `AuthenticationBuilder` | OAuth protected-resource-metadata handler. **In use** (`OAuthServer`): it serves `/mcp`'s protected-resource metadata. |
 
 ### What this changes in the plan
 

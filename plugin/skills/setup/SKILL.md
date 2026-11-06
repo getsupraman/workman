@@ -1,6 +1,6 @@
 ---
 name: setup
-description: "Get the Workman MCP server running and registered, so the `work_*` tools are callable. Workman is a self-hosted HTTP MCP server (a .NET service plus a Postgres, in Docker, on your own machine) that holds what coding agents are doing - projects, runs, phases, tasks, claims, evidence and an append-only journal - with an operator dashboard on the same port. This skill detects which state the machine is in and runs one shipped script that does only the part that is missing: writes the local-only `.env` with random passwords, pulls the published image (no clone needed) or builds from a clone, starts it, registers it with `claude mcp add` with OAuth sign-in, so no token is stored, writes `~/.workman/server.json`, and proves that the server asks for that sign-in - without the model ever reading the `.env`. With `--url` it instead registers a remote Workman server, such as the hosted https://work.supraman.ai or a team's own, with OAuth sign-in and no Docker at all. Also backs up and restores the database. USE FOR: `work_brief` or any other `work_*` tool is missing and a skill told you it needs the store; a first install of Workman; connecting to a hosted or team Workman server, or moving to another one; \"the workman tools are gone\"; the server is up but this session cannot see it; backing up or restoring Workman. DO NOT USE FOR: using the tools once they work (call `work_brief`), or deploying the Workman server anywhere but localhost."
+description: "Get the Workman MCP server running and registered, so the `work_*` tools are callable. Workman is a self-hosted HTTP MCP server (a .NET service plus Postgres, in Docker) with an operator dashboard on the same port. One shipped script does only the part that is missing: writes the local `.env` with random passwords, pulls the published image or builds from a clone, starts it, registers it with OAuth sign-in (no token stored), writes `~/.workman/server.json`, and proves the server asks for that sign-in. With `--url` it registers a remote Workman server instead, such as the hosted https://work.supraman.ai, with no Docker at all. Also backs up and restores the database. USE FOR: `work_brief` or any other `work_*` tool is missing and a skill told you it needs the store; a first install of Workman; connecting to a hosted or team Workman server, or moving to another one; \"the workman tools are gone\"; the server is up but this session cannot see it; backing up or restoring Workman. DO NOT USE FOR: using the tools once they work (call `work_brief`), or deploying the Workman server anywhere but localhost."
 ---
 
 # Workman setup
@@ -22,9 +22,7 @@ never see one, and you keep it that way:**
 
 - **never `Read`, `cat`, `grep` or open the `.env`**, and never write one yourself;
 - **never run `claude mcp get` or `claude mcp list` to check Workman**, nor start a `claude` process to
-  probe it: both health-check the server without a token, which caches a needs-auth entry that blocks
-  agent workers for 15 minutes. The script's `--dry-run` reads the registration's url from Claude
-  Code's config file instead, and `~/.workman/server.json` says which server setup registered;
+  probe it: a token-less check blocks every agent's Workman tools for 15 minutes. `--dry-run` is the check;
 - never put a token on a command line, in a `curl`, or in a file you write.
 
 The dashboard password is for the human: tell them it is in the `.env` the script names; do not print
@@ -154,9 +152,9 @@ An existing registration is kept as it is unless you pass `--force`.
 Every registration also writes `~/.workman/server.json` — `{"url": "<origin>", "mcpName": "workman"}`,
 atomically — which is how the rest of Workman finds the server; `--dry-run` writes nothing.
 
-**Register `127.0.0.1`, never `localhost`.** The sign-in is bound to the host the server was reached
-on, so a registration on one name cannot use a grant issued on the other. The script always writes
-`http://127.0.0.1:<port>/mcp`; do not edit it into `localhost`.
+**Register `127.0.0.1`, never `localhost`.** The server binds IPv4 loopback only, and the sign-in is
+bound to the host it was reached on. The script always writes `http://127.0.0.1:<port>/mcp`; do not
+edit it into `localhost`.
 
 The registration also runs `session-header.mjs` (copied to `~/.workman/`; the script needs `node`) on
 each connect: it keys the session by its Claude Code process, so `work_session(name)` can name a
@@ -180,8 +178,7 @@ dashboard http://127.0.0.1:5290 - sign in with WORKMAN_DASHBOARD_USERNAME / _PAS
 next      start a new Claude Code session, run /mcp, pick 'workman', Authenticate, sign in in the browser and Approve: the work_* tools appear there, not in this one
 ```
 
-An existing `.env` is **never overwritten** (`env  kept …`), and an existing registration is kept
-unless you pass `--force`.
+An existing `.env` is **never overwritten** (`env  kept …`).
 
 **Report the `prove` line to the user.** There is no token to list tools with, so it proves what
 Claude Code needs to find the sign-in: `POST /mcp` without a token answers `401` with a
@@ -207,8 +204,7 @@ and tell the user, and do not edit `.gitignore` yourself.
 
 The image is multi-arch (amd64 and arm64), so Apple Silicon needs nothing special, and
 `restart: unless-stopped` brings the stack back wherever Docker starts at logon — you run this once,
-not once per session. Every address is `127.0.0.1`, not `localhost`: the server binds IPv4 loopback
-only, and some clients resolve `localhost` to `::1` first and find nothing there.
+not once per session.
 
 ---
 

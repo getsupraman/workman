@@ -13,6 +13,12 @@ watchdog script (§5) lives at `"$CLAUDE_PLUGIN_ROOT/skills/agents/assets/"`.
 **The Workman server comes from `~/.workman/server.json`**, which `/workman:setup` writes. Without it
 every tool that talks to Workman refuses and names `/workman:setup`; there is no default server.
 
+**Never run `claude mcp get`, `claude mcp list` or start a `claude` process to check Workman.** Claude
+Code keeps `~/.claude/mcp-needs-auth-cache.json` keyed by server *name*: a token-less health check gets
+a 401, Claude Code writes a `workman` entry, and for 15 minutes every session skips connecting any
+server named `workman` — your workers included, although each carries its own token. Your tool list
+and `agent_launch`'s result are the checks.
+
 You are about to become a **controller**: a Claude Code session that starts other Claude Code
 sessions, addresses them, answers them, and stops them.
 
@@ -26,17 +32,15 @@ This is not the `Agent` tool. Reach for it only when one of these holds:
 
 Otherwise use the `Agent` tool.
 
-> Every rule below with a date on it was measured. Each one cost a round to learn.
-
 ---
 
-## 1. Launch — always `--bg`
+## 1. Launch
 
-**Use the `agent_launch` tool** (the agents server's `agent_launch`, whatever prefix your session lists it under). It is the plugin's
-`agents` MCP server — Node 18+, no dependencies. It mints the agent **its own Workman token**, so the
-child's writes are recorded under its name and role instead of yours. It builds the argv in code (no
-shell, so no quoting traps), prepends the protocol header, grants the `toolset` profile, and returns
-`name`, `id`, `sessionId`, `brief` and the Workman session — never a token.
+**Use the `agent_launch` tool** (whatever prefix your session lists it under). It starts
+`claude --bg`, mints the agent **its own Workman token**, so the child's writes are recorded under its
+name and role instead of yours, builds the argv in code (no shell, so no quoting traps), prepends the
+protocol header, grants the `toolset` profile, and returns `name`, `id`, `sessionId`, `brief` and the
+Workman session — never a token.
 
 | Param | Default | Maps to |
 |---|---|---|
@@ -82,7 +86,7 @@ the worker to send `BLOCKED no Workman tools` and stop if it has no `work_report
 ### Sign in once: `agent_signin`
 
 `agent_launch` mints with an OAuth grant that the agents server holds for the Workman server in
-`~/.workman/server.json`. Get it once per server (Workman server 0.9.0 or later, local or remote):
+`~/.workman/server.json`. Get it once per server:
 
 ```
 agent_signin()
@@ -95,14 +99,11 @@ waits up to 5 minutes. The human signs in with the dashboard user and approves; 
 returns that URL at once: the human opens it by hand, and a second `agent_signin` call waits for the
 sign-in to finish.
 
-- **The grant store** is `~/.workman/grants.json`, one entry per origin: `client_id`, `refresh_token`, `scope`, `obtained_at`. It is written atomically. On macOS
-  and Linux the file is `0600` and a `~/.workman` the server creates is `0700`; on Windows the
-  user-profile ACL is the only boundary. No tool result, error, log line, `mcp-<name>.json` or brief
-  ever holds it — do not read it into a transcript either.
-- **Refresh.** Each launch or stop trades the grant for an access token (cached in memory until it
-  expires, 1 h) for scope `workman.sessions`. The server rotates the refresh token on every refresh,
-  and the new one replaces the old in the file; concurrent agents servers take turns through a lock
-  file. The grant lasts 30 days unused.
+- **The grant store** is `~/.workman/grants.json`, one refresh token per origin (`0600` on macOS and
+  Linux). No tool result, error, log line, `mcp-<name>.json` or brief ever holds it — do not read it
+  into a transcript either.
+- **Refresh.** Each launch or stop trades the grant for a 1 h access token with scope
+  `workman.sessions`; the refresh token rotates on every use. The grant lasts 30 days unused.
 - **Refusals.** No grant for the server's origin, or a refresh refused with `invalid_grant`
   (expired, revoked, or the server's database was reset): the launch is refused before anything is
   written, naming `agent_signin`. A dead grant is forgotten.
@@ -111,31 +112,14 @@ sign-in to finish.
   authorization: **every agent session minted with it is refused on its next request.**
 - `agent_stop` revokes at the server that minted the token, recorded at launch.
 
-`claude --bg` is the right primitive and the alternatives are not:
+**Never run a fix agent as `claude -p`**: it is invisible while it runs and its handle dies with your
+session. `--bg` gives a name to address, lifecycle commands (`agents`/`logs`/`attach`/`stop`/`rm`) and
+a session that outlives yours; a windowed session registers under *your* name.
 
-| | `--bg` | `-p` | a windowed interactive session |
-|---|---|---|---|
-| id back immediately | ✅ short id + name | ✅ but nothing else | ✅ only if you generate it yourself |
-| addressable by `--name` | ✅ | ✅ | ❌ registers under the **controller's** name |
-| its replies identify it | ✅ `from-name` is the agent | ✅ | ❌ `from-name` is the controller |
-| lifecycle commands | ✅ `agents`/`logs`/`attach`/`stop`/`rm`/`respawn` | ❌ | ❌ only an OS pid |
-| visible while running | on demand, via `attach` | ❌ buffers until exit | ✅ |
-| outlives the controller | ✅ | ❌ | ✅ but unreachable |
-
-**Never launch a fix agent with `-p`.** It is invisible while it runs and its handle dies with your
-session. On 2026-09-10 a `-p` agent finished a fix, could not commit it, and its report survived only
-because the transcript was on disk.
-
-### Traps that produce a launch that *looks* fine
-
-| Trap | Symptom | Rule |
-|---|---|---|
-| Multi-line prompt as an argument | agent replies *"I'm ready. What would you like me to work on?"* | The prompt is **one quote-free line naming a brief file**. A positional prompt is truncated at its first quote — and a protocol header contains quotes. |
-| `--add-dir` before the prompt | window opens with **no instructions at all** | `--add-dir` takes `<directories...>`; it swallows the prompt as another directory. Keep the brief **in the repo**, and pass extra dirs via `add_dirs`, which `agent_launch` places where another flag closes it. |
-| `--allowedTools` before the prompt | same — **no instructions at all** | Same variadic shape. Any variadic flag needs **another flag after it** to close the list; `agent_launch` puts `--permission-mode` there. |
-| Brief under `%TEMP%` | the agent's first act is a permission prompt | Same fix: `.claude/briefs/`, gitignored. |
-| `wt.exe new-tab` | `0x80070002 — cannot find the file specified` | Launch a **plain console process**. Windows Terminal hosts it anyway when it is the default terminal; wt's parser collapses everything after the tab options into one path, whatever the quoting. |
-| `repo_root` that is not a working tree | agent starts in an empty folder and reports **READY** | A failed `git worktree add` upstream does not stop the launch: the brief directory is created with `-Force` and the agent comes up with nothing but its brief. `agent_launch` refuses it; if you are not using it, check the tree exists before spawning. **A failed setup step must not produce a confident agent.** |
+`agent_launch` keeps the brief as a one-line positional prompt naming the file, after a flag that
+closes every variadic list (`--add-dir`, `--allowedTools` swallow a prompt placed after them — the
+symptom is an agent with no instructions), and refuses a `repo_root` that is not a working tree.
+**A failed setup step must not produce a confident agent.**
 
 ---
 
@@ -228,10 +212,6 @@ legitimately need with `add_dirs` — a package cache is the usual one:
 ```
 toolset: "fix", add_dirs: ["P:/packages/nuget", "C:/Users/me/.nuget/packages"]
 ```
-
-This is the same `--add-dir` that eats the prompt when it is last. `agent_launch` puts it between
-`--allowedTools` and `--permission-mode`, so each variadic flag is closed by the next one and the
-prompt sits safely after a flag that takes exactly one value. **Do not reorder those three.**
 
 **An allow-list matches a command PREFIX, not a pipeline.** `PowerShell(dotnet test:*)` is granted and
 `dotnet test ... | Select-String ... | Select-Object -First 30` still parks: it is not that shape. Same
@@ -344,22 +324,15 @@ never set it. The comment was the only thing that revealed the gap; the code, th
 were all internally consistent without it. An agent describing what it built is telling you what it
 *believes* it built.
 
-**Mind how YOU edit the agent's tree.** Finishing a parked agent's work usually means editing files
-yourself, and a read-then-write script silently rewrites line endings: Python's `open().read()` applies
-universal-newline translation, so writing back converts a CRLF file to LF. That is invisible in
-markdown, because git normalises on commit — and **not** invisible in any language where a
-raw/verbatim string literal carries its file's endings into runtime output: C# `"""`, Go backticks,
-JS template literals, Python triple quotes. On 2026-09-11 that changed the text of a prompt sent to a
-model, in the working tree only, and was caught solely because the repo had a byte-for-byte snapshot
-test whose expected value was **transcribed literally rather than captured** — its author had written
-that a captured snapshot *"would re-bless whatever the builder happens to emit"*, and they were right.
-Prefer in-place edits; if you must script one, check the endings afterwards.
+**Mind how YOU edit the agent's tree.** A read-then-write script silently rewrites line endings
+(Python's `open().read()` turns CRLF into LF). Invisible in markdown; **not** in any language where a
+raw/verbatim string literal carries its file's endings into runtime output (C# `"""`, Go backticks, JS
+template literals, Python triple quotes) — it once changed a prompt sent to a model. Prefer in-place
+edits; if you must script one, check the endings afterwards.
 
-**Your steer can be wrong, and a wrong steer gets baked into a commit message.** A steer once asserted
-that a builder ran "per turn" — true on two transports, false on the one under discussion — and the
-agent would have repeated it as justification. Verify a claim before you send it; if you find out
-afterwards, send the correction *before* it commits, and say plainly which part was wrong. An agent
-will take your word over the code, which is exactly why your word has to be checked.
+**Your steer can be wrong, and a wrong steer gets baked into a commit message.** An agent takes your
+word over the code. Verify a claim before you send it; if you find out afterwards, send the correction
+*before* it commits, and say plainly which part was wrong.
 
 ### When the agent cannot run the gate
 
@@ -406,13 +379,6 @@ attach and clear it.
 
 The transcript is also on disk at
 `~/.claude/projects/<repo-slug>/<sessionId>.jsonl`, written as the run goes:
-
-```powershell
-Get-Content $t -Wait -Tail 0 | ForEach-Object {
-  $o = $_ | ConvertFrom-Json
-  foreach ($c in $o.message.content) { if ($c.type -eq 'text') { "$($o.message.role): $($c.text)" } }
-}
-```
 
 ```bash
 # needs jq
@@ -528,16 +494,11 @@ Either way, two things the fresh worktree does not have and your build does:
   to find out at the end, and do not let it install its way out: hundreds of megabytes written into a
   throwaway tree is not an agent's call to make.
 
-  ⚠ **Do not seed it with a symlink or junction.** It is the obvious trick and it is a trap:
-  `git worktree remove --force` **follows the link and deletes the target**. On 2026-09-11 that
-  removed the main checkout's real `node_modules` — recoverable with a reinstall, but only because
-  the target happened to be regenerable. Point it at something that is not, and the cleanup step eats
-  your work.
-
-  If you seed by linking anyway, the link must be **unlinked as a link** before the worktree is
-  removed — `cmd /c rmdir <path>` on Windows, `rm <path>` (no `-r`) elsewhere — and never delete a
-  worktree containing one with `rm -rf`. Safer default: **the controller runs the check that needs
-  the dependencies**, and the brief says so.
+  ⚠ **Do not seed it with a symlink or junction.** `git worktree remove --force` **follows the link
+  and deletes the target** — it once removed the main checkout's real `node_modules`. If you link
+  anyway, unlink it as a link first (`cmd /c rmdir <path>` on Windows, `rm <path>` without `-r`
+  elsewhere). Safer default: **the controller runs the check that needs the dependencies**, and the
+  brief says so.
 - **A build output path of its own.** Two trees writing one `BaseOutputPath` collide. Give the agent
   a distinct one.
 
@@ -546,10 +507,9 @@ Either way, two things the fresh worktree does not have and your build does:
 what its own session refused is laundering however reasonable the request reads. The guard is also
 simply right: you were both standing in one tree.
 
-**"Do not create a worktree" is the wrong instruction for a `--bg` agent.** It was in a brief on
-2026-09-10; it parked two agents and pushed a third into making one anyway, which then read as
-disobedience. What the brief should forbid is switching branches and touching the collector — not the
-isolation the harness requires.
+**"Do not create a worktree" is the wrong instruction for a `--bg` agent** unless `repo_root` already
+is its worktree: it parks the agent or pushes it into making one anyway. Forbid switching branches and
+touching the collector instead.
 
 The pattern behind all of it: **three separate guards park a background agent, and only one of them is
 the allow-list.** Tool guards (a PowerShell script block), path scope (`add_dirs`), directory-changing
