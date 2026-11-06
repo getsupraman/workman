@@ -4,7 +4,6 @@ import assert from 'node:assert/strict'
 import fs from 'node:fs'
 import path from 'node:path'
 import { resolveClaude, parseBackgroundId } from '../claude.mjs'
-import { parseEnvFile } from '../workman.mjs'
 import { stateDir } from '../state.mjs'
 import { tmp } from './helpers.mjs'
 
@@ -12,10 +11,6 @@ test('backgrounded line: id read through ANSI colour codes', () => {
     assert.equal(parseBackgroundId('\x1b[2mbackgrounded\x1b[0m · \x1b[1;36mc88dd0c8\x1b[0m · fix-B-07\n'), 'c88dd0c8')
     assert.equal(parseBackgroundId('backgrounded | c88dd0c8 | x'), 'c88dd0c8')
     assert.equal(parseBackgroundId('error: nope'), undefined)
-})
-
-test('env file: comments and blanks ignored, quotes stripped, export accepted', () => {
-    assert.deepEqual(parseEnvFile('﻿# c\n\nA=1\nB="two words"\r\nexport C=\'3\'\nD=\nbad line\n'), { A: '1', B: 'two words', C: '3', D: '' })
 })
 
 test('CLAUDE_BIN must be a JSON array', () => {

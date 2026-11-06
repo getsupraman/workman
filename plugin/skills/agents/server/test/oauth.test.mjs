@@ -5,12 +5,12 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import fs from 'node:fs'
 import path from 'node:path'
-import { startServer, makeRepo, tmp, CONTROLLER, CONTROLLER_TOKEN } from './helpers.mjs'
+import { startServer, makeRepo, tmp, homeEnv, CONTROLLER } from './helpers.mjs'
 import { fakeOAuthWorkman } from './fake-oauth.mjs'
 
 function grantsHome() {
-    const file = path.join(tmp('home'), '.workman', 'grants.json')
-    return { file, env: { WORKMAN_GRANTS_FILE: file } }
+    const home = tmp('home')
+    return { file: path.join(home, '.workman', 'grants.json'), env: homeEnv(home) }
 }
 
 /** @param {string} file @returns {Record<string, any>} */
@@ -33,7 +33,7 @@ test('agent_signin: discovery, DCR once per origin, PKCE S256, loopback callback
     const home = grantsHome()
     const s = startServer(home.env)
     try {
-        const r = await s.call('agent_signin', { url: ws.url })
+        const r = await s.call('agent_signin', {})
         assert.equal(r.isError, false, r.content[0].text)
         assert.match(r.content[0].text, new RegExp(`^signed in to ${ws.url} as alice$`, 'm'))
         assert.match(r.content[0].text, /\/connect\/authorize\?/, 'the URL is returned for opening by hand')
@@ -59,7 +59,7 @@ test('agent_signin: discovery, DCR once per origin, PKCE S256, loopback callback
         }
         assert.ok(!fs.readdirSync(path.dirname(home.file)).some((f) => f.endsWith('.tmp') || f.endsWith('.lock')), 'no temp or lock file left behind')
 
-        const again = await s.call('agent_signin', { url: ws.url })
+        const again = await s.call('agent_signin', {})
         assert.equal(again.isError, false, again.content[0].text)
         assert.equal(ws.count('/connect/register'), 1, 'the client_id is reused for the same origin')
     } finally {
@@ -68,17 +68,17 @@ test('agent_signin: discovery, DCR once per origin, PKCE S256, loopback callback
     }
 })
 
-test('agent_launch without env_file mints with the stored grant in a new process; PATCH and agent_stop use it too', async () => {
+test('agent_launch mints with the stored grant in a new process; PATCH and agent_stop use it too', async () => {
     const ws = await fakeOAuthWorkman()
     const repo = makeRepo()
     const home = grantsHome()
     const first = startServer(home.env)
     const s = startServer(home.env)
     try {
-        assert.equal((await first.call('agent_signin', { url: ws.url })).isError, false)
+        assert.equal((await first.call('agent_signin', {})).isError, false)
         await first.close()
 
-        const r = await s.call('agent_launch', launchArgs(repo, 'oa-1', { url: ws.url }))
+        const r = await s.call('agent_launch', launchArgs(repo, 'oa-1', {}))
         assert.equal(r.isError, false, r.content[0].text)
         assert.equal(tokenCalls(ws, 'refresh_token').length, 1, 'a new process refreshes the stored grant')
 
@@ -108,10 +108,10 @@ test('refresh rotation: every refresh stores the rotated token, and the next ref
     const home = grantsHome()
     const s = startServer(home.env)
     try {
-        assert.equal((await s.call('agent_signin', { url: ws.url })).isError, false)
+        assert.equal((await s.call('agent_signin', {})).isError, false)
         const signedIn = readGrants(home.file)[ws.url].refresh_token
         for (const name of ['rot-1', 'rot-2']) {
-            const r = await s.call('agent_launch', launchArgs(repo, name, { url: ws.url }))
+            const r = await s.call('agent_launch', launchArgs(repo, name, {}))
             assert.equal(r.isError, false, `${name}: ${r.content[0].text}`)
         }
         const refreshes = tokenCalls(ws, 'refresh_token')
@@ -131,21 +131,21 @@ test('no grant, or a refresh refused with invalid_grant, refuses the launch nami
     const home = grantsHome()
     const s = startServer(home.env)
     const later = startServer(home.env)
-    const signin = new RegExp(`agent_signin \\{"url": "${ws.url}"\\}`)
+    const signin = /agent_signin/
     try {
         for (const dryRun of [false, true]) {
-            const r = await s.call('agent_launch', { ...launchArgs(repo, 'ng-1', { url: ws.url }), dry_run: dryRun })
+            const r = await s.call('agent_launch', { ...launchArgs(repo, 'ng-1', {}), dry_run: dryRun })
             assert.equal(r.isError, true)
             assert.match(r.content[0].text, signin)
         }
         assert.equal(ws.requests.length, 0, 'no grant: refused before any request')
 
-        assert.equal((await s.call('agent_signin', { url: ws.url })).isError, false)
-        const dry = await s.call('agent_launch', { ...launchArgs(repo, 'ng-dry', { url: ws.url }), dry_run: true })
+        assert.equal((await s.call('agent_signin', {})).isError, false)
+        const dry = await s.call('agent_launch', { ...launchArgs(repo, 'ng-dry', {}), dry_run: true })
         assert.equal(dry.isError, false, dry.content[0].text)
 
         ws.expireRefreshTokens()
-        const r = await later.call('agent_launch', launchArgs(repo, 'ng-2', { url: ws.url }))
+        const r = await later.call('agent_launch', launchArgs(repo, 'ng-2', {}))
         assert.equal(r.isError, true)
         assert.match(r.content[0].text, /invalid_grant/)
         assert.match(r.content[0].text, signin)
@@ -166,13 +166,13 @@ test('agent_signout revokes at /connect/revoke, deletes the grant, and the sessi
     const home = grantsHome()
     const s = startServer(home.env)
     try {
-        assert.equal((await s.call('agent_signin', { url: ws.url })).isError, false)
+        assert.equal((await s.call('agent_signin', {})).isError, false)
         const refresh = readGrants(home.file)[ws.url].refresh_token
-        assert.equal((await s.call('agent_launch', launchArgs(repo, 'so-1', { url: ws.url }))).isError, false)
+        assert.equal((await s.call('agent_launch', launchArgs(repo, 'so-1', {}))).isError, false)
         const [minted] = ws.minted()
         assert.equal(await mcpAnswers(ws, minted), 200)
 
-        const r = await s.call('agent_signout', { url: ws.url })
+        const r = await s.call('agent_signout', {})
         assert.equal(r.isError, false, r.content[0].text)
         assert.match(r.content[0].text, /refused on its next request/)
         const revoke = ws.requests.find((q) => q.path === '/connect/revoke')
@@ -181,38 +181,11 @@ test('agent_signout revokes at /connect/revoke, deletes the grant, and the sessi
         assert.deepEqual(readGrants(home.file)[ws.url], { client_id: 'client-1' })
         assert.equal(await mcpAnswers(ws, minted), 401, 'the session minted under the grant stops working')
 
-        const twice = await s.call('agent_signout', { url: ws.url })
+        const twice = await s.call('agent_signout', {})
         assert.match(twice.content[0].text, /not signed in/)
-        const after = await s.call('agent_launch', launchArgs(repo, 'so-2', { url: ws.url }))
+        const after = await s.call('agent_launch', launchArgs(repo, 'so-2', {}))
         assert.equal(after.isError, true)
         assert.match(after.content[0].text, /agent_signin/)
-    } finally {
-        await s.close()
-        await ws.close()
-    }
-})
-
-test('env_file wins over a stored grant, and env_file launches work unchanged after sign-out', async () => {
-    const ws = await fakeOAuthWorkman({ staticToken: CONTROLLER_TOKEN })
-    const repo = makeRepo()
-    const home = grantsHome()
-    const s = startServer(home.env)
-    try {
-        assert.equal((await s.call('agent_signin', { url: ws.url })).isError, false)
-        const r = await s.call('agent_launch', launchArgs(repo, 'ef-1', { url: ws.url, env_file: repo.envFile }))
-        assert.equal(r.isError, false, r.content[0].text)
-        const mint = ws.requests.find((q) => q.method === 'POST' && q.path === '/api/agent-sessions')
-        assert.equal(mint?.auth, `Bearer ${CONTROLLER_TOKEN}`)
-        assert.equal(tokenCalls(ws, 'refresh_token').length, 0)
-
-        assert.equal((await s.call('agent_signout', { url: ws.url })).isError, false)
-        const [first] = ws.minted()
-        assert.equal(await mcpAnswers(ws, first), 200, 'signing out does not touch env_file sessions')
-        const again = await s.call('agent_launch', launchArgs(repo, 'ef-2', { url: ws.url, env_file: repo.envFile }))
-        assert.equal(again.isError, false, again.content[0].text)
-        const stop = await s.call('agent_stop', { name: 'ef-2' })
-        assert.equal(stop.structuredContent.revoked, true)
-        assert.equal(ws.requests.filter((q) => q.method === 'DELETE').at(-1)?.auth, `Bearer ${CONTROLLER_TOKEN}`)
     } finally {
         await s.close()
         await ws.close()
@@ -224,7 +197,7 @@ test('a callback whose state does not match is refused, and nothing is exchanged
     const home = grantsHome()
     const s = startServer(home.env)
     try {
-        const r = await s.call('agent_signin', { url: ws.url })
+        const r = await s.call('agent_signin', {})
         assert.equal(r.isError, true)
         assert.match(r.content[0].text, /state did not match/)
         assert.equal(tokenCalls(ws, 'authorization_code').length, 0)
@@ -240,7 +213,7 @@ test('when no browser can be started, agent_signin returns the URL to open by ha
     const home = grantsHome()
     const s = startServer({ ...home.env, AGENTS_BROWSER: JSON.stringify([path.join(tmp('nobrowser'), 'no-such-browser')]) })
     try {
-        const r = await s.call('agent_signin', { url: ws.url })
+        const r = await s.call('agent_signin', {})
         assert.equal(r.isError, false, r.content[0].text)
         assert.equal(r.structuredContent.signed_in, false)
         assert.match(r.structuredContent.authorize_url, new RegExp(`^${ws.url}/connect/authorize\\?`))

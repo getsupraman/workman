@@ -9,7 +9,7 @@ import { startServer, makeRepo, fakeWorkman, CONTROLLER, CONTROLLER_TOKEN } from
 async function launch(s, url, repo, name) {
     const r = await s.call('agent_launch', {
         name, brief: 'task.md', repo_root: repo.root, controller: CONTROLLER,
-        workman: { env_file: repo.envFile, url },
+        workman: {},
     })
     assert.equal(r.isError, false, r.content[0].text)
     return r.structuredContent

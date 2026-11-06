@@ -6,13 +6,13 @@
 // @ts-check
 
 import fs from 'node:fs'
-import os from 'node:os'
 import path from 'node:path'
 import http from 'node:http'
 import crypto from 'node:crypto'
 import { spawn } from 'node:child_process'
 import { Refusal } from './launch-args.mjs'
 import { call, serverReason } from './workman.mjs'
+import { workmanDir, writeFileAtomic, sleep } from './home.mjs'
 
 export const SCOPE = 'workman.sessions offline_access'
 const SIGNIN_TIMEOUT_MS = 5 * 60 * 1000
@@ -23,20 +23,10 @@ const EXPIRY_SKEW_MS = 60 * 1000
  * @typedef {{resource: string, authorization_endpoint: string, token_endpoint: string, registration_endpoint?: string, revocation_endpoint?: string}} Metadata
  */
 
-/** @param {NodeJS.ProcessEnv} [env] */
-export function grantsFile(env = process.env) {
-    return env.WORKMAN_GRANTS_FILE || path.join(os.homedir(), '.workman', 'grants.json')
-}
+const grantsFile = () => path.join(workmanDir(), 'grants.json')
 
 /** @param {string} url */
-export function originOf(url) {
-    return new URL(url).origin
-}
-
-/** @param {string} url */
-export function signinCall(url) {
-    return `agent_signin {"url": "${url}"}`
-}
+const originOf = (url) => new URL(url).origin
 
 /** @returns {Record<string, Grant>} */
 function readGrants() {
@@ -56,27 +46,7 @@ function readGrants() {
 }
 
 /** @param {Record<string, Grant>} grants */
-function writeGrants(grants) {
-    const file = grantsFile()
-    const tmp = `${file}.${process.pid}.${crypto.randomBytes(4).toString('hex')}.tmp`
-    fs.writeFileSync(tmp, JSON.stringify(grants, null, 2) + '\n', { mode: 0o600 })
-    try {
-        fs.chmodSync(tmp, 0o600)
-    } catch {}
-    for (let i = 0; ; i++) {
-        try {
-            fs.renameSync(tmp, file)
-            return
-        } catch (e) {
-            // Windows refuses the rename while another process has the target open.
-            if (i >= 20 || /** @type {NodeJS.ErrnoException} */ (e).code !== 'EPERM') {
-                fs.rmSync(tmp, { force: true })
-                throw e
-            }
-            Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 50)
-        }
-    }
-}
+const writeGrants = (grants) => writeFileAtomic(grantsFile(), JSON.stringify(grants, null, 2) + '\n', 0o600)
 
 function ensureDir() {
     const dir = path.dirname(grantsFile())
@@ -87,9 +57,6 @@ function ensureDir() {
         } catch {}
     }
 }
-
-/** @param {number} ms */
-const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
 
 /**
  * Serialises every read-modify-write of grants.json across processes: a rotated refresh token
@@ -134,7 +101,7 @@ const metadataCache = new Map()
  */
 async function getJson(url) {
     const res = await call(url, { headers: { Accept: 'application/json' } })
-    if (!res.ok) throw new Refusal(`${url} answered ${await serverReason(res)}: the server does not offer OAuth sign-in (Workman server 0.9.0 or later does), so pass workman.env_file instead`)
+    if (!res.ok) throw new Refusal(`${url} answered ${await serverReason(res)}: the server does not offer OAuth sign-in (Workman server 0.9.0 or later does)`)
     try {
         return await res.json()
     } catch {
@@ -341,7 +308,7 @@ async function startFlow(url) {
         }
         if (u.searchParams.get('state') !== state) {
             send(400, 'Sign-in refused', 'The sign-in answer did not match the request this computer made, so it was refused. Run agent_signin again.')
-            failed(new Refusal(`the sign-in callback's state did not match the request (a forged or stale answer); nothing was stored. Run ${signinCall(url)} again.`))
+            failed(new Refusal(`the sign-in callback's state did not match the request (a forged or stale answer); nothing was stored. Run agent_signin again.`))
             return
         }
         const error = u.searchParams.get('error')
@@ -376,7 +343,7 @@ async function startFlow(url) {
         resource: meta.resource,
     })}`
 
-    const timer = setTimeout(() => failed(new Refusal(`no sign-in arrived within ${SIGNIN_TIMEOUT_MS / 60000} minutes; nothing was stored. Run ${signinCall(url)} again.`)), SIGNIN_TIMEOUT_MS)
+    const timer = setTimeout(() => failed(new Refusal(`no sign-in arrived within ${SIGNIN_TIMEOUT_MS / 60000} minutes; nothing was stored. Run agent_signin again.`)), SIGNIN_TIMEOUT_MS)
     timer.unref()
 
     const done = (async () => {
@@ -429,7 +396,7 @@ export async function signIn(url) {
                 text: [
                     `could not open a browser (${notOpened}). Open this URL to sign in to ${origin}:`,
                     flow.authorizeUrl,
-                    `It waits ${SIGNIN_TIMEOUT_MS / 60000} minutes; call ${signinCall(url)} again to wait for it to finish.`,
+                    `It waits ${SIGNIN_TIMEOUT_MS / 60000} minutes; call agent_signin again to wait for it to finish.`,
                 ].join('\n'),
                 structured: { signed_in: false, origin, authorize_url: flow.authorizeUrl, waiting: true },
             }
@@ -445,7 +412,7 @@ export async function signIn(url) {
     return {
         text: [
             `signed in to ${r.origin}${r.who ? ` as ${r.who}` : ''}`,
-            `the grant is stored in ${grantsFile()} (never shown); agent_launch and agent_stop use it for ${r.origin} when no workman.env_file is given`,
+            `the grant is stored in ${grantsFile()} (never shown); agent_launch and agent_stop use it for ${r.origin}`,
             `sign-in URL was: ${flow.authorizeUrl}`,
         ].join('\n'),
         structured: { signed_in: true, origin: r.origin, as: r.who ?? null, grants_file: grantsFile(), authorize_url: flow.authorizeUrl },
@@ -481,8 +448,8 @@ export async function signOut(url) {
         return {
             text: [
                 `signed out of ${origin}: the grant is revoked at the server and deleted from ${grantsFile()}`,
-                'every agent session minted with it is refused on its next request; agents launched with workman.env_file are not affected',
-                `sign in again with ${signinCall(url)}`,
+                'every agent session minted with it is refused on its next request',
+                `sign in again with agent_signin`,
             ].join('\n'),
             structured: { signed_out: true, origin, revoked: true },
         }
@@ -504,9 +471,7 @@ export function forgetAccessToken(url) {
 }
 
 /** @param {string} url */
-function notSignedIn(url) {
-    return new Refusal(`not signed in to ${originOf(url)}: run ${signinCall(url)} once to sign in in the browser. A headless launch instead needs workman.env_file: the PATH of Workman's .env (never its contents).`)
-}
+const notSignedIn = (url) => new Refusal(`not signed in to ${originOf(url)}: run agent_signin once to sign in in the browser.`)
 
 /**
  * Throws the agent_signin refusal unless a grant is stored for url. Reads the disk only.
@@ -543,7 +508,7 @@ export async function accessToken(url) {
             if (j.error === 'invalid_grant') {
                 grants[origin] = { client_id: g.client_id }
                 writeGrants(grants)
-                throw new Refusal(`the stored sign-in for ${origin} was refused (invalid_grant: expired or revoked) and is forgotten: run ${signinCall(url)} to sign in again, or pass workman.env_file.`)
+                throw new Refusal(`the stored sign-in for ${origin} was refused (invalid_grant: expired or revoked) and is forgotten: run agent_signin to sign in again.`)
             }
             throw new Refusal(`refreshing the Workman sign-in failed: ${oauthReason(j, res.status)}. Nothing was launched.`)
         }

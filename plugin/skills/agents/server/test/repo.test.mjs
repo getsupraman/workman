@@ -58,7 +58,7 @@ test('agent_launch from a worktree mints with the remote and the main root', asy
     try {
         const r = await s.call('agent_launch', {
             name: 'unit-repo', brief: 'task.md', repo_root: worktree, controller: CONTROLLER,
-            workman: { env_file: repo.envFile, url: ws.url },
+            workman: {},
         })
         assert.equal(r.isError, false, r.content[0].text)
         const mint = ws.requests.find((q) => q.method === 'POST')

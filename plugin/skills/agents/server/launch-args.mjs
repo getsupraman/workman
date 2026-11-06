@@ -14,7 +14,6 @@ export const TOOLSETS = ['none', 'readonly', 'fix']
 export const WORKMAN_TOOLS = 'mcp__workman'
 export const EFFORTS = ['low', 'medium', 'high', 'xhigh', 'max']
 export const ROLES = ['worker', 'orchestrator', 'controller', 'none']
-export const DEFAULT_WORKMAN_URL = 'http://127.0.0.1:5290'
 export const GRANTS = ['import']
 
 const LAUNCH_KEYS = [
@@ -22,7 +21,7 @@ const LAUNCH_KEYS = [
     'disallowed_tools', 'add_dirs', 'model', 'effort', 'settings', 'append_system_prompt',
     'workman', 'dry_run',
 ]
-const WORKMAN_KEYS = ['role', 'env_file', 'url', 'ttl_hours', 'grants']
+const WORKMAN_KEYS = ['role', 'ttl_hours', 'grants']
 
 const NAME_RE = /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/
 const CONTROLLER_RE = /^\S.*\s\[[0-9a-fA-F]{6}\]$/
@@ -32,8 +31,6 @@ const QUOTE_RE = /['"`]/
 /**
  * @typedef {object} WorkmanParams
  * @property {'worker'|'orchestrator'|'controller'|'none'} role
- * @property {string|undefined} envFile  undefined: mint with the stored agent_signin grant
- * @property {string} url
  * @property {number|undefined} ttlHours
  * @property {string[]} grants
  *
@@ -55,8 +52,8 @@ const QUOTE_RE = /['"`]/
  * @property {boolean} dryRun
  */
 
-/** @param {unknown} v */
-function isObject(v) {
+/** @param {unknown} v @returns {v is Record<string, any>} */
+export function isObject(v) {
     return typeof v === 'object' && v !== null && !Array.isArray(v)
 }
 
@@ -65,7 +62,7 @@ function isObject(v) {
  * @param {string[]} allowed
  * @param {string} where
  */
-function rejectUnknown(obj, allowed, where) {
+export function rejectUnknown(obj, allowed, where) {
     const extra = Object.keys(obj).filter((k) => !allowed.includes(k))
     if (extra.length) throw new Refusal(`${where}: unknown parameter(s) ${extra.join(', ')}; allowed: ${allowed.join(', ')}`)
 }
@@ -168,7 +165,7 @@ export function validateLaunch(input) {
 
     const permissionMode = /** @type {string} */ (oneOf(a.permission_mode, PERMISSION_MODES, 'permission_mode', 'auto'))
     const toolset = /** @type {'none'|'readonly'|'fix'} */ (oneOf(a.toolset, TOOLSETS, 'toolset', 'fix'))
-    const workman = validateWorkman(a.workman, repoRoot)
+    const workman = validateWorkman(a.workman)
     // A minted session must reach its own server without a prompt: under acceptEdits an MCP call
     // parks the agent. The server, not this list, limits which work_* tools the role sees.
     const workmanTools = workman.role === 'none' ? [] : [WORKMAN_TOOLS]
@@ -216,29 +213,15 @@ export function validateLaunch(input) {
 
 /**
  * @param {unknown} v
- * @param {string} param
- * @returns {string} the url without a trailing slash; DEFAULT_WORKMAN_URL when v is absent
- */
-export function workmanUrl(v, param) {
-    if (v === undefined || v === null) return DEFAULT_WORKMAN_URL
-    if (typeof v !== 'string' || !/^https?:\/\/[^\s/]+/.test(v)) throw new Refusal(`${param} must be an http(s) URL, e.g. http://127.0.0.1:5290`)
-    return v.replace(/\/+$/, '')
-}
-
-/**
- * @param {unknown} v
- * @param {string} repoRoot
  * @returns {WorkmanParams}
  */
-function validateWorkman(v, repoRoot) {
+function validateWorkman(v) {
     if (v === undefined || v === null) v = {}
-    if (!isObject(v)) throw new Refusal('workman must be an object: {role, env_file?, url?, ttl_hours?, grants?}')
+    if (!isObject(v)) throw new Refusal('workman must be an object: {role?, ttl_hours?, grants?}')
     const w = /** @type {Record<string, unknown>} */ (v)
     rejectUnknown(w, WORKMAN_KEYS, 'workman')
 
     const role = /** @type {WorkmanParams['role']} */ (oneOf(w.role, ROLES, 'workman.role', 'worker'))
-
-    const url = workmanUrl(w.url, 'workman.url')
 
     let ttlHours
     if (w.ttl_hours !== undefined && w.ttl_hours !== null) {
@@ -260,12 +243,7 @@ function validateWorkman(v, repoRoot) {
         throw new Refusal('workman.grants rides on the minted token, and workman.role "none" mints none: pass role "orchestrator" with grants ["import"]')
     }
 
-    let envFile
-    if (w.env_file !== undefined && w.env_file !== null) {
-        if (typeof w.env_file !== 'string' || w.env_file.trim() === '') throw new Refusal('workman.env_file must be a path')
-        envFile = path.resolve(repoRoot, w.env_file)
-    }
-    return { role, envFile, url, ttlHours, grants }
+    return { role, ttlHours, grants }
 }
 
 /** @param {string} briefPath */

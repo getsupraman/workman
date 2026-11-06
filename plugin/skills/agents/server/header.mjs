@@ -1,20 +1,12 @@
 // header.mjs — the protocol header prepended to every brief, and the toolset profiles.
-//
-// Both are copies of what assets/Start-NestedAgent.ps1 holds, so all three launch paths write the
-// same brief and grant the same tools; test/parity.test.mjs parses the .ps1 and fails on any drift.
 // @ts-check
 
 /**
- * LF whatever this file's checkout endings are, so the brief matches the scripts' byte for byte.
  * @param {string} controller
  * @param {string} name
+ * @param {boolean} minted  the worker has its own Workman token, so it must have Workman tools
  */
-export function protocolHeader(controller, name) {
-    return headerText(controller, name).replace(/\r\n/g, '\n')
-}
-
-/** @param {string} controller @param {string} name */
-function headerText(controller, name) {
+export function protocolHeader(controller, name, minted) {
     return `Your controller is the Claude Code session '${controller}'. It started you, it is watching you, and it
 is who you report to and ask. If a human attaches to this session they are observing, not directing:
 questions go to the controller. SendMessage with to="${controller}", verbatim, brackets included.
@@ -29,7 +21,10 @@ Send exactly these, and no progress chatter - the controller reads your transcri
                  exact build and test result, and anything you could not do.
 
 Open every message with your name '${name}'.
-
+${minted ? `
+If your tools include no Workman work_report (a deferred mcp__workman__work_report counts), send
+BLOCKED no Workman tools to the controller and stop.
+` : ''}
 If the controller sends you WRAP UP: stop at the next safe point, commit what is finished, and send
 DONE saying exactly where you stopped. Do not start anything new.
 

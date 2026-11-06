@@ -1,4 +1,7 @@
 // helpers.mjs — a fake Workman, a throwaway git repo, and a stdio client for agents.mjs.
+//
+// Every server runs with a temp home directory (HOME and USERPROFILE: os.homedir() reads one or the
+// other), whose ~/.workman/server.json points at the fake Workman created last.
 // @ts-check
 
 import fs from 'node:fs'
@@ -16,6 +19,7 @@ export const FAKE_BROWSER = path.join(here, 'fake-browser.mjs')
 export const MINTED_TOKEN = 'wss_FAKEminted0123456789abcdefMINTED'
 export const CONTROLLER_TOKEN = 'ctl_FAKEcontroller0123456789SECRET'
 export const CONTROLLER = 'skills-5d [e50df6]'
+const SEEDED_REFRESH = 'wsrFAKEseededrefresh0123456789'
 
 /** @type {string[]} */
 const created = []
@@ -31,7 +35,7 @@ export function tmp(prefix) {
 }
 
 /**
- * A git working tree with .claude/briefs/ ignored, a brief, and an env file outside it.
+ * A git working tree with .claude/briefs/ ignored and a brief.
  * @param {{ignoreBriefs?: boolean}} [opts]
  */
 export function makeRepo(opts = {}) {
@@ -39,17 +43,24 @@ export function makeRepo(opts = {}) {
     execFileSync('git', ['init', '-q'], { cwd: root })
     if (opts.ignoreBriefs !== false) fs.writeFileSync(path.join(root, '.gitignore'), '.claude/briefs/\n')
     fs.writeFileSync(path.join(root, 'task.md'), 'Do the unit.\n')
-    const envDir = tmp('env')
-    const envFile = path.join(envDir, '.env')
-    fs.writeFileSync(envFile, [
-        '# Workman local secrets',
-        '',
-        'WORKMAN_ORCHESTRATOR_TOKEN=orchestrator-not-this-one',
-        `WORKMAN_CONTROLLER_TOKEN="${CONTROLLER_TOKEN}"`,
-        '',
-    ].join('\n'))
-    return { root, envFile, briefs: path.join(root, '.claude', 'briefs') }
+    return { root, briefs: path.join(root, '.claude', 'briefs') }
 }
+
+/** @type {{url: string, grant: boolean}|undefined} */
+let current
+
+/**
+ * Point the servers started from now on at this Workman. With grant, each gets a stored agent_signin
+ * grant for it, which fakeWorkman redeems for CONTROLLER_TOKEN.
+ * @param {string} url
+ * @param {boolean} grant
+ */
+export function useWorkman(url, grant) {
+    current = { url, grant }
+}
+
+/** @param {string} home */
+export const homeEnv = (home) => ({ HOME: home, USERPROFILE: home })
 
 /**
  * @typedef {{method: string, url: string, auth: string|undefined, body: any}} Recorded
@@ -64,11 +75,17 @@ export async function fakeWorkman(opts = {}) {
         req.on('end', () => {
             let body = null
             try { body = raw ? JSON.parse(raw) : null } catch { body = raw }
-            requests.push({ method: req.method ?? '', url: req.url ?? '', auth: req.headers.authorization, body })
             const json = (/** @type {number} */ status, /** @type {unknown} */ v) => {
                 res.writeHead(status, { 'Content-Type': 'application/json' })
                 res.end(v === undefined ? '' : JSON.stringify(v))
             }
+            // The sign-in behind the seeded grant; not recorded in requests.
+            if (req.url === '/.well-known/oauth-protected-resource/api') return json(200, { resource: `${url}/api`, authorization_servers: [url] })
+            if (req.url === '/.well-known/oauth-authorization-server') return json(200, { authorization_endpoint: `${url}/connect/authorize`, token_endpoint: `${url}/connect/token` })
+            if (req.method === 'POST' && req.url === '/connect/token') {
+                return json(String(body).includes(`refresh_token=${SEEDED_REFRESH}`) ? 200 : 400, { access_token: CONTROLLER_TOKEN, token_type: 'Bearer', expires_in: 3600 })
+            }
+            requests.push({ method: req.method ?? '', url: req.url ?? '', auth: req.headers.authorization, body })
             if (req.method === 'POST' && req.url === '/api/agent-sessions') {
                 if (opts.mintStatus && opts.mintStatus !== 201) return json(opts.mintStatus, { error: 'fake refusal' })
                 return json(201, { sessionId: 'ws-42', name: body?.name, role: body?.role, token: MINTED_TOKEN, expiresAt: '2026-10-27T00:00:00Z' })
@@ -83,8 +100,10 @@ export async function fakeWorkman(opts = {}) {
     })
     await new Promise((r) => server.listen(0, '127.0.0.1', () => r(undefined)))
     const addr = /** @type {import('node:net').AddressInfo} */ (server.address())
+    const url = `http://127.0.0.1:${addr.port}`
+    useWorkman(url, true)
     return {
-        url: `http://127.0.0.1:${addr.port}`,
+        url,
         requests,
         close: () => new Promise((r) => server.close(() => r(undefined))),
     }
@@ -92,24 +111,36 @@ export async function fakeWorkman(opts = {}) {
 
 /**
  * Spawn agents.mjs with the fake claude and talk JSON-RPC to it.
- * @param {Record<string, string>} [env]
+ * @param {Record<string, string>} [env]  HOME here (see homeEnv) shares a home between servers
+ * @param {{url?: string|null, grant?: boolean}} [opts]  the server.json url (null: write none) and
+ *   whether to seed a grant for it; default the last fake Workman
  */
-export function startServer(env = {}) {
+export function startServer(env = {}, opts = {}) {
     const data = tmp('data')
     const claudeLog = path.join(data, 'claude-argv.jsonl')
-    const child = spawn(process.execPath, [SERVER], {
-        env: {
-            ...process.env,
-            CLAUDE_BIN: JSON.stringify([process.execPath, FAKE_CLAUDE]),
-            FAKE_CLAUDE_LOG: claudeLog,
-            CLAUDE_PLUGIN_DATA: data,
-            AGENTS_SESSION_WAIT_MS: '1500',
-            WORKMAN_GRANTS_FILE: path.join(data, 'home', '.workman', 'grants.json'),
-            AGENTS_BROWSER: JSON.stringify([process.execPath, FAKE_BROWSER]),
-            ...env,
-        },
-        stdio: ['pipe', 'pipe', 'pipe'],
-    })
+    const home = env.HOME ?? tmp('home')
+    const url = 'url' in opts ? opts.url : current?.url
+    const workman = path.join(home, '.workman')
+    fs.mkdirSync(workman, { recursive: true })
+    if (url) {
+        fs.writeFileSync(path.join(workman, 'server.json'), JSON.stringify({ url, mcpName: 'workman' }))
+        if (opts.grant ?? current?.grant) {
+            fs.writeFileSync(path.join(workman, 'grants.json'), JSON.stringify({ [url]: { client_id: 'client-seeded', refresh_token: SEEDED_REFRESH } }))
+        }
+    }
+    /** @type {NodeJS.ProcessEnv} */
+    const childEnv = {
+        ...process.env,
+        CLAUDE_BIN: JSON.stringify([process.execPath, FAKE_CLAUDE]),
+        FAKE_CLAUDE_LOG: claudeLog,
+        CLAUDE_PLUGIN_DATA: data,
+        AGENTS_SESSION_WAIT_MS: '1500',
+        AGENTS_BROWSER: JSON.stringify([process.execPath, FAKE_BROWSER]),
+        ...homeEnv(home),
+        ...env,
+    }
+    if (!('CLAUDE_CONFIG_DIR' in env)) delete childEnv.CLAUDE_CONFIG_DIR
+    const child = spawn(process.execPath, [SERVER], { env: childEnv, stdio: ['pipe', 'pipe', 'pipe'] })
     let stdout = ''
     let stderr = ''
     let buf = ''
@@ -157,7 +188,7 @@ export function startServer(env = {}) {
         child.stdin.end()
         await new Promise((r) => child.on('exit', r))
     }
-    return { request, notify, call, claudeCalls, close, data, output: () => ({ stdout, stderr }) }
+    return { request, notify, call, claudeCalls, close, data, home, output: () => ({ stdout, stderr }) }
 }
 
 /**

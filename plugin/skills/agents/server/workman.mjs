@@ -1,52 +1,12 @@
 // workman.mjs — mint, bind and revoke per-session Workman tokens (docs/14 §2).
 //
-// The controller token (read from the env FILE) or the OAuth access token (oauth.mjs) goes nowhere
-// but an Authorization header. A minted token goes nowhere but the mcp-<name>.json it is written to.
-// Error messages are built from status codes and server error text, never from a header or body
-// this code sent.
+// The OAuth access token (oauth.mjs) goes nowhere but an Authorization header. A minted token goes
+// nowhere but the mcp-<name>.json it is written to. Error messages are built from status codes and
+// server error text, never from a header or body this code sent.
 // @ts-check
 
-import fs from 'node:fs'
 import { Refusal } from './launch-args.mjs'
-
-const TOKEN_KEYS = ['WORKMAN_CONTROLLER_TOKEN', 'WORKMAN_ORCHESTRATOR_TOKEN']
-
-/**
- * KEY=VALUE lines; blank lines and # comments ignored; one layer of matching quotes stripped.
- * @param {string} text
- * @returns {Record<string, string>}
- */
-export function parseEnvFile(text) {
-    /** @type {Record<string, string>} */
-    const out = {}
-    for (const raw of text.replace(/^﻿/, '').split(/\r?\n/)) {
-        const line = raw.trim()
-        if (!line || line.startsWith('#')) continue
-        const eq = line.indexOf('=')
-        if (eq <= 0) continue
-        const k = line.slice(0, eq).replace(/^export\s+/, '').trim()
-        let v = line.slice(eq + 1).trim()
-        if (v.length >= 2 && (v[0] === '"' || v[0] === "'") && v[v.length - 1] === v[0]) v = v.slice(1, -1)
-        out[k] = v
-    }
-    return out
-}
-
-/**
- * @param {string} envFile
- * @returns {string} the controller token (orchestrator as fallback)
- */
-export function readControllerToken(envFile) {
-    let text
-    try {
-        text = fs.readFileSync(envFile, 'utf8')
-    } catch (e) {
-        throw new Refusal(`cannot read workman.env_file ${envFile}: ${/** @type {NodeJS.ErrnoException} */ (e).code ?? 'unreadable'}`)
-    }
-    const env = parseEnvFile(text)
-    for (const k of TOKEN_KEYS) if (env[k]) return env[k]
-    throw new Refusal(`workman.env_file ${envFile} has neither ${TOKEN_KEYS.join(' nor ')}; minting needs one of them`)
-}
+import { MCP_NAME } from './home.mjs'
 
 /**
  * @param {Response} res
@@ -79,12 +39,27 @@ export async function call(url, init) {
 }
 
 /**
+ * /api/agent-sessions[/{id}] with the access token.
+ * @param {{url: string, token: string}} a
+ * @param {string} method
+ * @param {string|undefined} sessionId
+ * @param {unknown} [body]
+ */
+function sessions(a, method, sessionId, body) {
+    /** @type {Record<string, string>} */
+    const headers = { Authorization: `Bearer ${a.token}` }
+    if (body !== undefined) headers['Content-Type'] = 'application/json'
+    const tail = sessionId === undefined ? '' : `/${encodeURIComponent(sessionId)}`
+    return call(`${a.url}/api/agent-sessions${tail}`, { method, headers, body: body === undefined ? undefined : JSON.stringify(body) })
+}
+
+/**
  * @typedef {{sessionId: string, role: string, token: string, expiresAt: string|undefined}} Minted
  */
 
 /**
  * POST /api/agent-sessions. Throws Refusal with the reason on any failure.
- * @param {{url: string, controllerToken: string, signedIn?: boolean, name: string, role: string, launchedBy: string, cwd: string, ttlHours?: number, grants?: string[], repo?: {remote?: string, root?: string}}} a
+ * @param {{url: string, token: string, name: string, role: string, launchedBy: string, cwd: string, ttlHours?: number, grants?: string[], repo?: {remote?: string, root?: string}}} a
  * @returns {Promise<Minted>}
  */
 export async function mintSession(a) {
@@ -93,72 +68,59 @@ export async function mintSession(a) {
     if (a.ttlHours !== undefined) body.ttlHours = a.ttlHours
     if (a.grants && a.grants.length > 0) body.grants = a.grants
     if (a.repo && (a.repo.remote || a.repo.root)) body.repo = a.repo
+    const failed = (/** @type {string} */ why) => new Refusal(`minting a Workman token failed: ${why} Nothing was launched.`)
     let res
     try {
-        res = await call(`${a.url}/api/agent-sessions`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${a.controllerToken}` },
-            body: JSON.stringify(body),
-        })
+        res = await sessions(a, 'POST', undefined, body)
     } catch (e) {
-        throw new Refusal(`minting a Workman token failed: ${/** @type {Error} */ (e).message}. Nothing was launched.`)
+        throw failed(`${/** @type {Error} */ (e).message}.`)
     }
     if (!res.ok) {
         const hint = res.status === 409
             ? ` A live token already exists for "${a.name}": agent_stop that agent first, or pick another name.`
             : res.status === 401 || res.status === 403
-                ? a.signedIn
-                    ? ` The sign-in was refused, or it may not mint this role (a role is never raised); if it was signed out, run agent_signin {"url": "${a.url}"}.`
-                    : ' The env file token was refused, or it may not mint this role (a role is never raised).'
+                ? ' The sign-in was refused, or it may not mint this role (a role is never raised); if it was signed out, run agent_signin.'
                 : ''
-        throw new Refusal(`minting a Workman token failed: ${await serverReason(res)}.${hint} Nothing was launched.`)
+        throw failed(`${await serverReason(res)}.${hint}`)
     }
     let j
     try {
         j = await res.json()
     } catch {
-        throw new Refusal('minting a Workman token failed: the response was not JSON. Nothing was launched.')
+        throw failed('the response was not JSON.')
     }
     if (!j || typeof j.token !== 'string' || !j.token || j.sessionId === undefined || j.sessionId === null) {
-        throw new Refusal('minting a Workman token failed: the response had no token or sessionId. Nothing was launched.')
+        throw failed('the response had no token or sessionId.')
     }
     return { sessionId: String(j.sessionId), role: String(j.role ?? a.role), token: j.token, expiresAt: j.expiresAt }
 }
 
 /**
- * PATCH the Claude session uuid onto the Workman session. Best effort: returns an error string.
- * @param {{url: string, controllerToken: string, sessionId: string, claudeSessionId: string}} a
- * @returns {Promise<string|undefined>}
+ * @param {Promise<Response>} request
+ * @param {number[]} [alsoOk]
+ * @returns {Promise<string|undefined>} an error, or undefined on success
  */
-export async function bindClaudeSession(a) {
+async function bestEffort(request, alsoOk = []) {
     try {
-        const res = await call(`${a.url}/api/agent-sessions/${encodeURIComponent(a.sessionId)}`, {
-            method: 'PATCH',
-            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${a.controllerToken}` },
-            body: JSON.stringify({ claudeSessionId: a.claudeSessionId }),
-        })
-        return res.ok ? undefined : await serverReason(res)
+        const res = await request
+        return res.ok || alsoOk.includes(res.status) ? undefined : await serverReason(res)
     } catch (e) {
         return /** @type {Error} */ (e).message
     }
 }
 
 /**
- * DELETE /api/agent-sessions/{id}. A 404 counts as revoked: there is nothing left to revoke.
- * @param {{url: string, controllerToken: string, sessionId: string}} a
- * @returns {Promise<string|undefined>} an error, or undefined when revoked
+ * PATCH the Claude session uuid onto the Workman session.
+ * @param {{url: string, token: string, sessionId: string}} a
+ * @param {string} claudeSessionId
  */
-export async function revokeSession(a) {
-    try {
-        const res = await call(`${a.url}/api/agent-sessions/${encodeURIComponent(a.sessionId)}`, {
-            method: 'DELETE',
-            headers: { Authorization: `Bearer ${a.controllerToken}` },
-        })
-        return res.ok || res.status === 404 ? undefined : await serverReason(res)
-    } catch (e) {
-        return /** @type {Error} */ (e).message
-    }
-}
+export const bindClaudeSession = (a, claudeSessionId) => bestEffort(sessions(a, 'PATCH', a.sessionId, { claudeSessionId }))
+
+/**
+ * DELETE /api/agent-sessions/{id}. A 404 counts as revoked: there is nothing left to revoke.
+ * @param {{url: string, token: string, sessionId: string}} a
+ */
+export const revokeSession = (a) => bestEffort(sessions(a, 'DELETE', a.sessionId), [404])
 
 /**
  * The --mcp-config file. A server named "workman" here replaces the user-scope one, and a --bg
@@ -167,5 +129,5 @@ export async function revokeSession(a) {
  * @param {string} token
  */
 export function mcpConfigJson(url, token) {
-    return JSON.stringify({ mcpServers: { workman: { type: 'http', url: `${url}/mcp`, headers: { Authorization: `Bearer ${token}` } } } }, null, 2) + '\n'
+    return JSON.stringify({ mcpServers: { [MCP_NAME]: { type: 'http', url: `${url}/mcp`, headers: { Authorization: `Bearer ${token}` } } } }, null, 2) + '\n'
 }

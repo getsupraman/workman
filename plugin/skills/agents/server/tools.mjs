@@ -1,8 +1,8 @@
 // tools.mjs — agent_launch, agent_stop, agent_list, agent_signin, agent_signout: schemas and handlers.
 //
 // Nothing returned from here, logged, or written outside mcp-<name>.json may hold a token. The
-// controller or access token lives in a local variable for the length of one call; the minted one
-// is written to its file and dropped.
+// access token lives in a local variable for the length of one call; the minted one is written to
+// its file and dropped.
 // @ts-check
 
 import fs from 'node:fs'
@@ -10,11 +10,12 @@ import path from 'node:path'
 import { spawnSync } from 'node:child_process'
 import { protocolHeader } from './header.mjs'
 import {
-    Refusal, validateLaunch, buildArgv, workmanUrl, PERMISSION_MODES, TOOLSETS, EFFORTS, ROLES, DEFAULT_WORKMAN_URL, GRANTS,
+    Refusal, validateLaunch, buildArgv, isObject, rejectUnknown, PERMISSION_MODES, TOOLSETS, EFFORTS, ROLES, GRANTS,
 } from './launch-args.mjs'
 import { runClaude, parseBackgroundId, listLiveAgents, stripAnsi, resolveClaude } from './claude.mjs'
-import { readControllerToken, mintSession, bindClaudeSession, revokeSession, mcpConfigJson } from './workman.mjs'
+import { mintSession, bindClaudeSession, revokeSession, mcpConfigJson } from './workman.mjs'
 import { signIn, signOut, accessToken, requireGrant, forgetAccessToken } from './oauth.mjs'
+import { serverUrl, clearAuthCacheEntry, writeFileAtomic, sleep } from './home.mjs'
 import { saveRecord, loadRecords, findRecord, deleteRecord } from './state.mjs'
 import { repoKeys } from './repo.mjs'
 
@@ -24,11 +25,12 @@ export function log(line) {
 }
 
 const pathArray = { type: 'array', items: { type: 'string' } }
+const noParams = { type: 'object', properties: {}, additionalProperties: false }
 
 export const TOOLS = [
     {
         name: 'agent_launch',
-        description: 'Launch a nested Claude Code session in the background (claude --bg) with the protocol header prepended to its brief and, unless workman.role is "none", its own minted Workman token. The token is minted with the agent_signin grant for workman.url, or with workman.env_file when given (headless; it wins over the grant). Returns name, id, sessionId and brief; never a token.',
+        description: 'Launch a nested Claude Code session in the background (claude --bg) with the protocol header prepended to its brief and, unless workman.role is "none", its own Workman token, minted with the agent_signin grant for the server in ~/.workman/server.json (written by /workman:setup). Returns name, id, sessionId and brief; never a token.',
         inputSchema: {
             type: 'object',
             properties: {
@@ -47,11 +49,9 @@ export const TOOLS = [
                 append_system_prompt: { type: 'string', description: '--append-system-prompt' },
                 workman: {
                     type: 'object',
-                    description: 'Per-session Workman credentials. Default {role: "worker"}',
+                    description: 'The per-session Workman token. Default {role: "worker"}',
                     properties: {
                         role: { type: 'string', enum: ROLES, default: 'worker', description: '"none" mints nothing and passes no --mcp-config' },
-                        env_file: { type: 'string', description: "Optional, for headless use: PATH of Workman's .env, ~/.workman/.env or <clone>/server/.env (never its contents). Without it the agent_signin grant mints" },
-                        url: { type: 'string', default: DEFAULT_WORKMAN_URL },
                         ttl_hours: { type: 'integer', minimum: 1, maximum: 720, description: 'Idle window in hours (server default 72): the token lapses after this long unused; every use renews it, no hard cap' },
                         grants: { type: 'array', items: { type: 'string', enum: GRANTS }, description: 'Capabilities on the minted token. "import" shows work_import; the server allows it only on role orchestrator or controller' },
                     },
@@ -80,25 +80,17 @@ export const TOOLS = [
     {
         name: 'agent_list',
         description: 'claude agents --json joined with what agent_launch recorded: name, id, status, waitingFor, repo_root, Workman session and role.',
-        inputSchema: { type: 'object', properties: {}, additionalProperties: false },
+        inputSchema: noParams,
     },
     {
         name: 'agent_signin',
-        description: 'Sign in to a Workman server once, in the browser (OAuth with PKCE), so agent_launch and agent_stop mint and revoke without workman.env_file. Opens the system browser and waits up to 5 minutes for the sign-in; the result also carries the URL to open by hand. The grant is stored in ~/.workman/grants.json; no token is ever returned.',
-        inputSchema: {
-            type: 'object',
-            properties: { url: { type: 'string', default: DEFAULT_WORKMAN_URL, description: 'The Workman server, as in workman.url' } },
-            additionalProperties: false,
-        },
+        description: 'Sign in once, in the browser (OAuth with PKCE), to the Workman server in ~/.workman/server.json, so agent_launch and agent_stop can mint and revoke. Opens the system browser and waits up to 5 minutes for the sign-in; the result also carries the URL to open by hand. The grant is stored in ~/.workman/grants.json; no token is ever returned.',
+        inputSchema: noParams,
     },
     {
         name: 'agent_signout',
-        description: 'Revoke the agent_signin grant for a Workman server and delete it. Every agent session minted with it is refused on its next request; env_file launches are not affected.',
-        inputSchema: {
-            type: 'object',
-            properties: { url: { type: 'string', default: DEFAULT_WORKMAN_URL, description: 'The Workman server, as in workman.url' } },
-            additionalProperties: false,
-        },
+        description: 'Revoke the agent_signin grant for the Workman server in ~/.workman/server.json and delete it. Every agent session minted with it is refused on its next request.',
+        inputSchema: noParams,
     },
 ]
 
@@ -116,8 +108,8 @@ export async function callTool(name, args) {
         if (name === 'agent_launch') return await agentLaunch(args ?? {})
         if (name === 'agent_stop') return await agentStop(args ?? {})
         if (name === 'agent_list') return await agentList()
-        if (name === 'agent_signin') return await signIn(signinUrl(name, args))
-        if (name === 'agent_signout') return await signOut(signinUrl(name, args))
+        if (name === 'agent_signin') return await signIn(noArgs(name, args))
+        if (name === 'agent_signout') return await signOut(noArgs(name, args))
     } catch (e) {
         if (e instanceof Refusal) return { text: `refused: ${e.message}`, structured: { refused: e.message }, isError: true }
         throw e
@@ -128,14 +120,14 @@ export async function callTool(name, args) {
 /**
  * @param {string} tool
  * @param {unknown} args
+ * @returns {string} the server url
  */
-function signinUrl(tool, args) {
-    if (args === undefined || args === null) args = {}
-    if (typeof args !== 'object' || Array.isArray(args)) throw new Refusal(`${tool} takes {url?}`)
-    const a = /** @type {Record<string, unknown>} */ (args)
-    const extra = Object.keys(a).filter((k) => k !== 'url')
-    if (extra.length) throw new Refusal(`${tool}: unknown parameter(s) ${extra.join(', ')}; allowed: url`)
-    return workmanUrl(a.url, 'url')
+function noArgs(tool, args) {
+    if (args !== undefined && args !== null) {
+        if (!isObject(args)) throw new Refusal(`${tool} takes no parameters`)
+        rejectUnknown(args, [], tool)
+    }
+    return serverUrl()
 }
 
 /**
@@ -152,17 +144,6 @@ function ensureIgnored(repoRoot, file) {
     }
     throw new Refusal(`could not confirm with git check-ignore that ${rel} is gitignored (${r.error?.message ?? `exit ${r.status}`}); it would hold a Workman token`)
 }
-
-/** @param {string} file @param {string} content */
-function writeSecretFile(file, content) {
-    fs.writeFileSync(file, content, { mode: 0o600 })
-    try {
-        fs.chmodSync(file, 0o600)
-    } catch {}
-}
-
-/** @param {number} ms */
-const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
 
 /**
  * @param {string} id
@@ -192,25 +173,25 @@ async function agentLaunch(input) {
     const mints = p.workman.role !== 'none'
     const mcpConfigPath = mints ? path.join(briefDir, `mcp-${p.name}.json`) : undefined
 
-    const signedIn = mints && p.workman.envFile === undefined
-    let controllerToken
+    let url = ''
+    let token = ''
     if (mints) {
         ensureIgnored(p.repoRoot, /** @type {string} */ (mcpConfigPath))
-        if (!signedIn) controllerToken = readControllerToken(/** @type {string} */ (p.workman.envFile))
-        else if (p.dryRun) requireGrant(p.workman.url)
-        else controllerToken = await accessToken(p.workman.url)
+        url = serverUrl()
+        if (p.dryRun) requireGrant(url)
+        else token = await accessToken(url)
     }
     if (!p.dryRun) resolveClaude()
 
     const argv = buildArgv(p, { briefPath, mcpConfigPath })
-    const briefText = protocolHeader(p.controller, p.name) + fs.readFileSync(p.brief, 'utf8').replace(/^﻿/, '')
+    const briefText = protocolHeader(p.controller, p.name, mints) + fs.readFileSync(p.brief, 'utf8').replace(/^﻿/, '')
     fs.mkdirSync(briefDir, { recursive: true })
 
     if (p.dryRun) {
         fs.writeFileSync(briefPath, briefText)
         const lines = ['dry-run: nothing minted, claude NOT started', `brief: ${briefPath}`, `cwd:   ${p.repoRoot}`, 'argv:', '  [0] claude']
         argv.forEach((a, i) => lines.push(`  [${i + 1}] ${a}`))
-        const mcpConfig = mints ? { path: mcpConfigPath, content: JSON.parse(mcpConfigJson(p.workman.url, '<minted>')) } : null
+        const mcpConfig = mints ? { path: mcpConfigPath, content: JSON.parse(mcpConfigJson(url, '<minted>')) } : null
         if (mcpConfig) lines.push(`mcp config (would be written, token shown as <minted>): ${mcpConfigPath}`, JSON.stringify(mcpConfig.content))
         return {
             text: lines.join('\n'),
@@ -222,9 +203,8 @@ async function agentLaunch(input) {
     let minted
     if (mints) {
         minted = await mintSession({
-            url: p.workman.url,
-            controllerToken: /** @type {string} */ (controllerToken),
-            signedIn,
+            url,
+            token,
             name: p.name,
             role: p.workman.role,
             launchedBy: p.controller.replace(/\s\[[0-9a-fA-F]{6}\]$/, ''),
@@ -233,14 +213,21 @@ async function agentLaunch(input) {
             grants: p.workman.grants,
             repo: repoKeys(p.repoRoot),
         }).catch((e) => {
-            if (signedIn) forgetAccessToken(p.workman.url)
+            forgetAccessToken(url)
             throw e
         })
     }
 
+    /** @type {string[]} */
+    const warnings = []
+    if (minted) {
+        const w = clearAuthCacheEntry()
+        if (w) warnings.push(w)
+    }
+
     let id
     try {
-        if (minted) writeSecretFile(/** @type {string} */ (mcpConfigPath), mcpConfigJson(p.workman.url, minted.token))
+        if (minted) writeFileAtomic(/** @type {string} */ (mcpConfigPath), mcpConfigJson(url, minted.token), 0o600)
         fs.writeFileSync(briefPath, briefText)
         const run = await runClaude(argv, { cwd: p.repoRoot })
         id = parseBackgroundId(run.stdout + '\n' + run.stderr)
@@ -251,7 +238,7 @@ async function agentLaunch(input) {
     } catch (e) {
         let cleanup = ''
         if (minted) {
-            const err = await revokeSession({ url: p.workman.url, controllerToken: /** @type {string} */ (controllerToken), sessionId: minted.sessionId })
+            const err = await revokeSession({ url, token, sessionId: minted.sessionId })
             fs.rmSync(/** @type {string} */ (mcpConfigPath), { force: true })
             cleanup = err ? ` The minted token could NOT be revoked (${err}); it lapses once unused past its idle window (current expiry ${minted.expiresAt ?? 'unknown'}, renewed on each use).` : ' The minted token was revoked and its config deleted.'
         }
@@ -266,30 +253,27 @@ async function agentLaunch(input) {
         repo_root: p.repoRoot,
         brief: briefPath,
         mcpConfigPath,
-        envFile: p.workman.envFile,
-        url: mints ? p.workman.url : undefined,
+        url: mints ? url : undefined,
         workman: minted ? { sessionId: minted.sessionId, role: minted.role, expiresAt: minted.expiresAt } : null,
         launchedAt: new Date().toISOString(),
     }
     saveRecord(rec)
     log(`launched ${p.name} as ${id}`)
 
-    /** @type {string[]} */
-    const warnings = []
     const waitMs = Number(process.env.AGENTS_SESSION_WAIT_MS ?? 10000)
     const found = await waitForSessionId(id, waitMs)
     if (found.sessionId) {
         rec.sessionId = found.sessionId
         saveRecord(rec)
         if (minted) {
-            const err = await bindClaudeSession({ url: p.workman.url, controllerToken: /** @type {string} */ (controllerToken), sessionId: minted.sessionId, claudeSessionId: found.sessionId })
+            const err = await bindClaudeSession({ url, token, sessionId: minted.sessionId }, found.sessionId)
             if (err) warnings.push(`could not record the Claude session id on Workman session ${minted.sessionId}: ${err}`)
         }
     } else {
         warnings.push(`no sessionId yet: ${found.error}. The agent is running; agent_list shows it once claude lists it.`)
     }
 
-    const ws = rec.workman ? { session: rec.workman.sessionId, role: rec.workman.role, expiresAt: rec.workman.expiresAt } : null
+    const ws = workmanRow(rec)
     const lines = [
         `launched ${p.name} (id ${id}${rec.sessionId ? `, session ${rec.sessionId}` : ''})`,
         `brief: ${briefPath}`,
@@ -303,15 +287,17 @@ async function agentLaunch(input) {
     }
 }
 
+/** @param {import('./state.mjs').AgentRecord} r */
+const workmanRow = (r) => (r.workman ? { session: r.workman.sessionId, role: r.workman.role, expiresAt: r.workman.expiresAt } : null)
+
 /**
  * @param {unknown} input
  * @returns {Promise<ToolResult>}
  */
 async function agentStop(input) {
-    if (typeof input !== 'object' || input === null || Array.isArray(input)) throw new Refusal('agent_stop takes {id | name, remove?, keep_brief?}')
-    const a = /** @type {Record<string, unknown>} */ (input)
-    const extra = Object.keys(a).filter((k) => !['id', 'name', 'remove', 'keep_brief'].includes(k))
-    if (extra.length) throw new Refusal(`agent_stop: unknown parameter(s) ${extra.join(', ')}`)
+    if (!isObject(input)) throw new Refusal('agent_stop takes {id | name, remove?, keep_brief?}')
+    const a = input
+    rejectUnknown(a, ['id', 'name', 'remove', 'keep_brief'], 'agent_stop')
     const idIn = typeof a.id === 'string' && a.id ? a.id : undefined
     const nameIn = typeof a.name === 'string' && a.name ? a.name : undefined
     if (!idIn && !nameIn) throw new Refusal('agent_stop needs id or name')
@@ -328,23 +314,23 @@ async function agentStop(input) {
     /** @type {string[]} */
     const notes = []
 
+    /** @param {string[]} args @param {string[]} onFail @param {string} hint */
+    const claude = async (args, onFail, hint) => {
+        const r = await runClaude(args, { timeoutMs: 30000 })
+        if (r.code === 0 && !r.error) done.push(`claude ${args.join(' ')}`)
+        else onFail.push(`claude ${args.join(' ')}: ${r.error ?? `exit ${r.code}`} ${stripAnsi(r.stderr || r.stdout).trim().slice(0, 300)}${hint}`)
+    }
     if (id) {
-        const r = await runClaude(['stop', id], { timeoutMs: 30000 })
-        if (r.code === 0 && !r.error) done.push(`claude stop ${id}`)
-        else notes.push(`claude stop ${id}: ${r.error ?? `exit ${r.code}`} ${stripAnsi(r.stderr || r.stdout).trim().slice(0, 300)} (already stopped?)`)
-        if (a.remove === true) {
-            const rm = await runClaude(['rm', id], { timeoutMs: 30000 })
-            if (rm.code === 0 && !rm.error) done.push(`claude rm ${id}`)
-            else problems.push(`claude rm ${id}: ${rm.error ?? `exit ${rm.code}`} ${stripAnsi(rm.stderr || rm.stdout).trim().slice(0, 300)}`)
-        }
+        await claude(['stop', id], notes, ' (already stopped?)')
+        if (a.remove === true) await claude(['rm', id], problems, '')
     }
 
     let revoked = false
     if (rec?.workman) {
         try {
+            // The server that minted the token, as recorded at launch.
             if (!rec.url) throw new Refusal('the launch record has no url')
-            const token = rec.envFile ? readControllerToken(rec.envFile) : await accessToken(rec.url)
-            const err = await revokeSession({ url: rec.url, controllerToken: token, sessionId: rec.workman.sessionId })
+            const err = await revokeSession({ url: rec.url, token: await accessToken(rec.url), sessionId: rec.workman.sessionId })
             if (err) throw new Error(err)
             revoked = true
             done.push(`revoked Workman session ${rec.workman.sessionId}`)
@@ -377,11 +363,10 @@ async function agentStop(input) {
 /** @returns {Promise<ToolResult>} */
 async function agentList() {
     const { agents: live, error } = await listLiveAgents()
-    const records = loadRecords()
-    const rows = []
-    for (const r of records) {
+    /** @type {{name: string|null, id: string|null, status: string|null, state: string|null, waitingFor: string|null, sessionId: string|null, repo_root: string|null, workman: ReturnType<typeof workmanRow>, tracked: boolean}[]} */
+    const rows = loadRecords().map((r) => {
         const l = live.find((x) => (r.id && x.id === r.id) || (r.sessionId && x.sessionId === r.sessionId))
-        rows.push({
+        return {
             name: r.name,
             id: r.id ?? null,
             status: l?.status ?? 'not listed',
@@ -389,10 +374,10 @@ async function agentList() {
             waitingFor: l?.waitingFor ?? null,
             sessionId: l?.sessionId ?? r.sessionId ?? null,
             repo_root: r.repo_root,
-            workman: r.workman ? { session: r.workman.sessionId, role: r.workman.role, expiresAt: r.workman.expiresAt } : null,
+            workman: workmanRow(r),
             tracked: true,
-        })
-    }
+        }
+    })
     for (const l of live) {
         if (rows.some((x) => x.id && x.id === l.id)) continue
         rows.push({

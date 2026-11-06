@@ -39,7 +39,7 @@ test('every parameter maps to its flag, variadics closed in order, prompt last',
             effort: 'high',
             settings: 'settings.json',
             append_system_prompt: 'Be brief.',
-            workman: { role: 'orchestrator', env_file: repo.envFile, url: ws.url, ttl_hours: 24 },
+            workman: { role: 'orchestrator', ttl_hours: 24 },
         })
         assert.equal(r.isError, false, r.content[0].text)
         const { argv, cwd } = bgArgv(s)
@@ -92,7 +92,7 @@ test('defaults: auto, fix profile, worker role; --permission-mode closes the las
     try {
         const r = await s.call('agent_launch', {
             name: 'unit-2', brief: path.join(repo.root, 'task.md'), repo_root: repo.root, controller: CONTROLLER,
-            workman: { env_file: repo.envFile, url: ws.url },
+            workman: {},
         })
         assert.equal(r.isError, false, r.content[0].text)
         const { argv } = bgArgv(s)
@@ -138,7 +138,7 @@ test('role none: no mint, no --mcp-config, no config file', async () => {
     try {
         const r = await s.call('agent_launch', {
             name: 'unit-4', brief: 'task.md', repo_root: repo.root, controller: CONTROLLER, toolset: 'none',
-            workman: { role: 'none', url: ws.url },
+            workman: { role: 'none' },
         })
         assert.equal(r.isError, false, r.content[0].text)
         const { argv } = bgArgv(s)
@@ -160,7 +160,7 @@ test('a minted session may call its Workman tools without a prompt; without Work
     try {
         const minted = await s.call('agent_launch', {
             name: 'unit-ws', brief: 'task.md', repo_root: repo.root, controller: CONTROLLER, toolset: 'none',
-            permission_mode: 'acceptEdits', workman: { env_file: repo.envFile, url: ws.url },
+            permission_mode: 'acceptEdits', workman: {},
         })
         assert.equal(minted.isError, false, minted.content[0].text)
         const plain = await s.call('agent_launch', {
@@ -178,30 +178,27 @@ test('a minted session may call its Workman tools without a prompt; without Work
     }
 })
 
-test('mint failure (4xx, server down, no env file, no token key) refuses and spawns nothing', async () => {
+test('mint failure (4xx, server down) refuses and spawns nothing', async () => {
     const repo = makeRepo()
     const ws = await fakeWorkman({ mintStatus: 403 })
-    const noKey = path.join(tmp('env'), '.env')
-    fs.writeFileSync(noKey, '# empty\nOTHER=1\n')
     const s = startServer()
+    const down = startServer({}, { url: 'http://127.0.0.1:9', grant: true })
     try {
         const base = { brief: 'task.md', repo_root: repo.root, controller: CONTROLLER }
         const cases = [
-            { name: 'm-403', workman: { env_file: repo.envFile, url: ws.url }, says: /HTTP 403/ },
-            { name: 'm-down', workman: { env_file: repo.envFile, url: 'http://127.0.0.1:9' }, says: /unreachable/ },
-            { name: 'm-nofile', workman: { env_file: path.join(repo.root, 'missing.env'), url: ws.url }, says: /cannot read workman.env_file/ },
-            { name: 'm-nokey', workman: { env_file: noKey, url: ws.url }, says: /WORKMAN_CONTROLLER_TOKEN/ },
-            { name: 'm-noenv', workman: { role: 'worker', url: ws.url }, says: /needs workman.env_file/ },
+            { name: 'm-403', server: s, says: /HTTP 403/ },
+            { name: 'm-down', server: down, says: /unreachable/ },
         ]
         for (const c of cases) {
-            const r = await s.call('agent_launch', { ...base, name: c.name, workman: c.workman })
+            const r = await c.server.call('agent_launch', { ...base, name: c.name, workman: {} })
             assert.equal(r.isError, true, c.name)
             assert.match(r.content[0].text, c.says, c.name)
             assert.ok(!fs.existsSync(path.join(repo.briefs, `mcp-${c.name}.json`)), c.name)
         }
-        assert.equal(s.claudeCalls().length, 0, 'claude must not be run when minting fails')
+        assert.equal(s.claudeCalls().length + down.claudeCalls().length, 0, 'claude must not be run when minting fails')
     } finally {
         await s.close()
+        await down.close()
         await ws.close()
     }
 })
@@ -213,7 +210,7 @@ test('a failed claude --bg revokes the minted token and deletes its config', asy
     try {
         const r = await s.call('agent_launch', {
             name: 'unit-5', brief: 'task.md', repo_root: repo.root, controller: CONTROLLER,
-            workman: { env_file: repo.envFile, url: ws.url },
+            workman: {},
         })
         assert.equal(r.isError, true)
         assert.match(r.content[0].text, /could not read the background id[\s\S]*fake launch failure[\s\S]*revoked/)
@@ -258,7 +255,7 @@ test('validation refusals', async () => {
             ['ttl out of range', { ...ok, workman: { role: 'none', ttl_hours: 721 } }, /ttl_hours/],
             ['unknown parameter', { ...ok, permissionMode: 'auto' }, /unknown parameter/],
             ['the 1.x name workstate', { ...ok, workman: undefined, workstate: { role: 'none' } }, /unknown parameter/],
-            ['config not gitignored', { ...ok, repo_root: unignored.root, workman: { env_file: unignored.envFile } }, /not gitignored/],
+            ['config not gitignored', { ...ok, repo_root: unignored.root, workman: {} }, /not gitignored/],
         ]
         for (const [label, args, says] of cases) {
             const r = await s.call('agent_launch', args)
@@ -278,7 +275,7 @@ test('dry_run: argv returned with the token as <minted>; nothing minted, spawned
     try {
         const r = await s.call('agent_launch', {
             name: 'unit-6', brief: 'task.md', repo_root: repo.root, controller: CONTROLLER, dry_run: true,
-            workman: { env_file: repo.envFile, url: ws.url },
+            workman: {},
         })
         assert.equal(r.isError, false, r.content[0].text)
         const sc = r.structuredContent
@@ -306,7 +303,7 @@ test('a session id that never appears is a warning, not a failure', async () => 
     try {
         const r = await s.call('agent_launch', {
             name: 'unit-8', brief: 'task.md', repo_root: repo.root, controller: CONTROLLER,
-            workman: { env_file: repo.envFile, url: ws.url },
+            workman: {},
         })
         assert.equal(r.isError, false)
         assert.equal(r.structuredContent.sessionId, null)

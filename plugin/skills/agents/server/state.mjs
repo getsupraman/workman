@@ -1,5 +1,5 @@
 // state.mjs — one JSON file per launched agent, so agent_stop and agent_list survive a restart.
-// Holds paths and ids only: the env file is recorded by PATH and no token or grant is ever written here.
+// Holds paths, ids and the Workman url only: no token or grant is ever written here.
 // @ts-check
 
 import fs from 'node:fs'
@@ -14,23 +14,16 @@ import path from 'node:path'
  * @property {string} repo_root
  * @property {string} brief
  * @property {string|undefined} mcpConfigPath
- * @property {string|undefined} envFile     undefined with a url: minted with the agent_signin grant
- * @property {string|undefined} url
+ * @property {string|undefined} url         the Workman server that minted the token; agent_stop revokes there
  * @property {{sessionId: string, role: string, expiresAt: string|undefined}|null} workman
  * @property {string} launchedAt
  */
 
 /** @param {NodeJS.ProcessEnv} [env] @param {string} [tmp] */
 export function stateDir(env = process.env, tmp = os.tmpdir()) {
-    const base = env.CLAUDE_PLUGIN_DATA || fallbackBase(tmp)
-    const dir = path.join(base, 'agents')
+    const dir = path.join(env.CLAUDE_PLUGIN_DATA || path.join(tmp, 'workman-agents'), 'agents')
     fs.mkdirSync(dir, { recursive: true })
     return dir
-}
-
-/** @param {string} tmp */
-function fallbackBase(tmp) {
-    return path.join(tmp, 'workman-agents')
 }
 
 /** @param {string} name */

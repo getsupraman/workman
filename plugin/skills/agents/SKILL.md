@@ -5,18 +5,13 @@ description: "Run Claude Code inside Claude Code — spawn nested `claude` sessi
 
 # Nested Claude
 
-The scripts referenced below live with this skill. Installed as a plugin they are at
-`"$CLAUDE_PLUGIN_ROOT/skills/agents/assets/"` — run `echo "$CLAUDE_PLUGIN_ROOT"` to confirm.
-A project may vendor a copy, but then the copy is the one that drifts; prefer calling these.
+**Launch, list and stop with the `agent_launch` / `agent_stop` / `agent_list` tools** of the plugin's
+`agents` MCP server (§1), which need **Node 18+** on PATH. `dry_run: true` does everything except mint
+and run `claude` and returns the exact argv — use it to check a launch before spending one. The
+watchdog script (§5) lives at `"$CLAUDE_PLUGIN_ROOT/skills/agents/assets/"`.
 
-**The primary path is the `agent_launch` / `agent_stop` / `agent_list` tools** of the plugin's
-`agents` MCP server (§1), which need **Node 18+** on PATH. The scripts are the fallback.
-
-**Platforms.** Windows: `Start-NestedAgent.ps1` / `Stop-NestedAgent.ps1`, under `pwsh` or Windows
-PowerShell. macOS/Linux: the bash twins `start-nested-agent.sh` / `stop-nested-agent.sh`, same flags
-in `--kebab-case` (`-PromptFile` is `--prompt-file`; repeat `--allowed-tools` / `--add-dir` once per
-value); `pwsh` is optional there. Both twins take a dry-run switch (`-DryRun` / `--dry-run`) that does
-everything except run `claude` and prints the exact argv — use it to check a launch before spending one.
+**The Workman server comes from `~/.workman/server.json`**, which `/workman:setup` writes. Without it
+every tool that talks to Workman refuses and names `/workman:setup`; there is no default server.
 
 You are about to become a **controller**: a Claude Code session that starts other Claude Code
 sessions, addresses them, answers them, and stops them.
@@ -38,11 +33,10 @@ Otherwise use the `Agent` tool.
 ## 1. Launch — always `--bg`
 
 **Use the `agent_launch` tool** (the agents server's `agent_launch`, whatever prefix your session lists it under). It is the plugin's
-`agents` MCP server — Node 18+, no dependencies — and it does what the scripts below do, plus the one
-thing they cannot: it mints the agent **its own Workman token**, so the child's writes are recorded
-under its name and role instead of yours. It builds the argv in code (no shell, so no quoting traps),
-prepends the same protocol header, grants the same `toolset` profiles, and returns `name`, `id`,
-`sessionId`, `brief` and the Workman session — never a token.
+`agents` MCP server — Node 18+, no dependencies. It mints the agent **its own Workman token**, so the
+child's writes are recorded under its name and role instead of yours. It builds the argv in code (no
+shell, so no quoting traps), prepends the protocol header, grants the `toolset` profile, and returns
+`name`, `id`, `sessionId`, `brief` and the Workman session — never a token.
 
 | Param | Default | Maps to |
 |---|---|---|
@@ -55,7 +49,7 @@ prepends the same protocol header, grants the same `toolset` profiles, and retur
 | `allowed_tools` / `disallowed_tools` | `[]` | merged into `--allowedTools` / `--disallowedTools`. To keep an agent off the tracker, pass `workman: {role: "none"}` and `disallowed_tools: ["mcp__workman"]` |
 | `add_dirs` | `[]` | `--add-dir` |
 | `model`, `effort`, `settings`, `append_system_prompt` | — | `--model`, `--effort` (`low`…`max`), `--settings` (path or JSON), `--append-system-prompt` |
-| `workman` | `{role: "worker"}` | `role` (`worker` `orchestrator` `controller` `none`), `env_file` (optional, for headless use: the PATH of the Workman `.env` that `/workman:setup` names: `<home>/.env`, by default `~/.workman/.env`, or `<clone>/server/.env`; never its contents. Without it the `agent_signin` grant mints — below), `url` (default `http://127.0.0.1:5290`), `ttl_hours` (idle window, default 72: the token lapses after that long unused; every use renews it, no hard cap), `grants` (`["import"]` shows `work_import` to the session — orchestrator or controller role only; see `/workman:import`) |
+| `workman` | `{role: "worker"}` | `role` (`worker` `orchestrator` `controller` `none`; minted with the `agent_signin` grant — below), `ttl_hours` (idle window, default 72: the token lapses after that long unused; every use renews it, no hard cap), `grants` (`["import"]` shows `work_import` to the session — orchestrator or controller role only; see `/workman:import`) |
 | `dry_run` | `false` | validate and return the argv; mints and spawns nothing (the token shows as `<minted>`) |
 
 An auto-mode worker — the usual case:
@@ -79,13 +73,19 @@ unless git says that path is ignored) and reaches the agent through `--mcp-confi
 fails the launch is refused** — it never falls back to your own registration. `role: "none"` mints
 nothing and passes no `--mcp-config`. `agent_list` joins `claude agents --json` with what was launched.
 
+Just before a minted worker starts, `agent_launch` deletes the `workman` entry from Claude Code's
+`mcp-needs-auth-cache.json` (in `$CLAUDE_CONFIG_DIR`, else `~/.claude`): while that entry is younger
+than 15 minutes Claude Code skips connecting any server named `workman`, the worker's own included.
+If the file cannot be changed the launch still goes ahead, with a warning. The minted header tells
+the worker to send `BLOCKED no Workman tools` and stop if it has no `work_report` anyway.
+
 ### Sign in once: `agent_signin`
 
-`agent_launch` mints with an OAuth grant that the agents server holds for the Workman server, so no
-`.env` is needed. Get it once per server (Workman server 0.9.0 or later, local or remote):
+`agent_launch` mints with an OAuth grant that the agents server holds for the Workman server in
+`~/.workman/server.json`. Get it once per server (Workman server 0.9.0 or later, local or remote):
 
 ```
-agent_signin(url: "http://127.0.0.1:5290")      # url defaults to that
+agent_signin()
 ```
 
 It discovers the server's OAuth metadata, registers itself as a public client the first time, opens
@@ -95,8 +95,7 @@ waits up to 5 minutes. The human signs in with the dashboard user and approves; 
 returns that URL at once: the human opens it by hand, and a second `agent_signin` call waits for the
 sign-in to finish.
 
-- **The grant store** is `~/.workman/grants.json` (`WORKMAN_GRANTS_FILE` overrides it), one entry
-  per origin: `client_id`, `refresh_token`, `scope`, `obtained_at`. It is written atomically. On macOS
+- **The grant store** is `~/.workman/grants.json`, one entry per origin: `client_id`, `refresh_token`, `scope`, `obtained_at`. It is written atomically. On macOS
   and Linux the file is `0600` and a `~/.workman` the server creates is `0700`; on Windows the
   user-profile ACL is the only boundary. No tool result, error, log line, `mcp-<name>.json` or brief
   ever holds it — do not read it into a transcript either.
@@ -104,49 +103,13 @@ sign-in to finish.
   expires, 1 h) for scope `workman.sessions`. The server rotates the refresh token on every refresh,
   and the new one replaces the old in the file; concurrent agents servers take turns through a lock
   file. The grant lasts 30 days unused.
-- **Refusals.** No grant for `workman.url`'s origin, or a refresh refused with `invalid_grant`
+- **Refusals.** No grant for the server's origin, or a refresh refused with `invalid_grant`
   (expired, revoked, or the server's database was reset): the launch is refused before anything is
-  written, naming `agent_signin {"url": "…"}`. A dead grant is forgotten.
-- **Sign-out.** `agent_signout(url: …)` revokes the refresh token at the server's `/connect/revoke` and
+  written, naming `agent_signin`. A dead grant is forgotten.
+- **Sign-out.** `agent_signout()` revokes the refresh token at the server's `/connect/revoke` and
   deletes it from the file (the `client_id` stays for the next sign-in). That revokes the whole
-  authorization: **every agent session minted with it is refused on its next request.** Sessions
-  minted with an `env_file` are not affected.
-- **The fallback.** `workman.env_file` still works exactly as before and wins when both exist: the
-  server reads the controller token from that file and the grant is not touched. Use it where no
-  human can sign in in a browser (CI, a headless box). An agent launched with it is stopped with it.
-- The token the agent gets is the same per-session `wss_` token either way; only the credential that
-  mints it differs.
-
-### Fallback: the scripts
-
-When the agents server is not available — no Node, or no plugin — the launchers do the same launch
-without the Workman token (the agent inherits your registration):
-
-```powershell
-$a = & "$env:CLAUDE_PLUGIN_ROOT/skills/agents/assets/Start-NestedAgent.ps1" `
-        -Name       fix-B-07 `
-        -PromptFile .\brief-B-07.txt `
-        -Controller 'prod-log-triage [9825b9]' `   # your address, from ListAgents, ref included
-        -RepoRoot   ../repo.worktrees/b-07 `        # its OWN worktree - see §7, not optional for --bg
-        -Toolset    fix `                           # what it may do unattended - see §3
-        -Watch                                      # optional: open a window attached to it
-```
-
-```bash
-bash "$CLAUDE_PLUGIN_ROOT/skills/agents/assets/start-nested-agent.sh" \
-        --name        fix-B-07 \
-        --prompt-file ./brief-B-07.txt \
-        --controller  'prod-log-triage [9825b9]' \
-        --repo-root   ../repo.worktrees/b-07 \
-        --toolset     fix \
-        --watch
-```
-
-Returns immediately, before the agent has done anything: `Name` (the address), `Id` (the short id
-claude's own commands take), `Brief`, `Started` — an object from the `.ps1`, `Key=value` lines from
-the `.sh`. `-Watch` picks the terminal by OS (Windows: `pwsh`, else `powershell.exe`; macOS: Terminal
-via `osascript`; Linux: `gnome-terminal`, else `x-terminal-emulator`). If no window can be opened the
-launch still succeeds: you get a warning naming `claude attach <id>`, and the Id is returned.
+  authorization: **every agent session minted with it is refused on its next request.**
+- `agent_stop` revokes at the server that minted the token, recorded at launch.
 
 `claude --bg` is the right primitive and the alternatives are not:
 
@@ -168,11 +131,11 @@ because the transcript was on disk.
 | Trap | Symptom | Rule |
 |---|---|---|
 | Multi-line prompt as an argument | agent replies *"I'm ready. What would you like me to work on?"* | The prompt is **one quote-free line naming a brief file**. A positional prompt is truncated at its first quote — and a protocol header contains quotes. |
-| `--add-dir` before the prompt | window opens with **no instructions at all** | `--add-dir` takes `<directories...>`; it swallows the prompt as another directory. Keep the brief **in the repo**, and pass extra dirs via `-AddDir`, which the launcher places where another flag closes it. |
-| `--allowedTools` before the prompt | same — **no instructions at all** | Same variadic shape, and the launcher hit it too. Any variadic flag needs **another flag after it** to close the list; the launcher now puts `--permission-mode` there. |
+| `--add-dir` before the prompt | window opens with **no instructions at all** | `--add-dir` takes `<directories...>`; it swallows the prompt as another directory. Keep the brief **in the repo**, and pass extra dirs via `add_dirs`, which `agent_launch` places where another flag closes it. |
+| `--allowedTools` before the prompt | same — **no instructions at all** | Same variadic shape. Any variadic flag needs **another flag after it** to close the list; `agent_launch` puts `--permission-mode` there. |
 | Brief under `%TEMP%` | the agent's first act is a permission prompt | Same fix: `.claude/briefs/`, gitignored. |
 | `wt.exe new-tab` | `0x80070002 — cannot find the file specified` | Launch a **plain console process**. Windows Terminal hosts it anyway when it is the default terminal; wt's parser collapses everything after the tab options into one path, whatever the quoting. |
-| `-RepoRoot` that is not a working tree | agent starts in an empty folder and reports **READY** | A failed `git worktree add` upstream does not stop the launch: the brief directory is created with `-Force` and the agent comes up with nothing but its brief. The launcher now refuses; if you are not using it, check the tree exists before spawning. **A failed setup step must not produce a confident agent.** |
+| `repo_root` that is not a working tree | agent starts in an empty folder and reports **READY** | A failed `git worktree add` upstream does not stop the launch: the brief directory is created with `-Force` and the agent comes up with nothing but its brief. `agent_launch` refuses it; if you are not using it, check the tree exists before spawning. **A failed setup step must not produce a confident agent.** |
 
 ---
 
@@ -185,7 +148,7 @@ sessions register under *your* name and are indistinguishable from each other.
 **Your own address needs its `[ref]`.** Remote Control mirrors your session under your own name, so a
 bare name matches several rows and `SendMessage` stops to ask which one — halting the agent on a human,
 the exact thing this protocol exists to prevent. Take the first line of `ListAgents` verbatim.
-`Start-NestedAgent.ps1` (and `start-nested-agent.sh`) refuses a `-Controller` without a ref.
+`agent_launch` refuses a `controller` without a ref.
 
 **Replying works too:** every incoming message carries
 `from="uds:\\.\pipe\LOCAL\cc-msg-…"`, and copying that as your `to` always reaches the sender. Use it
@@ -203,7 +166,7 @@ before you believe it. Either re-subscribe after every relaunch, or give each at
 
 ## 3. The protocol
 
-The launcher prepends it to every brief. Three messages, no chatter:
+`agent_launch` prepends it to every brief. Three messages, no chatter:
 
 | Agent sends | When | You do |
 |---|---|---|
@@ -216,7 +179,7 @@ finished, send DONE saying where you stopped.* The brief already defines it.
 
 ### Permissions — the most common way a launch quietly fails
 
-The launcher's `-PermissionMode` defaults to `auto` (see `/workman:controller` §2). The rest of this
+`agent_launch`'s `permission_mode` defaults to `auto` (see `/workman:controller` §2). The rest of this
 section is what happens under any other mode. A `--bg` agent has **no human at its keyboard**, and
 `--permission-mode acceptEdits` only covers *edits*. The first shell command it has not been granted parks it, and from the outside a parked
 agent is indistinguishable from a busy one. On 2026-09-10 an agent stopped nine minutes in on
@@ -230,14 +193,14 @@ The tell is in `claude agents --json`:
 
 `waitingFor` is the field to key on. §5's watchdog exists because nothing else surfaces it.
 
-**Grant the surface up front.** `-Toolset` is a named profile, merged with anything you add in
-`-AllowedTools`:
+**Grant the surface up front.** `toolset` is a named profile, merged with anything you add in
+`allowed_tools`:
 
-| `-Toolset` | Grants | Use for |
+| `toolset` | Grants | Use for |
 |---|---|---|
 | `readonly` | `Read`/`Glob`/`Grep`, and the read-only shell an agent reaches for without thinking — `ls cat head tail grep rg find wc sed -n echo which`, plus `git status/diff/log/show/branch/rev-parse` | recon, review, an agent that must not change anything |
 | `fix` *(default)* | all of the above plus `Write`/`Edit`, `git add`/`git commit`, `dotnet build`/`dotnet test`/`pnpm run` | an agent that edits, tests and commits |
-| `none` | nothing beyond `-PermissionMode` | an agent that genuinely never shells out |
+| `none` | nothing beyond `permission_mode` | an agent that genuinely never shells out |
 
 **`git push` is deliberately absent from every profile.** An allow-list is the only thing between a
 nested agent and a remote its controller was told never to touch. Do not add it.
@@ -259,14 +222,14 @@ find out when nothing has happened for an hour.
 agent reaches for whichever fits the thought. The profiles above list both.
 
 **An allow-list grants tools, not paths.** `Bash(ls:*)` is granted and the agent still parks on
-`ls /p/packages/nuget`, because the target is outside `-RepoRoot`. Pass the directories it will
-legitimately need with `-AddDir` — a package cache is the usual one:
+`ls /p/packages/nuget`, because the target is outside `repo_root`. Pass the directories it will
+legitimately need with `add_dirs` — a package cache is the usual one:
 
-```powershell
--Toolset fix -AddDir @("P:\packages\nuget", "$env:USERPROFILE\.nuget\packages")
+```
+toolset: "fix", add_dirs: ["P:/packages/nuget", "C:/Users/me/.nuget/packages"]
 ```
 
-This is the same `--add-dir` that eats the prompt when it is last. The launcher puts it between
+This is the same `--add-dir` that eats the prompt when it is last. `agent_launch` puts it between
 `--allowedTools` and `--permission-mode`, so each variadic flag is closed by the next one and the
 prompt sits safely after a flag that takes exactly one value. **Do not reorder those three.**
 
@@ -436,8 +399,7 @@ claude attach <id>          # take the session over in this terminal
 ```
 
 `attach` is the answer to "I want to see what it is doing": it opens the live session in your
-terminal, and **closing that window detaches — the agent keeps running**. `-Watch` on the launcher
-opens one at spawn time.
+terminal, and **closing that window detaches — the agent keeps running**.
 
 `status`/`state` from `agents --json` is the liveness check. `blocked` means a prompt is waiting;
 attach and clear it.
@@ -485,7 +447,7 @@ found too.
 
 | It emits | When | What you do |
 |---|---|---|
-| `BLOCKED` | `waitingFor` appears — a permission prompt with nobody to answer it | `claude attach <id>`, or stop and relaunch with the right `-Toolset` |
+| `BLOCKED` | `waitingFor` appears — a permission prompt with nobody to answer it | `claude attach <id>`, or stop and relaunch with the right `toolset` |
 | `STALL` | the transcript stopped growing for `--stall` minutes while the agent is still listed | look at what it last said; a hung tool call or a turn that died |
 | `STATUS` back to `busy` | it cleared its own prompt | you may steer again — messages only drain while it runs |
 | `STATUS` | `busy -> idle`, `idle -> done` | the turn ended; go verify |
@@ -514,24 +476,12 @@ hang — all three look exactly like "still working". Cover the failures first a
    and deletes `mcp-<name>.json` — always, even with `keep_brief`, because that file holds the secret.
    A revoke that fails is reported as an error; run `agent_stop` again.
 
-For an agent started by the scripts:
-
-```powershell
-& "$env:CLAUDE_PLUGIN_ROOT/skills/agents/assets/Stop-NestedAgent.ps1" -Id $a.Id -Name $a.Name
-& "$env:CLAUDE_PLUGIN_ROOT/skills/agents/assets/Stop-NestedAgent.ps1" -Id $a.Id -Name $a.Name -Remove   # and delete the session
-```
-
-```bash
-bash "$CLAUDE_PLUGIN_ROOT/skills/agents/assets/stop-nested-agent.sh" --id c88dd0c8 --name fix-B-07
-bash "$CLAUDE_PLUGIN_ROOT/skills/agents/assets/stop-nested-agent.sh" --id c88dd0c8 --name fix-B-07 --remove
-```
-
 `claude stop` **keeps the conversation** — `claude attach <id>` reopens it and `claude --resume` works
 once stopped. So stopping is cheap and reversible; `claude rm` is the destructive one, and it is
 opt-in for that reason. The transcript on disk survives both.
 
 Stopping mid-turn loses whatever was not committed. When you are stopping a *failed* agent, pass
-`-KeepBrief`: the brief is the record of what it was actually told, which is what you read to work out
+`keep_brief: true`: the brief is the record of what it was actually told, which is what you read to work out
 why it failed.
 
 ---
@@ -557,10 +507,10 @@ So **plan for a worktree from the start**. Two ways, and the first is better:
    git switch <collector>                                   # release the branch first
    git worktree add ../repo.worktrees/<slug> <agent-branch>  # a branch can only be checked out once
    ```
-   Then **launch with `-RepoRoot <the worktree>`**, so the worktree *is* its working directory. Tell
+   Then **launch with `repo_root: <the worktree>`**, so the worktree *is* its working directory. Tell
    it not to call `EnterWorktree` — it would make a second worktree on a branch you never named.
 
-   Pointing `-RepoRoot` at the main checkout and telling the agent to work "over there" does not
+   Pointing `repo_root` at the main checkout and telling the agent to work "over there" does not
    work: its first act is `cd <worktree> && git ...`, and that trips a different guard — *"this
    command changes directory before running git, which can execute untrusted hooks from the target
    directory"* — which no allow-list clears either. Put it in the right directory instead of asking
@@ -602,14 +552,14 @@ disobedience. What the brief should forbid is switching branches and touching th
 isolation the harness requires.
 
 The pattern behind all of it: **three separate guards park a background agent, and only one of them is
-the allow-list.** Tool guards (a PowerShell script block), path scope (`-AddDir`), directory-changing
+the allow-list.** Tool guards (a PowerShell script block), path scope (`add_dirs`), directory-changing
 git commands, and background isolation each refuse independently. You cannot enumerate your way past
 them. Set the agent up so it never needs to ask: right directory, right branch, the files it needs
 already there.
 
 ### Until the agent is in its own tree, you are sharing yours
 
-`-RepoRoot` is your repo root, not a copy. While an agent is running against it:
+`repo_root` is your repo root, not a copy. While an agent is running against it:
 
 - **Do not `git switch`.** You would move the branch out from under it mid-edit.
 - Commit your own bookkeeping **onto the agent's branch**, explicitly by path, and say in the message
@@ -621,10 +571,10 @@ already there.
   and the machine began killing background tasks mid-verification. Whatever your toolchain's
   equivalent of `dotnet build-server shutdown` is, run it between agents.
 
-When you do run several: distinct `-Name` each, keep each returned object, and branch each one off the
+When you do run several: distinct `name` each, keep each returned result, and branch each one off the
 previous agent's branch rather than the base, so conflicts get resolved once by the agent that caused
 them instead of piling up at the end. If the work is tracked in Workman, claim each unit with its own
-worktree — `work_status(ref, "in_progress", tree: "<-RepoRoot>")` — or the second claim in the same run
+worktree — `work_status(ref, "in_progress", tree: "<repo_root>")` — or the second claim in the same run
 is refused.
 
 ---
@@ -661,7 +611,7 @@ fix-B-07 | c88dd0c8 | 481b9848-… | started 20:41 | brief .claude/briefs/brief-
 
 ## 9. Writing the brief
 
-The launcher prepends the protocol; your file supplies the work. A good brief:
+`agent_launch` prepends the protocol; your file supplies the work. A good brief:
 
 - **Names one task** and points at where it is specified rather than restating it — a restatement
   drifts from the source.
@@ -721,5 +671,5 @@ on disk. Write the continuation brief to say so: name the files already there, s
 say explicitly not to start over — in one run eight parks cost eight relaunches and no unit restarted
 from zero.
 
-Keep it in a file: it is what the agent reads, what `-KeepBrief` preserves, and what you diff against
+Keep it in a file: it is what the agent reads, what `keep_brief` preserves, and what you diff against
 when the result surprises you.

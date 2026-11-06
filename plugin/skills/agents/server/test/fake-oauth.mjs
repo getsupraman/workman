@@ -6,6 +6,7 @@
 
 import http from 'node:http'
 import crypto from 'node:crypto'
+import { useWorkman } from './helpers.mjs'
 
 /** @param {number} n */
 const rand = (n) => crypto.randomBytes(n).toString('hex')
@@ -158,6 +159,7 @@ export async function fakeOAuthWorkman(opts = {}) {
     await new Promise((r) => server.listen(0, '127.0.0.1', () => r(undefined)))
     const addr = /** @type {import('node:net').AddressInfo} */ (server.address())
     const origin = `http://127.0.0.1:${addr.port}`
+    useWorkman(origin, false)
     return {
         url: origin,
         requests,

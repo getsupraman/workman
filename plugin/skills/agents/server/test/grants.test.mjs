@@ -11,13 +11,13 @@ test('workman.grants is passed to the mint as is; without it the mint body carri
     try {
         const granted = await s.call('agent_launch', {
             name: 'importer', brief: path.join(repo.root, 'task.md'), repo_root: repo.root, controller: CONTROLLER,
-            workman: { role: 'orchestrator', env_file: repo.envFile, url: ws.url, grants: ['import'] },
+            workman: { role: 'orchestrator', grants: ['import'] },
         })
         assert.equal(granted.isError, false, granted.content[0].text)
 
         const plain = await s.call('agent_launch', {
             name: 'plain', brief: path.join(repo.root, 'task.md'), repo_root: repo.root, controller: CONTROLLER,
-            workman: { role: 'orchestrator', env_file: repo.envFile, url: ws.url },
+            workman: { role: 'orchestrator' },
         })
         assert.equal(plain.isError, false, plain.content[0].text)
 
@@ -37,8 +37,8 @@ test('workman.grants: an unknown grant, or a grant with role none, is refused be
     const ok = { name: 'g', brief: path.join(repo.root, 'task.md'), repo_root: repo.root, controller: CONTROLLER }
     try {
         for (const [label, workman, says] of /** @type {[string, object, RegExp][]} */ ([
-            ['unknown grant', { role: 'orchestrator', env_file: repo.envFile, url: ws.url, grants: ['admin'] }, /workman.grants must be an array of "import"/],
-            ['not an array', { role: 'orchestrator', env_file: repo.envFile, url: ws.url, grants: 'import' }, /workman.grants must be an array/],
+            ['unknown grant', { role: 'orchestrator', grants: ['admin'] }, /workman.grants must be an array of "import"/],
+            ['not an array', { role: 'orchestrator', grants: 'import' }, /workman.grants must be an array/],
             ['role none', { role: 'none', grants: ['import'] }, /mints none/],
         ])) {
             const r = await s.call('agent_launch', { ...ok, workman })
@@ -60,7 +60,7 @@ test('a server refusal of the grant is relayed and nothing is launched', async (
     try {
         const r = await s.call('agent_launch', {
             name: 'w', brief: path.join(repo.root, 'task.md'), repo_root: repo.root, controller: CONTROLLER,
-            workman: { role: 'worker', env_file: repo.envFile, url: ws.url, grants: ['import'] },
+            workman: { role: 'worker', grants: ['import'] },
         })
         assert.equal(r.isError, true)
         assert.match(r.content[0].text, /Nothing was launched/)
