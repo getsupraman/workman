@@ -9,12 +9,26 @@ All notable changes to the Workman server and the `workman` plugin are recorded 
 
 ## [3.0.2] — 2026-11-06
 
+Server 3.0.2 (server and dashboard). No migration; the plugin stays 3.0.1.
+
 ### Server
 
 - **`POST /api/agent-sessions` takes `takeoverFrom`:** with `replace: true`, a launcher renamed under the same
   user (`foreman/x` → `supraman/x`) takes its own row when `takeoverFrom` equals the row's `launchedBy`; the
   row keeps its id, claims and history, and `session_launcher_taken_over` records `from` and `to`. Every other
   launcher mismatch is still `409`.
+
+### Dashboard
+
+- **Keyboard:** ↓/↑ (and Home/End) walk a run's plan and show each item in the detail panel; the same keys
+  walk Needs you, Backlog, a project's runs and Activity. Alt+↓/↑ (⌥ on macOS) open the next/previous run
+  in sidebar order. `?` and the palette's *Keyboard shortcuts* list every key (doc 13, Keyboard). Keys never
+  act in a text field or while a dialog is open.
+- **Sidebar tip:** a run or project shows its whole title and its full ref beside the link on hover or focus.
+- **Needs you is a decision list:** each question or blocked item is a row with its title first, the kind
+  and ref muted below and the one line of why; it opens beside the list (`/inbox/{item}`), and an item
+  answered meanwhile stays struck through until you move on. Housekeeping is one collapsed line per kind
+  and run; unread notes are no longer shown. The overview's top five use the same row.
 
 ## [3.0.1] — 2026-11-06
 
