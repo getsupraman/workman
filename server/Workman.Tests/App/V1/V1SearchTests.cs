@@ -53,7 +53,7 @@ public sealed class V1SearchTests(PostgresFixture fixture)
         var seeded = await SeedAsync();
         var world = seeded.V1.World;
         await using var server = await seeded.V1.StartAsync(fixture);
-        var reader = Reader(server);
+        var reader = await ReaderAsync(server);
 
         var cases = new (string Query, Guid Expected)[]
         {
@@ -85,7 +85,7 @@ public sealed class V1SearchTests(PostgresFixture fixture)
     {
         var seeded = await SeedAsync();
         await using var server = await seeded.V1.StartAsync(fixture);
-        var reader = Reader(server);
+        var reader = await ReaderAsync(server);
 
         var prefix = await SearchAsync(reader, "Spa-Blank");
         var seam = Assert.Single(prefix, h => Id(h) == seeded.Seam);
@@ -110,7 +110,7 @@ public sealed class V1SearchTests(PostgresFixture fixture)
     {
         var seeded = await SeedAsync();
         await using var server = await seeded.V1.StartAsync(fixture);
-        var reader = Reader(server);
+        var reader = await ReaderAsync(server);
 
         var hits = await SearchAsync(reader, "lantern");
 
@@ -137,7 +137,7 @@ public sealed class V1SearchTests(PostgresFixture fixture)
         }
 
         await using var server = await seeded.V1.StartAsync(fixture);
-        var reader = Reader(server);
+        var reader = await ReaderAsync(server);
 
         foreach (var query in (string[])["spa-blank-page-seam", "spa-blank", "zeppelin", "lantern", "1.1", "run-a/1.1"])
         {
@@ -160,7 +160,7 @@ public sealed class V1SearchTests(PostgresFixture fixture)
         Assert.Equal(HttpStatusCode.Unauthorized, anonymous.StatusCode);
         Assert.Equal(ApiV1.Version, Assert.Single(anonymous.Headers.GetValues(ApiV1.Header)));
 
-        var reader = Reader(server);
+        var reader = await ReaderAsync(server);
         foreach (var path in (string[])["/api/v1/search", "/api/v1/search?q=", "/api/v1/search?q=%20%20"])
         {
             Assert.Equal(HttpStatusCode.BadRequest, (await reader.GetAsync(path, Ct)).StatusCode);

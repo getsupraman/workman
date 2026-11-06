@@ -7,7 +7,7 @@ namespace Workman.Api.Auth;
 /// <summary>
 /// The user a request acts for, read from the principal and from nothing else, as <see cref="RequestTenant"/> reads
 /// its tenant: the cookie's, an OAuth token's or a user-minted <c>wss_</c> token's. It decides which projects the
-/// request's tenant connections see (doc 02 §15b); a static token has no user and sees every project of its tenant.
+/// request's tenant connections see (doc 02 §15b); a session token minted with no user sees every project of its tenant.
 /// </summary>
 internal static class RequestUser
 {

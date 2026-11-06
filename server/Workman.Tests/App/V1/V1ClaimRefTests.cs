@@ -36,7 +36,7 @@ public sealed class V1ClaimRefTests(PostgresFixture fixture)
             world.WorkspaceId, "1.2", "in_progress", WriteSeed.Orchestrator, new StatusArgs(Tree: $"P:/trees/m24-b-{world.RunId:n}"), Ct));
 
         await using var server = await V1Http.StartAsync(fixture, world.Slug);
-        var reader = Reader(server);
+        var reader = await ReaderAsync(server);
 
         var overview = await GetAsync(reader, "/api/v1/overview");
         var working = Array(overview, "workingNow");
@@ -75,7 +75,7 @@ public sealed class V1ClaimRefTests(PostgresFixture fixture)
         Assert.Equal(2, (await queries.ResolveAsync(world.WorkspaceId, "1.1", Ct)).Count);
 
         await using var server = await V1Http.StartAsync(fixture, world.Slug);
-        var reader = Reader(server);
+        var reader = await ReaderAsync(server);
 
         var refs = new List<JsonElement>();
         foreach (var run in new[] { world.RunId, runB })

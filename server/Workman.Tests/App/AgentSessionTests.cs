@@ -35,8 +35,11 @@ public sealed class AgentSessionTests(PostgresFixture fixture)
     {
         var world = await WriteSeed.CreateAsync(fixture);
         await using var server = await StartAsync(world);
+        // A controller with no session of its own: the OAuth sign-in a launcher mints under.
+        var controller = await server.OAuthApiTokenAsync(Ct);
+        var rows = await SessionRows.BeforeAsync(fixture, world.WorkspaceId, server.BaseAddress);
 
-        var (status, body) = await MintAsync(server, ReadServer.ControllerToken, new
+        var (status, body) = await MintAsync(server, controller, new
         {
             name = "aw-mint",
             role = "worker",
@@ -55,8 +58,7 @@ public sealed class AgentSessionTests(PostgresFixture fixture)
         var expiresAt = body.GetProperty("expiresAt").GetDateTimeOffset();
         Assert.InRange(expiresAt, DateTimeOffset.UtcNow.AddHours(71), DateTimeOffset.UtcNow.AddHours(73));
 
-        await using var db = fixture.NewContext();
-        var row = await db.AgentSessions.SingleAsync(s => s.WorkspaceId == world.WorkspaceId, Ct);
+        var row = await rows.SingleNewAsync();
         Assert.Equal(body.GetProperty("sessionId").GetGuid(), row.Id);
         Assert.Equal(SessionToken.Hash(token), row.TokenHash);
         Assert.NotEqual(token, row.TokenHash);
@@ -84,10 +86,11 @@ public sealed class AgentSessionTests(PostgresFixture fixture)
         var world = await WriteSeed.CreateAsync(fixture);
         await using var server = await StartAsync(world);
 
+        var rows = await SessionRows.BeforeAsync(fixture, world.WorkspaceId, server.BaseAddress, ReadServer.WorkerToken);
         var (status, _) = await MintAsync(server, ReadServer.WorkerToken, new { name = "aw-w", role = "worker" });
 
         Assert.Equal(HttpStatusCode.Forbidden, status);
-        await AssertNoSessionAsync(world);
+        await rows.AssertNoneNewAsync();
     }
 
     [Fact]
@@ -96,12 +99,13 @@ public sealed class AgentSessionTests(PostgresFixture fixture)
         var world = await WriteSeed.CreateAsync(fixture);
         await using var server = await StartAsync(world);
 
+        var rows = await SessionRows.BeforeAsync(fixture, world.WorkspaceId, server.BaseAddress, ReadServer.OrchestratorToken);
         var (raised, body) = await MintAsync(server, ReadServer.OrchestratorToken, new { name = "aw-up", role = "controller" });
         Assert.Equal(HttpStatusCode.Forbidden, raised);
         Assert.Contains("never raised", body.GetProperty("error").GetString(), StringComparison.Ordinal);
-        await AssertNoSessionAsync(world);
+        await rows.AssertNoneNewAsync();
 
-        // A minted orchestrator is held to the same rule as the static one.
+        // An orchestrator a controller minted is held to the same rule.
         var (_, orchestrator) = await MintAsync(server, ReadServer.ControllerToken, new { name = "aw-orch", role = "orchestrator" });
         var (viaMinted, _) = await MintAsync(server, Token(orchestrator), new { name = "aw-up2", role = "controller" });
         Assert.Equal(HttpStatusCode.Forbidden, viaMinted);
@@ -145,6 +149,7 @@ public sealed class AgentSessionTests(PostgresFixture fixture)
     {
         var world = await WriteSeed.CreateAsync(fixture);
         await using var server = await StartAsync(world);
+        var rows = await SessionRows.BeforeAsync(fixture, world.WorkspaceId, server.BaseAddress, ReadServer.ControllerToken);
 
         var (_, first) = await MintAsync(server, ReadServer.ControllerToken, new { name = "aw-twice", role = "worker" });
         var sessionId = first.GetProperty("sessionId").GetGuid();
@@ -170,9 +175,9 @@ public sealed class AgentSessionTests(PostgresFixture fixture)
             await VerifyAsync(after, "after");
         }
 
-        await using var db = fixture.NewContext();
-        Assert.Single(await db.AgentSessions.Where(s => s.WorkspaceId == world.WorkspaceId).ToListAsync(Ct));
+        Assert.Single(await rows.NewAsync());
 
+        await using var db = fixture.NewContext();
         var verified = await db.Events
             .Where(e => e.ItemId == world.TaskId && e.Kind == "verified")
             .ToListAsync(Ct);
@@ -237,6 +242,7 @@ public sealed class AgentSessionTests(PostgresFixture fixture)
         var world = await WriteSeed.CreateAsync(fixture);
         await using var server = await StartAsync(world);
 
+        var rows = await SessionRows.BeforeAsync(fixture, world.WorkspaceId, server.BaseAddress, ReadServer.ControllerToken);
         var (_, minted) = await MintAsync(server, ReadServer.ControllerToken, new { name = "aw-bound", role = "worker" });
 
         await using var client = await server.ConnectAsync(
@@ -252,10 +258,10 @@ public sealed class AgentSessionTests(PostgresFixture fixture)
         Assert.DoesNotContain("session  unnamed", brief, StringComparison.Ordinal);
         await VerifyAsync(client, "bound");
 
-        await using var db = fixture.NewContext();
-        var row = await db.AgentSessions.SingleAsync(s => s.WorkspaceId == world.WorkspaceId, Ct);
+        var row = await rows.SingleNewAsync();
         Assert.Equal("aw-bound", row.Name);
 
+        await using var db = fixture.NewContext();
         var journal = await db.Events.SingleAsync(e => e.ItemId == world.TaskId && e.Kind == "verified", Ct);
         Assert.Equal(row.Id, journal.SessionId);
     }
@@ -299,14 +305,12 @@ public sealed class AgentSessionTests(PostgresFixture fixture)
         var controllers = byController.GetProperty("sessionId").GetGuid();
         var minteds = byMinted.GetProperty("sessionId").GetGuid();
 
-        Assert.Equal(HttpStatusCode.NoContent, await PatchAsync(server, ReadServer.OrchestratorToken, controllers, "c1"));
         Assert.Equal(HttpStatusCode.Forbidden, await PatchAsync(server, Token(orchestrator), controllers, "c1"));
         Assert.Equal(HttpStatusCode.Forbidden, await PatchAsync(server, ReadServer.OrchestratorToken, minteds, "c2"));
         Assert.Equal(HttpStatusCode.NoContent, await PatchAsync(server, Token(orchestrator), minteds, "c2"));
         Assert.Equal(HttpStatusCode.NoContent, await PatchAsync(server, ReadServer.ControllerToken, minteds, "c3"));
 
-        // A static orchestrator cannot tell itself from the static controller, so rank decides: a
-        // controller session is never an orchestrator's to change.
+        // Rank decides: a controller session is never an orchestrator's to change.
         var (_, controllerRole) = await MintAsync(server, ReadServer.ControllerToken, new { name = "aw-cc", role = "controller" });
         var controllerRoles = controllerRole.GetProperty("sessionId").GetGuid();
         Assert.Equal(HttpStatusCode.Forbidden, await DeleteAsync(server, ReadServer.OrchestratorToken, controllerRoles, Ct));
@@ -544,46 +548,6 @@ public sealed class AgentSessionTests(PostgresFixture fixture)
             (await cookie.PostAsync("/api/agent-sessions", AppServer.Json(body), Ct)).StatusCode);
 
         await AssertNoSessionAsync(world);
-    }
-
-    /// <summary>
-    /// The guard: the static tokens authenticate, nest and name sessions by header exactly as before
-    /// tokens could be minted — no session from the credential, the header still names one.
-    /// </summary>
-    [Fact]
-    public async Task Static_tokens_behave_as_before()
-    {
-        var world = await WriteSeed.CreateAsync(fixture);
-        await using var server = await StartAsync(world);
-
-        foreach (var token in new[] { ReadServer.WorkerToken, ReadServer.OrchestratorToken, ReadServer.ControllerToken })
-        {
-            Assert.Equal(HttpStatusCode.OK, await InitializeAsync(server, token));
-        }
-
-        await using var worker = await server.ConnectAsync(ReadServer.WorkerToken, Ct);
-        await using var orchestrator = await server.ConnectAsync(ReadServer.OrchestratorToken, Ct);
-        await using var controller = await server.ConnectAsync(ReadServer.ControllerToken, Ct);
-
-        var (w, o, c) = (await ToolsAsync(worker), await ToolsAsync(orchestrator), await ToolsAsync(controller));
-        Assert.DoesNotContain("work_status", w);
-        Assert.Contains("work_status", o);
-        Assert.Subset(c.ToHashSet(), o.ToHashSet());
-        Assert.Subset(o.ToHashSet(), w.ToHashSet());
-
-        await using var unnamed = await server.ConnectAsync(ReadServer.WorkerToken, Ct);
-        await VerifyAsync(unnamed, "unnamed");
-        await AssertNoSessionAsync(world);
-
-        await using var named = await server.ConnectAsync(
-            ReadServer.WorkerToken, Ct, new Dictionary<string, string> { [CallerSession.AgentHeader] = "aw-header" });
-        await ReadServer.CallAsync(named, "work_brief", null, Ct);
-
-        await using var db = fixture.NewContext();
-        var row = await db.AgentSessions.SingleAsync(s => s.WorkspaceId == world.WorkspaceId, Ct);
-        Assert.Equal("aw-header", row.Name);
-        Assert.Null(row.TokenHash);
-        Assert.Null(row.GrantedRole);
     }
 
     /// <summary>

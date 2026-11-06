@@ -52,8 +52,7 @@ public sealed partial class WorkWriter
 {
     /// <summary>
     /// The workspace with this slug, created when missing; a null slug is <c>default</c>. No request creates
-    /// its own tenant: this is the static-token binding's first use on a fresh install, so the
-    /// <c>work_create</c> that <c>work_brief</c>'s onboarding names has somewhere to write (doc 04 §4).
+    /// its own tenant; this is for seeding one outside a request.
     /// </summary>
     public async Task<Guid> EnsureWorkspaceAsync(string? slug, CancellationToken cancellationToken = default)
     {

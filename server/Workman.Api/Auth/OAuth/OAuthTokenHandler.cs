@@ -13,13 +13,13 @@ using ActorRole = Workman.Core.Domain.ActorRole;
 namespace Workman.Api.Auth.OAuth;
 
 /// <summary>
-/// <c>/mcp</c>'s third credential, beside <see cref="StaticTokenHandler"/>'s two, and the one that answers
+/// <c>/mcp</c>'s second credential, beside <see cref="SessionTokenHandler"/>'s, and the one that answers
 /// an anonymous request with RFC 9728's challenge. The read API and the agent-session group take it too,
 /// with <see cref="OAuthScopeRequirement"/> on top.
 /// <para>
-/// It touches only a JWT-shaped bearer — dotted, and not a <c>wss_</c> session token — so a static or
+/// It touches only a JWT-shaped bearer — dotted, and not a <c>wss_</c> session token — so a
 /// minted token is judged by the handler that always judged it and nothing else (C31). An access token
-/// OpenIddict accepts becomes the same principal a static controller token produces, so
+/// OpenIddict accepts becomes a controller principal of the shape a minted token's has, so
 /// <see cref="CallerIdentity"/>, <see cref="CallerSession"/> and the tool policies see no difference.
 /// </para>
 /// </summary>
@@ -62,7 +62,7 @@ public sealed class OAuthTokenHandler(
             return AuthenticateResult.Fail("The token carries no role this server issues.");
         }
 
-        var identity = StaticTokenHandler.Identity(StaticTokenHandler.Nested(ActorRole.Controller), SchemeName);
+        var identity = SessionTokenHandler.Identity(SessionTokenHandler.Nested(ActorRole.Controller), SchemeName);
         await UserAsync(identity, principal.GetClaim(OpenIddictConstants.Claims.Subject) ?? string.Empty, principal);
         foreach (var scope in principal.GetScopes())
         {
@@ -111,7 +111,7 @@ public sealed class OAuthTokenHandler(
 
     /// <summary>
     /// The resource-metadata challenge for a request with no credential or with a JWT. A request that
-    /// presented a static or <c>wss_</c> token gets the bare 401 it always got. Under <c>/api</c> the
+    /// presented any other token gets the bare 401 it always got. Under <c>/api</c> the
     /// metadata is <c>/api</c>'s; the MCP handler would name one per request path.
     /// </summary>
     protected override async Task HandleChallengeAsync(AuthenticationProperties properties)

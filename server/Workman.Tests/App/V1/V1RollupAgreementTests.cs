@@ -27,7 +27,7 @@ public sealed class V1RollupAgreementTests(PostgresFixture fixture)
         await WriteSeed.ChildAsync(world, world.RunId, "3");
 
         await using var server = await StartAsync(fixture, world.Slug);
-        var reader = Reader(server);
+        var reader = await ReaderAsync(server);
 
         var rows = Array(await GetAsync(reader, $"/api/v1/runs/{world.RunId}/board"), "rows");
         var (runDone, runTotal) = Counted(ByRef(rows, "run-a").GetProperty("rollup"));

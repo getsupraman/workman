@@ -19,7 +19,7 @@ public sealed class V1JournalBeforeTests(PostgresFixture fixture)
     {
         var (world, server) = await NotedAsync(8);
         await using var _ = server;
-        var reader = Reader(server);
+        var reader = await ReaderAsync(server);
 
         var all = await SeqsAsync(reader, $"/api/v1/journal?scope={world.RunId}&since=0&limit=500");
         Assert.True(all.Count >= 8, $"fixture needs several events; it has {all.Count}");
@@ -43,7 +43,7 @@ public sealed class V1JournalBeforeTests(PostgresFixture fixture)
     {
         var (world, server) = await NotedAsync(4);
         await using var _ = server;
-        var reader = Reader(server);
+        var reader = await ReaderAsync(server);
 
         var all = await SeqsAsync(reader, $"/api/v1/journal?scope={world.RunId}&since=0&limit=500");
 
@@ -62,7 +62,7 @@ public sealed class V1JournalBeforeTests(PostgresFixture fixture)
     {
         var (world, server) = await NotedAsync(3);
         await using var _ = server;
-        var reader = Reader(server);
+        var reader = await ReaderAsync(server);
 
         await WriteSeed.SecondRunAsync(world);
         var other = await world.Writer.NoteAsync(
@@ -84,7 +84,7 @@ public sealed class V1JournalBeforeTests(PostgresFixture fixture)
         var world = await WriteSeed.CreateAsync(fixture);
         await using var server = await StartAsync(fixture, world.Slug);
 
-        var response = await Reader(server).GetAsync("/api/v1/journal?since=1&before=5", Ct);
+        var response = await (await ReaderAsync(server)).GetAsync("/api/v1/journal?since=1&before=5", Ct);
         var body = await response.Content.ReadAsStringAsync(Ct);
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);

@@ -39,7 +39,7 @@ public sealed class V1SharedRefTests(PostgresFixture fixture)
         }
 
         await using var server = await V1Http.StartAsync(fixture, world.Slug);
-        var reader = Reader(server);
+        var reader = await ReaderAsync(server);
 
         var matches = Array(await GetAsync(reader, "/api/v1/resolve?ref=backlog"), "matches");
         Assert.Equal(2, matches.Count);
@@ -79,7 +79,7 @@ public sealed class V1SharedRefTests(PostgresFixture fixture)
     {
         var world = await WriteSeed.CreateAsync(fixture);
         await using var server = await V1Http.StartAsync(fixture, world.Slug);
-        var reader = Reader(server);
+        var reader = await ReaderAsync(server);
 
         using var session = CancellationTokenSource.CreateLinkedTokenSource(Ct);
         session.CancelAfter(TimeSpan.FromMinutes(1));

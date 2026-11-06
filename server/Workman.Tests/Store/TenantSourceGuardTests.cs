@@ -3,20 +3,16 @@ using Xunit;
 namespace Workman.Tests.Store;
 
 /// <summary>
-/// C62 at the source: <c>WorkspaceOptions</c> — <c>Workman:Workspace</c> — is the static tokens' own binding,
-/// read by their handler and registered by the composition root. Any other production file that names it is a
-/// request path reaching for a configured default instead of its principal's tenant.
+/// C62 at the source: <c>WorkspaceOptions</c> — <c>Workman:Workspace</c> — was the static tokens' own binding and
+/// went with them. A production file that names it again is a request path reaching for a configured default
+/// instead of its principal's tenant.
 /// </summary>
 public sealed class TenantSourceGuardTests
 {
-    private static readonly string[] Allowed =
-    [
-        Path.Combine("Workman.Api", "ApiHost.cs"),
-        Path.Combine("Workman.Api", "Auth", "StaticTokenAuthentication.cs"),
-    ];
+    private static readonly string[] Allowed = [];
 
     [Fact]
-    public void Only_the_static_token_binding_and_the_composition_root_name_WorkspaceOptions_not_a_tenant_path()
+    public void No_production_file_names_WorkspaceOptions_a_configured_tenant()
     {
         var mcp = Root();
         var sources = Directory.EnumerateDirectories(mcp, "Workman.*")
@@ -34,7 +30,7 @@ public sealed class TenantSourceGuardTests
             .Where(file => !Allowed.Contains(file))
             .ToList();
 
-        Assert.True(offenders.Count == 0, $"WorkspaceOptions outside the static-token binding: {string.Join(", ", offenders)}");
+        Assert.True(offenders.Count == 0, $"WorkspaceOptions in production code: {string.Join(", ", offenders)}");
     }
 
     private static string Root()

@@ -57,9 +57,6 @@ public sealed class ImportVisibilityTests(PostgresFixture fixture)
         var seen = new List<string>();
         foreach (var (label, token, pinned) in new[]
                  {
-                     ("static worker", ReadServer.WorkerToken, WorkerList),
-                     ("static orchestrator", ReadServer.OrchestratorToken, OrchestratorList),
-                     ("static controller", ReadServer.ControllerToken, ControllerList),
                      ("minted worker", Token(worker), WorkerList),
                      ("minted orchestrator", Token(orchestrator), OrchestratorList),
                      ("minted controller", Token(controller), ControllerList),
@@ -71,11 +68,8 @@ public sealed class ImportVisibilityTests(PostgresFixture fixture)
             if (hash != pinned)
             {
                 seen.Add($"{label} {hash}");
-                if (label.StartsWith("static", StringComparison.Ordinal))
-                {
-                    var tools = await client.ListToolsAsync(cancellationToken: Ct);
-                    seen.AddRange(tools.Select(t => $"  {t.Name} {Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(JsonSerializer.Serialize(t.ProtocolTool))))[..12]} {JsonSerializer.Serialize(t.ProtocolTool).Length}"));
-                }
+                var tools = await client.ListToolsAsync(cancellationToken: Ct);
+                seen.AddRange(tools.Select(t => $"  {t.Name} {Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(JsonSerializer.Serialize(t.ProtocolTool))))[..12]} {JsonSerializer.Serialize(t.ProtocolTool).Length}"));
             }
         }
 
@@ -160,6 +154,8 @@ public sealed class ImportVisibilityTests(PostgresFixture fixture)
         var world = await WriteSeed.CreateAsync(fixture);
         await using var server = await AppServer.StartAsync(fixture.ConnectionString, world.Slug, Ct);
 
+        var rows = await SessionRows.BeforeAsync(
+            fixture, world.WorkspaceId, server.BaseAddress, ReadServer.WorkerToken, ReadServer.OrchestratorToken);
         var (byWorker, _) = await MintAsync(
             server, ReadServer.WorkerToken, new { name = "aw-g1", role = "worker", grants = new[] { "import" } });
         Assert.Equal(HttpStatusCode.Forbidden, byWorker);
@@ -173,8 +169,7 @@ public sealed class ImportVisibilityTests(PostgresFixture fixture)
             server, ReadServer.OrchestratorToken, new { name = "aw-g3", role = "orchestrator", grants = new[] { "admin" } });
         Assert.Equal(HttpStatusCode.BadRequest, unknown);
 
-        await using var db = fixture.NewContext();
-        Assert.False(await db.AgentSessions.AnyAsync(s => s.WorkspaceId == world.WorkspaceId, Ct));
+        await rows.AssertNoneNewAsync();
     }
 
     private async Task<string> BindAsync(WriteWorld world)

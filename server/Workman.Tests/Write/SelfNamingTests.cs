@@ -13,9 +13,9 @@ using static Workman.Tests.Store.Tokens;
 namespace Workman.Tests.Write;
 
 /// <summary>
-/// doc 11 — a hand-started session on the shared static registration names itself: the session
-/// helper sends X-Workman-Client, work_session(name) binds it, and every later call carrying only
-/// the key is signed with the name. A minted session's name stays its credential's.
+/// doc 11 — a hand-started session signed in with OAuth names itself: the session helper sends
+/// X-Workman-Client, work_session(name) binds it, and every later call carrying only the key is signed
+/// with the name. A minted session's name stays its credential's.
 /// </summary>
 [Collection(StoreCollection.Name)]
 public sealed class SelfNamingTests(PostgresFixture fixture)
@@ -27,7 +27,7 @@ public sealed class SelfNamingTests(PostgresFixture fixture)
         await using var server = await StartAsync(world);
         var key = Key();
 
-        await using var client = await server.ConnectAsync(ReadServer.ControllerToken, Ct, Client(key));
+        await using var client = await server.ConnectAsync(await server.OAuthTokenAsync(Ct), Ct, Client(key));
 
         var named = await ReadServer.CallAsync(
             client, "work_session", new Dictionary<string, object?> { ["name"] = "skills-5d" }, Ct);
@@ -58,8 +58,9 @@ public sealed class SelfNamingTests(PostgresFixture fixture)
         await using var server = await StartAsync(world);
         var first = Key();
 
-        await using var holder = await server.ConnectAsync(ReadServer.OrchestratorToken, Ct, Client(first));
-        await using var rival = await server.ConnectAsync(ReadServer.OrchestratorToken, Ct, Client(Key()));
+        var oauth = await server.OAuthTokenAsync(Ct);
+        await using var holder = await server.ConnectAsync(oauth, Ct, Client(first));
+        await using var rival = await server.ConnectAsync(oauth, Ct, Client(Key()));
 
         await ReadServer.CallAsync(holder, "work_session", Name("autowork-7c"), Ct);
         var (text, refused) = await ReadServer.CallEitherAsync(rival, "work_session", Name("autowork-7c"), Ct);
@@ -92,6 +93,7 @@ public sealed class SelfNamingTests(PostgresFixture fixture)
         var world = await WriteSeed.CreateAsync(fixture);
         await using var server = await StartAsync(world);
 
+        var rows = await SessionRows.BeforeAsync(fixture, world.WorkspaceId, server.BaseAddress, ReadServer.ControllerToken);
         var (_, minted) = await ImportVisibilityTests.MintAsync(
             server, ReadServer.ControllerToken, new { name = "aw-minted", role = "worker" });
 
@@ -108,8 +110,8 @@ public sealed class SelfNamingTests(PostgresFixture fixture)
 
         await VerifyAsync(client);
 
+        var row = await rows.SingleNewAsync();
         await using var db = fixture.NewContext();
-        var row = await db.AgentSessions.SingleAsync(s => s.WorkspaceId == world.WorkspaceId, Ct);
         Assert.Equal("aw-minted", row.Name);
         Assert.Null(row.ClientKey);
         Assert.Equal(row.Id, (await db.Verifications.SingleAsync(v => v.ItemId == world.TaskId, Ct)).SessionId);
@@ -122,15 +124,16 @@ public sealed class SelfNamingTests(PostgresFixture fixture)
         await using var server = await StartAsync(world);
         var key = Key();
 
+        var oauth = await server.OAuthTokenAsync(Ct);
         await using (var both = await server.ConnectAsync(
-                         ReadServer.WorkerToken,
+                         oauth,
                          Ct,
                          new Dictionary<string, string> { [CallerSession.AgentHeader] = "m27-probe", [CallerSession.ClientHeader] = key }))
         {
             await ReadServer.CallAsync(both, "work_brief", null, Ct);
         }
 
-        await using var keyOnly = await server.ConnectAsync(ReadServer.WorkerToken, Ct, Client(key));
+        await using var keyOnly = await server.ConnectAsync(oauth, Ct, Client(key));
         await VerifyAsync(keyOnly);
 
         await using var db = fixture.NewContext();
@@ -146,8 +149,9 @@ public sealed class SelfNamingTests(PostgresFixture fixture)
         var world = await WriteSeed.CreateAsync(fixture);
         await using var server = await StartAsync(world);
 
-        await using var bare = await server.ConnectAsync(ReadServer.WorkerToken, Ct);
-        await using var keyed = await server.ConnectAsync(ReadServer.WorkerToken, Ct, Client(Key()));
+        var oauth = await server.OAuthTokenAsync(Ct);
+        await using var bare = await server.ConnectAsync(oauth, Ct);
+        await using var keyed = await server.ConnectAsync(oauth, Ct, Client(Key()));
 
         await VerifyAsync(bare);
         await VerifyAsync(keyed);
@@ -165,8 +169,9 @@ public sealed class SelfNamingTests(PostgresFixture fixture)
         var world = await WriteSeed.CreateAsync(fixture);
         await using var server = await StartAsync(world);
 
-        await using var keyed = await server.ConnectAsync(ReadServer.WorkerToken, Ct, Client(Key()));
-        await using var bare = await server.ConnectAsync(ReadServer.WorkerToken, Ct);
+        var oauth = await server.OAuthTokenAsync(Ct);
+        await using var keyed = await server.ConnectAsync(oauth, Ct, Client(Key()));
+        await using var bare = await server.ConnectAsync(oauth, Ct);
 
         var withKey = (await ReadServer.CallAsync(keyed, "work_brief", null, Ct)).Split('\n');
         var without = (await ReadServer.CallAsync(bare, "work_brief", null, Ct)).Split('\n');
@@ -177,11 +182,11 @@ public sealed class SelfNamingTests(PostgresFixture fixture)
     }
 
     /// <summary>
-    /// Hidden, not refused, like work_import: only a static token whose request carries the helper's
+    /// Hidden, not refused, like work_import: only an OAuth token whose request carries the helper's
     /// key lists it, so every other tools/list stays the bytes ImportVisibilityTests pins.
     /// </summary>
     [Fact]
-    public async Task work_session_is_listed_only_for_a_static_token_with_a_client_key()
+    public async Task work_session_is_listed_only_for_an_oauth_token_with_a_client_key()
     {
         var world = await WriteSeed.CreateAsync(fixture);
         await using var server = await StartAsync(world);
@@ -189,7 +194,7 @@ public sealed class SelfNamingTests(PostgresFixture fixture)
         var measured = new List<string>();
         foreach (var (token, budget) in new[]
                  {
-                     (ReadServer.WorkerToken, 2600), (ReadServer.OrchestratorToken, 7200), (ReadServer.ControllerToken, 7200),
+                     (await server.OAuthTokenAsync(Ct), 7200),
                  })
         {
             await using var withKey = await server.ConnectAsync(token, Ct, Client(Key()));
@@ -218,8 +223,9 @@ public sealed class SelfNamingTests(PostgresFixture fixture)
         var world = await WriteSeed.CreateAsync(fixture);
         await using var server = await StartAsync(world);
 
+        var oauth = await server.OAuthTokenAsync(Ct);
         await using (var launched = await server.ConnectAsync(
-                         ReadServer.WorkerToken,
+                         oauth,
                          Ct,
                          new Dictionary<string, string>
                          {
@@ -230,7 +236,7 @@ public sealed class SelfNamingTests(PostgresFixture fixture)
             await ReadServer.CallAsync(launched, "work_brief", null, Ct);
         }
 
-        await using var client = await server.ConnectAsync(ReadServer.WorkerToken, Ct, Client(Key()));
+        await using var client = await server.ConnectAsync(oauth, Ct, Client(Key()));
         var (text, refused) = await ReadServer.CallEitherAsync(client, "work_session", Name("aw-x"), Ct);
 
         Assert.True(refused, text);

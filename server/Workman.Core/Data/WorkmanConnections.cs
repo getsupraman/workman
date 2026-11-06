@@ -13,7 +13,7 @@ public enum Bypass
     /// <summary>A <c>wss_</c> token is being turned into its session and workspace: there is no tenant yet.</summary>
     Authentication,
 
-    /// <summary>The static tokens' configured workspace, looked up or created on first use (C62).</summary>
+    /// <summary>A workspace looked up or created by its slug, before any tenant is known (C62).</summary>
     WorkspaceBinding,
 
     /// <summary>Users and their memberships span workspaces: sign-in, the cookie's stamp, OAuth, the switcher.</summary>

@@ -48,7 +48,6 @@ internal sealed class AppServer : IAsyncDisposable
         string? workspaceSlug,
         CancellationToken cancellationToken,
         bool dashboardConfigured = true,
-        string? readerToken = null,
         string? heartbeat = null,
         string? publicUrl = null,
         string? trustedProxies = null,
@@ -62,11 +61,6 @@ internal sealed class AppServer : IAsyncDisposable
             builder.Configuration.AddInMemoryCollection(new Dictionary<string, string?>
             {
                 ["ConnectionStrings:Workman"] = connectionString,
-                ["Workman:Workspace"] = workspaceSlug,
-                ["Workman:Auth:WorkerToken"] = ReadServer.WorkerToken,
-                ["Workman:Auth:OrchestratorToken"] = ReadServer.OrchestratorToken,
-                ["Workman:Auth:ControllerToken"] = ReadServer.ControllerToken,
-                ["Workman:Auth:ReaderToken"] = readerToken,
                 ["Workman:Dashboard:Username"] = dashboardConfigured ? Username : null,
                 ["Workman:Dashboard:Password"] = dashboardConfigured ? Password : null,
                 ["Workman:Stream:Heartbeat"] = heartbeat,
@@ -74,6 +68,7 @@ internal sealed class AppServer : IAsyncDisposable
                 ["Workman:PublicUrls"] = publicUrls,
                 ["WORKMAN_TRUSTED_PROXIES"] = trustedProxies,
             });
+            RoleTokens.Add(builder, workspaceSlug);
             configure?.Invoke(builder);
         });
 
@@ -81,7 +76,7 @@ internal sealed class AppServer : IAsyncDisposable
 
         if (dashboardConfigured && soleMember)
         {
-            await SoleMemberAsync(app.Services, cancellationToken);
+            await SoleMemberAsync(app.Services, await RoleTokens.WorkspaceAsync(app.Services, cancellationToken), cancellationToken);
         }
 
         var addresses = app.Services.GetRequiredService<IServer>().Features.Get<IServerAddressesFeature>();
@@ -90,11 +85,11 @@ internal sealed class AppServer : IAsyncDisposable
 
     /// <summary>
     /// A single-tenant install as it was before tenants: the operator is a member of exactly the workspace
-    /// this server's static tokens are bound to, so a sign-in lands there and an OAuth token resolves to it.
+    /// this server's role tokens are bound to, so a sign-in lands there and an OAuth token resolves to it.
     /// The shared database's operator is otherwise a member of whatever workspaces existed when the first
     /// test signed in. Through the store, not the endpoint, so no sign-in rate limit is spent.
     /// </summary>
-    private static async Task SoleMemberAsync(IServiceProvider services, CancellationToken cancellationToken)
+    private static async Task SoleMemberAsync(IServiceProvider services, Guid workspace, CancellationToken cancellationToken)
     {
         var users = services.GetRequiredService<UserStore>();
         var dashboard = services.GetRequiredService<DashboardOptions>();
@@ -118,7 +113,6 @@ internal sealed class AppServer : IAsyncDisposable
 
         Assert.NotNull(operatorUser);
 
-        var workspace = await services.GetRequiredService<StaticTokenTenant>().IdAsync(cancellationToken);
         await connection.ExecuteAsync(
             """
             DELETE FROM tenant_membership WHERE user_id = @Id AND workspace_id <> @workspace;
@@ -126,6 +120,28 @@ internal sealed class AppServer : IAsyncDisposable
             ON CONFLICT DO NOTHING;
             """,
             new { operatorUser.Id, workspace, role = TenantMembership.Admin });
+    }
+
+    /// <summary>
+    /// An OAuth access token for <c>/mcp</c>, signed in as the operator through the same flow a client runs
+    /// (<see cref="OAuthTests"/>): the controller principal that names its session by header or by
+    /// <c>work_session</c>, which a minted token never does.
+    /// </summary>
+    public Task<string> OAuthTokenAsync(CancellationToken cancellationToken)
+        => OAuthTokenAsync($"{BaseAddress}/mcp", "mcp offline_access", cancellationToken);
+
+    /// <summary>The same operator's token for <c>/api</c>: it mints agent sessions in their name space.</summary>
+    public Task<string> OAuthApiTokenAsync(CancellationToken cancellationToken)
+        => OAuthTokenAsync($"{BaseAddress}/api", "workman.read workman.sessions offline_access", cancellationToken);
+
+    private async Task<string> OAuthTokenAsync(string resource, string scope, CancellationToken cancellationToken)
+    {
+        var anonymous = NewClient();
+        var clientId = await OAuthTests.RegisterAsync(anonymous);
+        var browser = await SignInAsync(cancellationToken);
+        var pkce = OAuthTests.Pkce.Create();
+        var code = await OAuthTests.AuthorizeForCodeAsync(browser, clientId, pkce, resource, scope: scope);
+        return (await OAuthTests.ExchangeAsync(anonymous, clientId, code, pkce)).AccessToken;
     }
 
     /// <summary>A client with a jar of its own, so one test's session cannot leak into another's.</summary>

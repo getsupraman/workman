@@ -6,13 +6,13 @@ namespace Workman.Core.Data;
 /// principal, after authorization (<c>ApiHost</c>); a path that authorized a tenant of its own enters that one
 /// around the call (the <c>/r/</c> links). Inside a scope with no workspace, and outside every scope, a tenant
 /// connection sees no tenant's rows (doc 02 §15). Inside a scope with a user it sees only the projects that user
-/// may see; with none — a static token — every project of its workspace (doc 02 §15b).
+/// may see; with none — a session minted with no user — every project of its workspace (doc 02 §15b).
 /// </summary>
 public static class TenantScope
 {
     private static readonly AsyncLocal<Frame?> Current = new();
 
-    /// <summary>A workspace and no user: every project of it, as for a static token.</summary>
+    /// <summary>A workspace and no user: every project of it, as for a session minted with no user.</summary>
     public static IDisposable Enter(Guid? workspaceId) => EnterAs(workspaceId, null);
 
     /// <summary>A workspace and the user the request acts for, null for a credential that has none.</summary>

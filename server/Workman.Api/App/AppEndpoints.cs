@@ -32,7 +32,7 @@ public static class AppEndpoints
         api.MapProjectMembers();
         api.MapSessionRelease();
 
-        // doc 10 rule 5: the stream and the v1 reads take a cookie, an agent token or a reader token.
+        // doc 10 rule 5: the stream and the v1 reads take a cookie or an agent token.
         api.MapGet("/stream", EventStream.HandleAsync).RequireAuthorization(ApiV1.Policy);
         api.MapApiV1();
     }
@@ -46,11 +46,6 @@ public static class AppEndpoints
             [FromServices] UserStore? users,
             HttpContext context) =>
         {
-            if (ApiV1.IsReader(context.User))
-            {
-                return Results.Forbid();
-            }
-
             // Without a store there is no user table to sign in against or to create the first user in.
             var user = users is null
                 ? null
@@ -144,11 +139,6 @@ public static class AppEndpoints
 
         api.MapDelete("/session", async (HttpContext context) =>
         {
-            if (ApiV1.IsReader(context.User))
-            {
-                return Results.Forbid();
-            }
-
             await context.SignOutAsync(DashboardAuth.SchemeName);
             return Results.NoContent();
         }).AllowAnonymous();

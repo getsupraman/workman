@@ -16,12 +16,16 @@ namespace Workman.Tests.App;
 /// <summary>
 /// doc 11 — who may have a session name. A launcher takes over a launcher-less row only by proving it
 /// is the same Claude session; any other row an operator frees with release, and the next mint
-/// creates the session fresh.
+/// creates the session fresh. A header names a session only for an OAuth caller, so the header rows and the
+/// mints here are one operator's: the same name space, as the shared static registration's once was.
 /// </summary>
 [Collection(StoreCollection.Name)]
 public sealed class SessionNameTests(PostgresFixture fixture)
 {
     private const string Foreman = "foreman/hand";
+
+    private string? _mcp;
+    private string? _api;
 
     [Fact]
     public async Task A_launcher_takes_over_a_launcherless_header_row_with_the_same_claude_session()
@@ -220,7 +224,7 @@ public sealed class SessionNameTests(PostgresFixture fixture)
         await using var server = await StartAsync(world);
 
         await using (var client = await server.ConnectAsync(
-            ReadServer.OrchestratorToken, Ct, new Dictionary<string, string> { [CallerSession.AgentHeader] = "aw-busy" }))
+            _mcp ??= await server.OAuthTokenAsync(Ct), Ct, new Dictionary<string, string> { [CallerSession.AgentHeader] = "aw-busy" }))
         {
             var (text, refused) = await ReadServer.CallEitherAsync(
                 client,
@@ -316,7 +320,7 @@ public sealed class SessionNameTests(PostgresFixture fixture)
     }
 
     /// <summary>A hand-started session as Foreman met it: named by header, no launcher.</summary>
-    private static async Task HeaderSessionAsync(AppServer server, string name, string? claudeSessionId, bool verify = false)
+    private async Task HeaderSessionAsync(AppServer server, string name, string? claudeSessionId, bool verify = false)
     {
         var headers = new Dictionary<string, string> { [CallerSession.AgentHeader] = name };
         if (claudeSessionId is not null)
@@ -324,7 +328,7 @@ public sealed class SessionNameTests(PostgresFixture fixture)
             headers[CallerSession.SessionHeader] = claudeSessionId;
         }
 
-        await using var client = await server.ConnectAsync(ReadServer.WorkerToken, Ct, headers);
+        await using var client = await server.ConnectAsync(_mcp ??= await server.OAuthTokenAsync(Ct), Ct, headers);
         await ReadServer.CallAsync(client, "work_brief", null, Ct);
 
         if (verify)
@@ -353,9 +357,10 @@ public sealed class SessionNameTests(PostgresFixture fixture)
         return client;
     }
 
-    private static async Task<(HttpStatusCode Status, JsonElement Body)> MintAsync(AppServer server, object body)
+    private async Task<(HttpStatusCode Status, JsonElement Body)> MintAsync(AppServer server, object body)
     {
-        var response = await Bearer(server, ReadServer.ControllerToken).PostAsync("/api/agent-sessions", AppServer.Json(body), Ct);
+        var response = await Bearer(server, _api ??= await server.OAuthApiTokenAsync(Ct))
+            .PostAsync("/api/agent-sessions", AppServer.Json(body), Ct);
         return (response.StatusCode, await BodyAsync(response));
     }
 

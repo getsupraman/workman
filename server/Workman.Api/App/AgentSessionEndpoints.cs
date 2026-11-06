@@ -244,9 +244,8 @@ public static class AgentSessionEndpoints
     }
 
     /// <summary>
-    /// "The same principal, or a controller." A static token has no session, so for a session a
-    /// static token minted, the same principal is any static caller of a role at least the one it
-    /// granted; for one a minted token minted, it is that minting session. On top, a credential that
+    /// "The same principal, or a controller." For a session a minted token minted, the same principal is
+    /// that minting session. On top, a credential that
     /// names a user changes only that user's sessions (<see cref="OwnsAsync"/>); another user's is not found, so no
     /// answer says that it exists.
     /// </summary>
@@ -282,7 +281,7 @@ public static class AgentSessionEndpoints
 
     /// <summary>
     /// A member manages the sessions they minted; an admin of the tenant, or a system administrator, every
-    /// session in it. A credential with no user — a static token — keeps the role rule alone.
+    /// session in it. A credential with no user keeps the role rule alone.
     /// </summary>
     private static async Task<bool> OwnsAsync(
         MintedSession session,
@@ -338,11 +337,11 @@ public static class AgentSessionEndpoints
     private static Guid? CallerSessionId(ClaimsPrincipal user)
         => Guid.TryParse(user.FindFirst(CallerSession.SessionIdClaim)?.Value, out var id) ? id : null;
 
-    /// <summary>The user behind an OAuth token, or behind a session a user minted; a static token names none.</summary>
+    /// <summary>The user behind an OAuth token, or behind a session a user minted; a session minted with no user names none.</summary>
     private static Guid? CallerUser(ClaimsPrincipal user)
         => Guid.TryParse(user.FindFirst(CallerSession.UserIdClaim)?.Value, out var id) ? id : null;
 
-    /// <summary>The human's name, or the authorization, behind an OAuth caller; a static or <c>wss_</c> token names neither.</summary>
+    /// <summary>The human's name, or the authorization, behind an OAuth caller; a <c>wss_</c> token names neither.</summary>
     private static string? OAuthClaim(ClaimsPrincipal user, string type)
         => user.Identities
             .FirstOrDefault(identity => identity.AuthenticationType == OAuthTokenHandler.SchemeName)?

@@ -82,7 +82,7 @@ public sealed class HeaderFamilyTests(PostgresFixture fixture)
         Put(headers, WorkmanHeaders.Cwd, family, "P:/worktrees/family");
         Put(headers, WorkmanHeaders.ForemanRole, family, "repo");
 
-        await using (var client = await server.ConnectAsync(ReadServer.WorkerToken, Ct, headers))
+        await using (var client = await server.ConnectAsync(await server.OAuthTokenAsync(Ct), Ct, headers))
         {
             await ReadServer.CallAsync(client, "work_brief", null, Ct);
         }
@@ -105,7 +105,7 @@ public sealed class HeaderFamilyTests(PostgresFixture fixture)
         Assert.Equal("repo", session.ExternalRole);
     }
 
-    /// <summary>Client: what lists work_session (the static scheme) and what work_session binds.</summary>
+    /// <summary>Client: what lists work_session (an OAuth token) and what work_session binds.</summary>
     [Theory]
     [InlineData(Family.Old)]
     [InlineData(Family.Workman)]
@@ -118,7 +118,7 @@ public sealed class HeaderFamilyTests(PostgresFixture fixture)
         var headers = new Dictionary<string, string>();
         Put(headers, WorkmanHeaders.Client, family, key);
 
-        await using (var client = await server.ConnectAsync(ReadServer.ControllerToken, Ct, headers))
+        await using (var client = await server.ConnectAsync(await server.OAuthTokenAsync(Ct), Ct, headers))
         {
             var listed = (await client.ListToolsAsync(cancellationToken: Ct)).Select(t => t.Name).ToList();
             if (family is Family.Workman)
@@ -153,7 +153,7 @@ public sealed class HeaderFamilyTests(PostgresFixture fixture)
         var world = await WriteSeed.CreateAsync(fixture);
         await using var server = await AppServer.StartAsync(fixture.ConnectionString, world.Slug, Ct);
         await using (var agent = await server.ConnectAsync(
-                         ReadServer.WorkerToken, Ct, new Dictionary<string, string> { [WorkmanHeaders.Agent] = "aw-release" }))
+                         await server.OAuthTokenAsync(Ct), Ct, new Dictionary<string, string> { [WorkmanHeaders.Agent] = "aw-release" }))
         {
             await ReadServer.CallAsync(agent, "work_brief", null, Ct);
         }

@@ -51,52 +51,46 @@ public static class ApiHost
         builder.Services.AddSingleton(dashboard);
 
         builder.Services
-            .AddAuthentication(StaticTokenHandler.SchemeName)
-            .AddScheme<StaticTokenOptions, StaticTokenHandler>(StaticTokenHandler.SchemeName, options =>
-            {
-                options.WorkerToken = builder.Configuration["Workman:Auth:WorkerToken"];
-                options.OrchestratorToken = builder.Configuration["Workman:Auth:OrchestratorToken"];
-                options.ControllerToken = builder.Configuration["Workman:Auth:ControllerToken"];
-                options.ReaderToken = builder.Configuration["Workman:Auth:ReaderToken"];
-            })
+            .AddAuthentication(SessionTokenHandler.SchemeName)
+            .AddScheme<AuthenticationSchemeOptions, SessionTokenHandler>(SessionTokenHandler.SchemeName, null)
             .AddCookie(DashboardAuth.SchemeName, options => DashboardAuth.Configure(options, publicUrls))
 
             // Registered with or without a store, because WorkmanPolicies.Any names it; without one there
-            // is no OAuth server and it admits no one and challenges as the static scheme does.
+            // is no OAuth server and it admits no one and challenges as the session-token scheme does.
             .AddScheme<AuthenticationSchemeOptions, OAuthTokenHandler>(OAuthTokenHandler.SchemeName, null);
 
         // doc 01 §6. AddAuthorizationFilters() honours [Authorize] on a tool, and a tool the token
         // cannot satisfy is hidden from tools/list rather than refused on call (PROBE Q6) — so
         // these three policies are the entire role mechanism.
         builder.Services.AddAuthorizationBuilder()
-            // Every agent token carries the worker role; a reader token carries none of the three. The one
+            // Every agent token carries the worker role. The one
             // policy that also names the OAuth scheme: it is the endpoint's, and the tool policies below are
             // judged against the principal this one admitted (AddAuthorizationFilters reads the user, not
             // the schemes).
             .AddPolicy(WorkmanPolicies.Any, policy => policy
-                .AddAuthenticationSchemes(StaticTokenHandler.SchemeName, OAuthTokenHandler.SchemeName)
+                .AddAuthenticationSchemes(SessionTokenHandler.SchemeName, OAuthTokenHandler.SchemeName)
                 .RequireAuthenticatedUser()
                 .RequireRole(WorkmanPolicies.Worker)
                 .AddRequirements(new TenantRequirement()))
             .AddPolicy(WorkmanPolicies.Worker, policy => policy
-                .AddAuthenticationSchemes(StaticTokenHandler.SchemeName)
+                .AddAuthenticationSchemes(SessionTokenHandler.SchemeName)
                 .RequireAuthenticatedUser()
                 .RequireRole(WorkmanPolicies.Worker))
             .AddPolicy(WorkmanPolicies.Orchestrator, policy => policy
-                .AddAuthenticationSchemes(StaticTokenHandler.SchemeName)
+                .AddAuthenticationSchemes(SessionTokenHandler.SchemeName)
                 .RequireAuthenticatedUser()
                 .RequireRole(WorkmanPolicies.Orchestrator))
             .AddPolicy(WorkmanPolicies.Controller, policy => policy
-                .AddAuthenticationSchemes(StaticTokenHandler.SchemeName)
+                .AddAuthenticationSchemes(SessionTokenHandler.SchemeName)
                 .RequireAuthenticatedUser()
                 .RequireRole(WorkmanPolicies.Controller))
             .AddPolicy(WorkmanPolicies.Importer, policy => policy
-                .AddAuthenticationSchemes(StaticTokenHandler.SchemeName)
+                .AddAuthenticationSchemes(SessionTokenHandler.SchemeName)
                 .RequireAuthenticatedUser()
                 .RequireRole(WorkmanPolicies.Orchestrator)
                 .RequireClaim(CallerSession.GrantClaim, Core.Domain.SessionGrants.Import))
             .AddPolicy(WorkmanPolicies.SelfNamer, policy => policy
-                .AddAuthenticationSchemes(StaticTokenHandler.SchemeName)
+                .AddAuthenticationSchemes(SessionTokenHandler.SchemeName)
                 .RequireAuthenticatedUser()
                 .RequireRole(WorkmanPolicies.Worker)
                 .RequireClaim(CallerSession.ClientKeyClaim))
@@ -114,15 +108,15 @@ public static class ApiHost
             // policy that names both schemes. It still grants nothing either scheme lacks on its own.
             // OAuth is the third, for a token whose audience is <origin>/api; the scope binds it alone.
             .AddPolicy(ApiV1.Policy, policy => policy
-                .AddAuthenticationSchemes(DashboardAuth.SchemeName, StaticTokenHandler.SchemeName, OAuthTokenHandler.SchemeName)
+                .AddAuthenticationSchemes(DashboardAuth.SchemeName, SessionTokenHandler.SchemeName, OAuthTokenHandler.SchemeName)
                 .RequireAuthenticatedUser()
-                .RequireRole(DashboardAuth.Role, WorkmanPolicies.Worker, WorkmanPolicies.Reader)
+                .RequireRole(DashboardAuth.Role, WorkmanPolicies.Worker)
                 .AddRequirements(new OAuthScopeRequirement(OAuthServer.ReadScope), new TenantRequirement()))
 
             // WorkmanPolicies.Orchestrator plus OAuth, kept apart from it because the tool policies must
-            // stay static-only; the cookie is still not a bearer here.
+            // stay session-token-only; the cookie is still not a bearer here.
             .AddPolicy(AgentSessionEndpoints.Policy, policy => policy
-                .AddAuthenticationSchemes(StaticTokenHandler.SchemeName, OAuthTokenHandler.SchemeName)
+                .AddAuthenticationSchemes(SessionTokenHandler.SchemeName, OAuthTokenHandler.SchemeName)
                 .RequireAuthenticatedUser()
                 .RequireRole(WorkmanPolicies.Orchestrator)
                 .AddRequirements(new OAuthScopeRequirement(OAuthServer.SessionsScope), new TenantRequirement()));
@@ -141,7 +135,7 @@ public static class ApiHost
                 {
                     Name = "workman",
                     Title = "Workman",
-                    Version = "2.4.2",
+                    Version = "3.0.0",
                 };
                 options.ServerInstructions = WorkmanServerInstructions.Text;
             })
@@ -183,6 +177,7 @@ public static class ApiHost
             app.UseClientIdMetadata();
         }
 
+        app.UseChallengeLog();
         app.UseAuthentication();
         app.UseAuthorization();
 
@@ -273,13 +268,6 @@ public static class ApiHost
         builder.Services.AddSingleton(sp => new AdminStore(sp.GetRequiredService<NpgsqlDataSource>()));
         builder.Services.AddSingleton(sp => new UserLinkStore(sp.GetRequiredService<NpgsqlDataSource>()));
         builder.Services.AddScoped<RequestTenant>();
-
-        // The static tokens' configured binding (doc 08 §4), the one reader of Workman:Workspace.
-        var slug = builder.Configuration["Workman:Workspace"];
-        builder.Services.AddSingleton(sp => new StaticTokenTenant(
-            new WorkspaceOptions { Slug = string.IsNullOrWhiteSpace(slug) ? null : slug.Trim() },
-            sp.GetRequiredService<BoardQueries>(),
-            sp.GetRequiredService<WorkWriter>()));
 
         OAuthServer.Add(builder.Services, connectionString, publicUrls);
     }

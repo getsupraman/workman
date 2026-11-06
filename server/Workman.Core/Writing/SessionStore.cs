@@ -42,7 +42,7 @@ public sealed partial class SessionStore(NpgsqlDataSource dataSource)
 
     private sealed record Row(Guid Id, string? ClaudeSessionId, string? LaunchedBy);
 
-    /// <summary>A caller with no user — a static token — names its sessions in the workspace's shared namespace.</summary>
+    /// <summary>A caller with no user names its sessions in the workspace's shared namespace.</summary>
     public Task<SessionResolution> ResolveAsync(
         Guid workspaceId,
         ActorRole role,

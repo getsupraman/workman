@@ -29,8 +29,6 @@ internal sealed record V1World(
     Guid Deferred,
     string Tree)
 {
-    public const string ReaderToken = "test-reader-token-7e0d42";
-
     public const string SessionName = "aw-v1";
 
 
@@ -110,8 +108,8 @@ internal sealed record V1World(
 
 internal static class V1Http
 {
-    public static Task<AppServer> StartAsync(PostgresFixture fixture, string slug, string? readerToken = V1World.ReaderToken)
-        => AppServer.StartAsync(fixture.ConnectionString, slug, Ct, readerToken: readerToken);
+    public static Task<AppServer> StartAsync(PostgresFixture fixture, string slug)
+        => AppServer.StartAsync(fixture.ConnectionString, slug, Ct);
 
     public static HttpClient Bearer(AppServer server, string token)
     {
@@ -120,7 +118,11 @@ internal static class V1Http
         return client;
     }
 
-    public static HttpClient Reader(AppServer server) => Bearer(server, V1World.ReaderToken);
+    /// <summary>
+    /// A read credential for v1 that is no agent session of its own: the operator's cookie, so /api/v1/sessions
+    /// lists only the sessions a test made.
+    /// </summary>
+    public static Task<HttpClient> ReaderAsync(AppServer server) => server.SignInAsync(Ct);
 
     /// <summary>A v1 body, after asserting rule 3 and rule 4 hold on it.</summary>
     public static async Task<JsonElement> GetAsync(HttpClient client, string path)

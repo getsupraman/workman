@@ -19,7 +19,7 @@ public sealed class V1BoardsTests(PostgresFixture fixture)
     {
         var (v1, runB) = await TwoRunsAsync();
         await using var server = await v1.StartAsync(fixture);
-        var reader = Reader(server);
+        var reader = await ReaderAsync(server);
 
         var boards = Array(await GetAsync(reader, "/api/v1/boards"), "boards");
 
@@ -65,7 +65,7 @@ public sealed class V1BoardsTests(PostgresFixture fixture)
         }
 
         await using var server = await v1.StartAsync(fixture);
-        var reader = Reader(server);
+        var reader = await ReaderAsync(server);
 
         Assert.Empty(Array(await GetAsync(reader, "/api/v1/boards"), "boards"));
         Assert.Equal(
@@ -78,7 +78,7 @@ public sealed class V1BoardsTests(PostgresFixture fixture)
     {
         var (v1, runB) = await TwoRunsAsync();
         await using var server = await v1.StartAsync(fixture);
-        var reader = Reader(server);
+        var reader = await ReaderAsync(server);
 
         Assert.Equal([runB], Array(await GetAsync(reader, $"/api/v1/boards?runs={runB}"), "boards").Select(RunId));
 
@@ -91,7 +91,7 @@ public sealed class V1BoardsTests(PostgresFixture fixture)
     {
         var v1 = await V1World.CreateAsync(fixture);
         await using var server = await v1.StartAsync(fixture);
-        var reader = Reader(server);
+        var reader = await ReaderAsync(server);
 
         var atCap = string.Join(',', Enumerable.Range(0, 200).Select(_ => Guid.CreateVersion7()));
         Assert.Empty(Array(await GetAsync(reader, $"/api/v1/boards?runs={atCap}"), "boards"));

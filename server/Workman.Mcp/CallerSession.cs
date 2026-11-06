@@ -33,7 +33,7 @@ public static class CallerSession
     public const string ClientHeader = WorkmanHeaders.Client;
 
     /// <summary>
-    /// <see cref="ClientHeader"/>, on the principal of a static agent token only — a minted token's
+    /// <see cref="ClientHeader"/>, on the principal of an OAuth token only — a minted token's
     /// session is its credential's, so its key is never read.
     /// </summary>
     public const string ClientKeyClaim = "workman:client-key";
@@ -43,12 +43,12 @@ public static class CallerSession
 
     public const string SessionNameClaim = "workman:session-name";
 
-    /// <summary>One per grant the minted token carries; a static token never has one.</summary>
+    /// <summary>One per grant the minted token carries; no other credential has one.</summary>
     public const string GrantClaim = "workman:grant";
 
     /// <summary>
-    /// The <c>app_user</c> id behind an OAuth token, or behind a minted token a user minted. A static token has
-    /// none, and its sessions share the workspace's names; a user's are theirs alone.
+    /// The <c>app_user</c> id behind an OAuth token, or behind a minted token a user minted. A session minted
+    /// with no user has none, and its sessions share the workspace's names; a user's are theirs alone.
     /// </summary>
     public const string UserIdClaim = "workman:user-id";
 

@@ -3,7 +3,7 @@ using Microsoft.AspNetCore.Authorization;
 namespace Workman.Api.Auth.OAuth;
 
 /// <summary>
-/// A scope an OAuth principal must hold on a surface that also admits static tokens, cookies or <c>wss_</c>
+/// A scope an OAuth principal must hold on a surface that also admits cookies or <c>wss_</c>
 /// tokens. Only the identity <see cref="OAuthTokenHandler"/> built is judged: the others carry no scopes and
 /// never needed one, so they pass exactly as before (C31).
 /// </summary>

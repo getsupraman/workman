@@ -51,8 +51,8 @@ app deploy workman
 Every connected Claude Code session then needs `/mcp` → Reconnect: MCP sessions live in the
 process.
 
-The server accepts no static role token (doc 08 §4): `compose.yml` passes none, and `gen-env.sh`
-writes none.
+The server has no static role or reader token: people sign in with OAuth, and agents use the per-session
+tokens a signed-in session mints.
 
 ## More than one host
 
@@ -74,8 +74,9 @@ Let's Encrypt issues a certificate for every host it names. Then `app deploy wor
 To see why a client's requests are refused, add `WORKMAN_AUTH_LOG_LEVEL=Information` to `.env` and
 `app deploy workman`. Each refused request then logs its scheme and reason in `docker logs workman-api-1`:
 `was not authenticated. Failure message: Unrecognised bearer token.` for a token the server does not
-accept, and only `was challenged` for a request that carried no `Authorization` header. Header and token
-values are never logged. Remove the line (default `Warning`) when done.
+accept, and only `was challenged` for a request that carried no `Authorization` header. Every request that ends 401 also logs one line, whatever this level, naming its method, path,
+`X-Workman-Client`, `X-Workman-Agent`, `User-Agent`, whether it carried an `Authorization` header and the
+reason. Token values are never logged. Remove the line (default `Warning`) when done.
 
 ## Restore
 

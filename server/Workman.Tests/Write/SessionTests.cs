@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using ModelContextProtocol.Client;
 using Workman.Core.Domain;
 using Workman.Mcp;
+using Workman.Tests.App;
 using Workman.Tests.Read;
 using Workman.Tests.Store;
 using Xunit;
@@ -12,7 +13,9 @@ namespace Workman.Tests.Write;
 /// <summary>
 /// doc 11 over the real transport. Two controller sessions shared one token, so all 301 live events
 /// and 26 claims were signed "controller"; the session is the second label that tells them apart,
-/// and it is the unit "one writer per tree" is now counted in.
+/// and it is the unit "one writer per tree" is now counted in. A minted token's session is its
+/// credential's, so the header-named callers here hold an OAuth token, the one credential that names its
+/// session by header.
 /// </summary>
 [Collection(StoreCollection.Name)]
 public sealed class SessionTests(PostgresFixture fixture)
@@ -22,10 +25,11 @@ public sealed class SessionTests(PostgresFixture fixture)
     {
         var world = await WriteSeed.CreateAsync(fixture);
         await WriteSeed.ChildAsync(world, world.PhaseId, "1.2");
-        await using var server = await ReadServer.StartAsync(fixture.ConnectionString, world.Slug, Ct);
+        await using var server = await AppServer.StartAsync(fixture.ConnectionString, world.Slug, Ct);
 
-        await using var first = await ConnectAsync(server, ReadServer.ControllerToken, Agent("skills-5d"));
-        await using var second = await ConnectAsync(server, ReadServer.ControllerToken, Agent("autowork-7c"));
+        var oauth = await server.OAuthTokenAsync(Ct);
+        await using var first = await ConnectAsync(server, oauth, Agent("skills-5d"));
+        await using var second = await ConnectAsync(server, oauth, Agent("autowork-7c"));
 
         await StartAsync(first, "1.1", Tree());
         await StartAsync(second, "1.2", Tree());
@@ -54,15 +58,16 @@ public sealed class SessionTests(PostgresFixture fixture)
 
     /// <summary>
     /// The guard for everything registered before doc 11: no header, no session. The claim, the
-    /// event and the refusal read exactly as they did, and the tree is held per writer as before.
+    /// event and the refusal read exactly as they did, and the tree is held per writer as before. An OAuth
+    /// token without a header is the one credential left that calls unnamed.
     /// </summary>
     [Fact]
     public async Task An_unnamed_call_has_no_session_and_is_attributed_as_before()
     {
         var world = await WriteSeed.CreateAsync(fixture);
         await WriteSeed.ChildAsync(world, world.PhaseId, "1.2");
-        await using var server = await ReadServer.StartAsync(fixture.ConnectionString, world.Slug, Ct);
-        await using var client = await server.ConnectAsync(ReadServer.ControllerToken, Ct);
+        await using var server = await AppServer.StartAsync(fixture.ConnectionString, world.Slug, Ct);
+        await using var client = await server.ConnectAsync(await server.OAuthTokenAsync(Ct), Ct);
 
         var tree = Tree();
         await StartAsync(client, "1.1", tree);
@@ -87,9 +92,10 @@ public sealed class SessionTests(PostgresFixture fixture)
     public async Task An_unnamed_brief_says_how_to_sign_and_a_named_one_does_not()
     {
         var world = await WriteSeed.CreateAsync(fixture);
-        await using var server = await ReadServer.StartAsync(fixture.ConnectionString, world.Slug, Ct);
-        await using var unnamed = await server.ConnectAsync(ReadServer.OrchestratorToken, Ct);
-        await using var named = await ConnectAsync(server, ReadServer.OrchestratorToken, Agent("aw-m4"));
+        await using var server = await AppServer.StartAsync(fixture.ConnectionString, world.Slug, Ct);
+        var oauth = await server.OAuthTokenAsync(Ct);
+        await using var unnamed = await server.ConnectAsync(oauth, Ct);
+        await using var named = await ConnectAsync(server, oauth, Agent("aw-m4"));
 
         const string hint = "session  unnamed — /workman:setup installs the session helper";
 
@@ -105,35 +111,6 @@ public sealed class SessionTests(PostgresFixture fixture)
         Assert.DoesNotContain("X-Workman-Agent", wrote, StringComparison.Ordinal);
     }
 
-    [Fact]
-    public async Task The_registration_headers_fill_the_session_row()
-    {
-        var world = await WriteSeed.CreateAsync(fixture);
-        await using var server = await ReadServer.StartAsync(fixture.ConnectionString, world.Slug, Ct);
-        await using var client = await ConnectAsync(
-            server,
-            ReadServer.WorkerToken,
-            Agent(
-                "aw-m3",
-                (CallerSession.SessionHeader, "0b5e7c1a-claude"),
-                (CallerSession.LaunchedByHeader, "foreman"),
-                (CallerSession.OriginHeader, "foreman/orion/Orion"),
-                (CallerSession.CwdHeader, "P:/worktrees/m3"),
-                (CallerSession.ForemanRoleHeader, "repo")));
-
-        await ReadServer.CallAsync(client, "work_brief", null, Ct);
-
-        await using var db = fixture.NewContext();
-        var session = await db.AgentSessions.SingleAsync(s => s.WorkspaceId == world.WorkspaceId, Ct);
-        Assert.Equal("aw-m3", session.Name);
-        Assert.Equal("0b5e7c1a-claude", session.ClaudeSessionId);
-        Assert.Equal("foreman", session.LaunchedBy);
-        Assert.Equal("foreman/orion/Orion", session.Origin);
-        Assert.Equal("P:/worktrees/m3", session.Cwd);
-        Assert.Equal("repo", session.ExternalRole);
-        Assert.Equal(ActorRole.Worker, session.Role);
-    }
-
     /// <summary>
     /// <c>--resume</c>, compaction and a respawn keep the name and open a new MCP connection; a
     /// respawn can come back under a new Claude session id. Keyed by anything but (workspace, name),
@@ -144,18 +121,19 @@ public sealed class SessionTests(PostgresFixture fixture)
     {
         var world = await WriteSeed.CreateAsync(fixture);
         await WriteSeed.ChildAsync(world, world.PhaseId, "1.2");
-        await using var server = await ReadServer.StartAsync(fixture.ConnectionString, world.Slug, Ct);
+        await using var server = await AppServer.StartAsync(fixture.ConnectionString, world.Slug, Ct);
 
         var tree = Tree();
+        var oauth = await server.OAuthTokenAsync(Ct);
 
         await using (var original = await ConnectAsync(
-                         server, ReadServer.OrchestratorToken, Agent("aw-m1", (CallerSession.SessionHeader, "claude-a"))))
+                         server, oauth, Agent("aw-m1", (CallerSession.SessionHeader, "claude-a"))))
         {
             await StartAsync(original, "1.1", tree);
         }
 
         await using var resumed = await ConnectAsync(
-            server, ReadServer.OrchestratorToken, Agent("aw-m1", (CallerSession.SessionHeader, "claude-b")));
+            server, oauth, Agent("aw-m1", (CallerSession.SessionHeader, "claude-b")));
 
         var (text, refused) = await StatusAsync(resumed, "1.2", tree);
         Assert.False(refused, text);
@@ -186,8 +164,8 @@ public sealed class SessionTests(PostgresFixture fixture)
     {
         var world = await WriteSeed.CreateAsync(fixture);
         await WriteSeed.ChildAsync(world, world.PhaseId, "1.2");
-        await using var server = await ReadServer.StartAsync(fixture.ConnectionString, world.Slug, Ct);
-        await using var client = await ConnectAsync(server, ReadServer.ControllerToken, Agent("skills-5d"));
+        await using var server = await AppServer.StartAsync(fixture.ConnectionString, world.Slug, Ct);
+        await using var client = await ConnectAsync(server, await server.OAuthTokenAsync(Ct), Agent("skills-5d"));
 
         var tree = Tree();
         await StartAsync(client, "1.1", tree);
@@ -204,9 +182,10 @@ public sealed class SessionTests(PostgresFixture fixture)
     {
         var world = await WriteSeed.CreateAsync(fixture);
         await WriteSeed.ChildAsync(world, world.PhaseId, "1.2");
-        await using var server = await ReadServer.StartAsync(fixture.ConnectionString, world.Slug, Ct);
-        await using var holder = await ConnectAsync(server, ReadServer.ControllerToken, Agent("skills-5d"));
-        await using var other = await ConnectAsync(server, ReadServer.ControllerToken, Agent("autowork-7c"));
+        await using var server = await AppServer.StartAsync(fixture.ConnectionString, world.Slug, Ct);
+        var oauth = await server.OAuthTokenAsync(Ct);
+        await using var holder = await ConnectAsync(server, oauth, Agent("skills-5d"));
+        await using var other = await ConnectAsync(server, oauth, Agent("autowork-7c"));
 
         var tree = Tree();
         await StartAsync(holder, "1.1", tree);
@@ -233,9 +212,10 @@ public sealed class SessionTests(PostgresFixture fixture)
     public async Task Any_call_from_the_claiming_session_renews_its_leases()
     {
         var world = await WriteSeed.CreateAsync(fixture);
-        await using var server = await ReadServer.StartAsync(fixture.ConnectionString, world.Slug, Ct);
-        await using var client = await ConnectAsync(server, ReadServer.OrchestratorToken, Agent("aw-lease"));
-        await using var stranger = await ConnectAsync(server, ReadServer.OrchestratorToken, Agent("aw-other"));
+        await using var server = await AppServer.StartAsync(fixture.ConnectionString, world.Slug, Ct);
+        var oauth = await server.OAuthTokenAsync(Ct);
+        await using var client = await ConnectAsync(server, oauth, Agent("aw-lease"));
+        await using var stranger = await ConnectAsync(server, oauth, Agent("aw-other"));
 
         await StartAsync(client, "1.1", Tree());
         await BackdateAsync(world);
@@ -254,14 +234,15 @@ public sealed class SessionTests(PostgresFixture fixture)
     public async Task A_name_held_by_another_launcher_is_refused()
     {
         var world = await WriteSeed.CreateAsync(fixture);
-        await using var server = await ReadServer.StartAsync(fixture.ConnectionString, world.Slug, Ct);
+        await using var server = await AppServer.StartAsync(fixture.ConnectionString, world.Slug, Ct);
 
+        var oauth = await server.OAuthTokenAsync(Ct);
         await using var first = await ConnectAsync(
-            server, ReadServer.WorkerToken, Agent("aw-dup", ("X-Workman-Launched-By", "foreman-a")));
+            server, oauth, Agent("aw-dup", ("X-Workman-Launched-By", "foreman-a")));
         await ReadServer.CallAsync(first, "work_brief", null, Ct);
 
         await using var second = await ConnectAsync(
-            server, ReadServer.WorkerToken, Agent("aw-dup", ("X-Workman-Launched-By", "foreman-b")));
+            server, oauth, Agent("aw-dup", ("X-Workman-Launched-By", "foreman-b")));
         var (text, refused) = await ReadServer.CallEitherAsync(second, "work_brief", null, Ct);
 
         Assert.True(refused, text);
@@ -282,7 +263,7 @@ public sealed class SessionTests(PostgresFixture fixture)
     public async Task No_header_raises_a_role()
     {
         var world = await WriteSeed.CreateAsync(fixture);
-        await using var server = await ReadServer.StartAsync(fixture.ConnectionString, world.Slug, Ct);
+        await using var server = await AppServer.StartAsync(fixture.ConnectionString, world.Slug, Ct);
 
         await using var controller = await ConnectAsync(server, ReadServer.ControllerToken, Agent("skills-5d"));
         await ReadServer.CallAsync(controller, "work_brief", null, Ct);
@@ -323,7 +304,7 @@ public sealed class SessionTests(PostgresFixture fixture)
     private static (string, string)[] Agent(string name, params (string, string)[] more)
         => [(CallerSession.AgentHeader, name), .. more];
 
-    private static Task<McpClient> ConnectAsync(ReadServer server, string token, (string Name, string Value)[] headers)
+    private static Task<McpClient> ConnectAsync(AppServer server, string token, (string Name, string Value)[] headers)
     {
         var all = new Dictionary<string, string> { ["Authorization"] = $"Bearer {token}" };
         foreach (var (name, value) in headers)

@@ -161,7 +161,7 @@ public sealed class EventStream(NpgsqlDataSource dataSource, StreamOptions optio
 
     /// <summary>
     /// <c>GET /api/stream</c>. Server-Sent Events, under the read API's policy (doc 10 rule 5): the
-    /// dashboard cookie, an agent token or a reader token — it carries ids and kinds, never content.
+    /// dashboard cookie or an agent token — it carries ids and kinds, never content.
     /// Each event is read back through the request's tenant scope before it is sent, so an event of a project
     /// the caller is not a member of is not sent, and a membership change applies from the next event (doc 02 §15b).
     /// </summary>

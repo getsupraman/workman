@@ -7,7 +7,7 @@ using Workman.Core.Writing;
 namespace Workman.Mcp.Tools;
 
 /// <summary>
-/// doc 11 — self-naming. Listed only where it can work: a static token on a request whose session
+/// doc 11 — self-naming. Listed only where it can work: an OAuth token on a request whose session
 /// helper sent <c>X-Workman-Client</c> (<see cref="WorkmanPolicies.SelfNamer"/>).
 /// </summary>
 [McpServerToolType]

@@ -135,7 +135,7 @@ public sealed partial class V1PromptTests(PostgresFixture fixture)
     {
         var w = await CreateAsync();
         await using var server = await V1Http.StartAsync(fixture, w.World.Slug);
-        var reader = V1Http.Reader(server);
+        var reader = await V1Http.ReaderAsync(server);
 
         var backlog = await V1Http.GetAsync(reader, $"/api/v1/backlog?project={w.World.ProjectId}");
         var listed = V1Http.Array(backlog, "groups").Sum(g => g.GetProperty("items").GetArrayLength());
@@ -339,7 +339,7 @@ public sealed partial class V1PromptTests(PostgresFixture fixture)
     {
         var w = await CreateAsync();
         await using var server = await V1Http.StartAsync(fixture, w.World.Slug);
-        var reader = V1Http.Reader(server);
+        var reader = await V1Http.ReaderAsync(server);
 
         var json = await V1Http.GetAsync(reader, $"/api/v1/prompts?scope={w.World.ProjectId}");
         var direct = await PromptsAsync(w.World, w.World.ProjectId);
@@ -379,7 +379,7 @@ public sealed partial class V1PromptTests(PostgresFixture fixture)
         Assert.Equal(HttpStatusCode.Unauthorized, anonymous.StatusCode);
         Assert.Equal(ApiV1.Version, Assert.Single(anonymous.Headers.GetValues(ApiV1.Header)));
 
-        var reader = V1Http.Reader(server);
+        var reader = await V1Http.ReaderAsync(server);
         Assert.Equal(HttpStatusCode.NotFound, (await reader.GetAsync($"/api/v1/prompts?scope={Guid.CreateVersion7()}", Ct)).StatusCode);
         Assert.Equal(HttpStatusCode.BadRequest, (await reader.GetAsync("/api/v1/prompts", Ct)).StatusCode);
 

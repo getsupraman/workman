@@ -2,7 +2,6 @@ using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using Microsoft.Extensions.Configuration;
-using Workman.Tests.Read;
 using Workman.Tests.Store;
 using Xunit;
 using static Workman.Tests.Store.Tokens;
@@ -10,14 +9,17 @@ using static Workman.Tests.Store.Tokens;
 namespace Workman.Tests.App;
 
 /// <summary>
-/// The server deploy (deploy/multi-deploy) configures no static role token: a token string some machine
-/// still holds is a credential nobody accepts, while the dashboard and OAuth keep working.
+/// Server 3.0 reads no static role or reader token: a value some machine still holds, even with its old
+/// configuration key still set, is a credential nobody accepts, while the dashboard and OAuth keep working.
 /// </summary>
 [Collection(StoreCollection.Name)]
 public sealed class StaticTokensRetiredTests(PostgresFixture fixture)
 {
+    private static readonly string[] Former =
+        ["test-worker-token-4b1f7a", "test-orchestrator-token-8d2c6e", "test-controller-token-c93a15", "test-reader-token-7e0d42"];
+
     [Fact]
-    public async Task With_no_static_tokens_configured_a_former_token_reaches_nothing_and_the_cookie_still_works()
+    public async Task A_former_static_token_reaches_nothing_even_configured_and_the_cookie_still_works()
     {
         await using var server = await AppServer.StartAsync(
             fixture.ConnectionString,
@@ -25,12 +27,13 @@ public sealed class StaticTokensRetiredTests(PostgresFixture fixture)
             Ct,
             configure: builder => builder.Configuration.AddInMemoryCollection(new Dictionary<string, string?>
             {
-                ["Workman:Auth:WorkerToken"] = "",
-                ["Workman:Auth:OrchestratorToken"] = "",
-                ["Workman:Auth:ControllerToken"] = "",
+                ["Workman:Auth:WorkerToken"] = Former[0],
+                ["Workman:Auth:OrchestratorToken"] = Former[1],
+                ["Workman:Auth:ControllerToken"] = Former[2],
+                ["Workman:Auth:ReaderToken"] = Former[3],
             }));
 
-        foreach (var token in new[] { ReadServer.WorkerToken, ReadServer.OrchestratorToken, ReadServer.ControllerToken })
+        foreach (var token in Former)
         {
             var client = server.NewClient();
             client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);

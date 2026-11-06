@@ -17,9 +17,11 @@ namespace Workman.Tests.Read;
 /// </summary>
 internal sealed class ReadServer : IAsyncDisposable
 {
-    public const string WorkerToken = "test-worker-token-4b1f7a";
-    public const string OrchestratorToken = "test-orchestrator-token-8d2c6e";
-    public const string ControllerToken = "test-controller-token-c93a15";
+    // Real wss_ session tokens, each bound to a minted session of the server's workspace on its first use
+    // (RoleTokens), so every test authenticates through the path production uses.
+    public const string WorkerToken = "wss_test-worker-token-4b1f7a";
+    public const string OrchestratorToken = "wss_test-orchestrator-token-8d2c6e";
+    public const string ControllerToken = "wss_test-controller-token-c93a15";
 
     private readonly WebApplication _app;
 
@@ -42,11 +44,8 @@ internal sealed class ReadServer : IAsyncDisposable
             builder.Configuration.AddInMemoryCollection(new Dictionary<string, string?>
             {
                 ["ConnectionStrings:Workman"] = connectionString,
-                ["Workman:Workspace"] = workspaceSlug,
-                ["Workman:Auth:WorkerToken"] = WorkerToken,
-                ["Workman:Auth:OrchestratorToken"] = OrchestratorToken,
-                ["Workman:Auth:ControllerToken"] = ControllerToken,
             });
+            RoleTokens.Add(builder, workspaceSlug);
         });
 
         await app.StartAsync(cancellationToken);

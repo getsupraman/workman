@@ -22,7 +22,7 @@ public sealed class V1FullRefTests(PostgresFixture fixture)
         var nineOne = await WriteSeed.SecondRunAsync(world, "run-b");
 
         await using var server = await V1Http.StartAsync(fixture, world.Slug);
-        var reader = Reader(server);
+        var reader = await ReaderAsync(server);
 
         var board = await GetAsync(reader, $"/api/v1/runs/{world.RunId}/board");
         var project = board.GetProperty("project").GetProperty("ref").GetString()!;

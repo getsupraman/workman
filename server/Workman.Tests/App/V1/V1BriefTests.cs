@@ -47,7 +47,9 @@ public sealed class V1BriefTests(PostgresFixture fixture)
 
         await using var server = await StartAsync(run.WorkspaceSlug);
         var client = await server.SignInAsync(Ct);
-        await using var mcp = await server.ConnectAsync(ReadServer.ControllerToken, Ct);
+
+        // An unnamed caller, as the dashboard's brief is: a minted token always names its session.
+        await using var mcp = await server.ConnectAsync(await server.OAuthTokenAsync(Ct), Ct);
 
         async Task<string> ApiAsync()
         {

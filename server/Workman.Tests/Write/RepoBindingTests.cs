@@ -242,7 +242,8 @@ public sealed class RepoBindingTests(PostgresFixture fixture)
             new UpdateArgs(Repo: new RepoArg(Remote, Root)), Ct);
         await using var server = await v1.StartAsync(fixture);
 
-        var overview = await V1Http.GetAsync(V1Http.Reader(server), "/api/v1/overview");
+        // A root is a path on one user's machine; the seed bound it with none, so a credential with no user reads it.
+        var overview = await V1Http.GetAsync(V1Http.Bearer(server, ReadServer.WorkerToken), "/api/v1/overview");
 
         var repos = V1Http.Array(Assert.Single(V1Http.Array(overview, "projects")), "repos");
         Assert.Equal(

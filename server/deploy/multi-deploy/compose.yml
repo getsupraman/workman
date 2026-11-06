@@ -32,7 +32,6 @@ services:
     environment:
       ASPNETCORE_ENVIRONMENT: Production
       ASPNETCORE_HTTP_PORTS: 8080
-      Workman__Auth__ReaderToken: ${WORKMAN_READER_TOKEN:-}
       Workman__Dashboard__Username: ${WORKMAN_DASHBOARD_USERNAME:?set WORKMAN_DASHBOARD_USERNAME in .env}
       Workman__Dashboard__Password: ${WORKMAN_DASHBOARD_PASSWORD:?set WORKMAN_DASHBOARD_PASSWORD in .env}
       Workman__PublicUrl: ${WORKMAN_PUBLIC_URL:?set WORKMAN_PUBLIC_URL in .env}

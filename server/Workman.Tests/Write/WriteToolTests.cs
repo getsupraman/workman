@@ -195,7 +195,9 @@ public sealed class WriteToolTests(PostgresFixture fixture)
         await Ok(client, "work_status", new Dictionary<string, object?> { ["ref"] = "1.1", ["to"] = "in_progress" });
         await WriteSeed.ExpireClaimAsync(world, world.TaskId);
 
-        await ReadServer.CallAsync(client, "work_brief", null, Ct);
+        // Another session's brief: a call from the claiming session would renew its lease.
+        await using var other = await server.ConnectAsync(ReadServer.ControllerToken, Ct);
+        await ReadServer.CallAsync(other, "work_brief", null, Ct);
 
         Assert.Equal(ItemStatus.Ready, await world.StatusAsync("1.1"));
         Assert.Contains("claim_expired", await WriteSeed.EventKindsAsync(world, world.TaskId));

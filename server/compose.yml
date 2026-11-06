@@ -32,11 +32,6 @@ services:
     environment:
       ASPNETCORE_ENVIRONMENT: Production
       ASPNETCORE_HTTP_PORTS: 8080
-      Workman__Auth__WorkerToken: ${WORKMAN_WORKER_TOKEN:?set WORKMAN_WORKER_TOKEN in .env}
-      Workman__Auth__OrchestratorToken: ${WORKMAN_ORCHESTRATOR_TOKEN:?set WORKMAN_ORCHESTRATOR_TOKEN in .env}
-      Workman__Auth__ControllerToken: ${WORKMAN_CONTROLLER_TOKEN:?set WORKMAN_CONTROLLER_TOKEN in .env}
-      # Optional, unlike the three above: empty means no reader token exists (doc 10 rule 5).
-      Workman__Auth__ReaderToken: ${WORKMAN_READER_TOKEN:-}
       Workman__Dashboard__Username: ${WORKMAN_DASHBOARD_USERNAME:?set WORKMAN_DASHBOARD_USERNAME in .env}
       Workman__Dashboard__Password: ${WORKMAN_DASHBOARD_PASSWORD:?set WORKMAN_DASHBOARD_PASSWORD in .env}
       # Optional: the base of the web line work_brief and work_get print. Empty means the request's host.

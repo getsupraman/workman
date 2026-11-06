@@ -226,7 +226,7 @@ public sealed class ProjectArchiveTests(PostgresFixture fixture)
         var world = v1.World;
         await using var server = await v1.StartAsync(fixture);
 
-        var before = Assert.Single(V1Http.Array(await V1Http.GetAsync(V1Http.Reader(server), "/api/v1/overview"), "projects"));
+        var before = Assert.Single(V1Http.Array(await V1Http.GetAsync(await V1Http.ReaderAsync(server), "/api/v1/overview"), "projects"));
         Assert.Equal(JsonValueKind.Null, before.GetProperty("archivedAt").ValueKind);
         Assert.Equal(JsonValueKind.String, before.GetProperty("lastActivityAt").ValueKind);
         Assert.Equal(1, before.GetProperty("openRuns").GetInt32());
@@ -234,7 +234,7 @@ public sealed class ProjectArchiveTests(PostgresFixture fixture)
         Assert.False((await world.Writer.UpdateAsync(world.WorkspaceId, WriteSeed.Orchestrator, await ProjectRefAsync(world),
             new UpdateArgs(Archived: true), Ct)).Refused);
 
-        var after = Assert.Single(V1Http.Array(await V1Http.GetAsync(V1Http.Reader(server), "/api/v1/overview"), "projects"));
+        var after = Assert.Single(V1Http.Array(await V1Http.GetAsync(await V1Http.ReaderAsync(server), "/api/v1/overview"), "projects"));
         Assert.Equal(JsonValueKind.String, after.GetProperty("archivedAt").ValueKind);
         Assert.True(after.GetProperty("lastActivityAt").GetDateTimeOffset() >= before.GetProperty("lastActivityAt").GetDateTimeOffset());
     }

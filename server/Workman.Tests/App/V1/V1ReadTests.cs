@@ -19,7 +19,7 @@ public sealed class V1ReadTests(PostgresFixture fixture)
         var v1 = await V1World.CreateAsync(fixture);
         await using var server = await v1.StartAsync(fixture);
 
-        var overview = await GetAsync(Reader(server), "/api/v1/overview");
+        var overview = await GetAsync(await ReaderAsync(server), "/api/v1/overview");
 
         var project = Assert.Single(Array(overview, "projects"));
         Assert.Equal(v1.World.ProjectId, project.GetProperty("item").GetProperty("id").GetGuid());
@@ -59,7 +59,7 @@ public sealed class V1ReadTests(PostgresFixture fixture)
     {
         var v1 = await V1World.CreateAsync(fixture);
         await using var server = await v1.StartAsync(fixture);
-        var reader = Reader(server);
+        var reader = await ReaderAsync(server);
 
         var audit = await v1.World.Reader.AuditAsync(await v1.World.ScopeAsync("run-a"), Ct);
         Assert.Contains("1.2", audit, StringComparison.Ordinal);
@@ -86,7 +86,7 @@ public sealed class V1ReadTests(PostgresFixture fixture)
         var v1 = await V1World.CreateAsync(fixture);
         await using var server = await v1.StartAsync(fixture);
 
-        var board = await GetAsync(Reader(server), $"/api/v1/runs/{v1.World.RunId}/board");
+        var board = await GetAsync(await ReaderAsync(server), $"/api/v1/runs/{v1.World.RunId}/board");
 
         Assert.Equal(v1.World.RunId, board.GetProperty("run").GetProperty("id").GetGuid());
         Assert.Equal(v1.World.ProjectId, board.GetProperty("project").GetProperty("id").GetGuid());
@@ -127,7 +127,7 @@ public sealed class V1ReadTests(PostgresFixture fixture)
         var v1 = await V1World.CreateAsync(fixture);
         await using var server = await v1.StartAsync(fixture);
 
-        var item = await GetAsync(Reader(server), $"/api/v1/items/{v1.World.TaskId}");
+        var item = await GetAsync(await ReaderAsync(server), $"/api/v1/items/{v1.World.TaskId}");
 
         Assert.Equal("1.1", item.GetProperty("item").GetProperty("ref").GetString());
         Assert.Equal(
@@ -187,7 +187,7 @@ public sealed class V1ReadTests(PostgresFixture fixture)
         Assert.False(assumed.Refused, assumed.Text);
 
         await using var server = await v1.StartAsync(fixture);
-        var reader = Reader(server);
+        var reader = await ReaderAsync(server);
 
         var waiting = await GetAsync(reader, $"/api/v1/items/{v1.WaitsOnWork}");
         var into = Assert.Single(waiting.GetProperty("links").GetProperty("in").EnumerateArray());
@@ -206,7 +206,7 @@ public sealed class V1ReadTests(PostgresFixture fixture)
         var v1 = await V1World.CreateAsync(fixture);
         var other = await V1World.CreateAsync(fixture);
         await using var server = await v1.StartAsync(fixture);
-        var reader = Reader(server);
+        var reader = await ReaderAsync(server);
 
         foreach (var id in (Guid[])[Guid.CreateVersion7(), other.World.TaskId])
         {
@@ -220,7 +220,7 @@ public sealed class V1ReadTests(PostgresFixture fixture)
     {
         var v1 = await V1World.CreateAsync(fixture);
         await using var server = await v1.StartAsync(fixture);
-        var reader = Reader(server);
+        var reader = await ReaderAsync(server);
 
         var response = await reader.GetAsync($"/api/v1/items/{v1.World.RunId}/brief", Ct);
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
@@ -241,7 +241,7 @@ public sealed class V1ReadTests(PostgresFixture fixture)
     {
         var v1 = await V1World.CreateAsync(fixture);
         await using var server = await v1.StartAsync(fixture);
-        var reader = Reader(server);
+        var reader = await ReaderAsync(server);
 
         var response = await reader.GetAsync($"/api/v1/items/{v1.World.PhaseId}/brief?for=Gate", Ct);
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
@@ -263,7 +263,7 @@ public sealed class V1ReadTests(PostgresFixture fixture)
         var v1 = await V1World.CreateAsync(fixture);
         await using var server = await v1.StartAsync(fixture);
 
-        var inbox = await GetAsync(Reader(server), $"/api/v1/inbox?project={v1.World.ProjectId}");
+        var inbox = await GetAsync(await ReaderAsync(server), $"/api/v1/inbox?project={v1.World.ProjectId}");
         var rows = Array(inbox, "rows");
 
         var blocked = Assert.Single(rows, r => r.GetProperty("kind").GetString() == "blocked");
@@ -290,7 +290,7 @@ public sealed class V1ReadTests(PostgresFixture fixture)
             $"{r.GetProperty("kind").GetString()}:{r.GetProperty("item").GetProperty("id").GetGuid()}",
             r.GetProperty("key").GetString()));
 
-        var all = await GetAsync(Reader(server), "/api/v1/inbox");
+        var all = await GetAsync(await ReaderAsync(server), "/api/v1/inbox");
         Assert.Equal(rows.Count, Array(all, "rows").Count);
     }
 
@@ -299,7 +299,7 @@ public sealed class V1ReadTests(PostgresFixture fixture)
     {
         var v1 = await V1World.CreateAsync(fixture);
         await using var server = await v1.StartAsync(fixture);
-        var reader = Reader(server);
+        var reader = await ReaderAsync(server);
 
         var first = await GetAsync(reader, $"/api/v1/journal?scope={v1.World.RunId}");
         var seqs = Array(first, "events").Select(e => e.GetProperty("seq").GetInt64()).ToList();
@@ -331,7 +331,7 @@ public sealed class V1ReadTests(PostgresFixture fixture)
         Assert.False(deferred.Refused, deferred.Text);
 
         await using var server = await v1.StartAsync(fixture);
-        var backlog = await GetAsync(Reader(server), $"/api/v1/backlog?project={v1.World.ProjectId}");
+        var backlog = await GetAsync(await ReaderAsync(server), $"/api/v1/backlog?project={v1.World.ProjectId}");
 
         Assert.Equal("run", backlog.GetProperty("run").GetProperty("kind").GetString());
         var group = Assert.Single(Array(backlog, "groups"));
@@ -344,7 +344,7 @@ public sealed class V1ReadTests(PostgresFixture fixture)
     {
         var v1 = await V1World.CreateAsync(fixture);
         await using var server = await v1.StartAsync(fixture);
-        var reader = Reader(server);
+        var reader = await ReaderAsync(server);
 
         var sessions = await GetAsync(reader, "/api/v1/sessions?active=true");
         var row = Assert.Single(Array(sessions, "sessions"));
@@ -366,7 +366,7 @@ public sealed class V1ReadTests(PostgresFixture fixture)
     {
         var v1 = await V1World.CreateAsync(fixture);
         await using var server = await v1.StartAsync(fixture);
-        var reader = Reader(server);
+        var reader = await ReaderAsync(server);
 
         var resolved = await GetAsync(reader, "/api/v1/resolve?ref=1.1");
         Assert.Equal(v1.World.TaskId, Assert.Single(Array(resolved, "matches")).GetProperty("id").GetGuid());
@@ -390,7 +390,7 @@ public sealed class V1ReadTests(PostgresFixture fixture)
         await WriteSeed.StatusAsync(world, world.PhaseId, ItemStatus.Done);
 
         await using var server = await StartAsync(fixture, world.Slug);
-        var rows = Array(await GetAsync(Reader(server), $"/api/v1/runs/{world.RunId}/board"), "rows");
+        var rows = Array(await GetAsync(await ReaderAsync(server), $"/api/v1/runs/{world.RunId}/board"), "rows");
 
         var phase = ByRef(rows, "1");
         Assert.Equal("done", phase.GetProperty("item").GetProperty("status").GetString());
@@ -429,7 +429,7 @@ public sealed class V1ReadTests(PostgresFixture fixture)
         await WriteSeed.ChildAsync(world, world.PhaseId, "1.6", status: ItemStatus.Cancelled);
 
         await using var server = await StartAsync(fixture, world.Slug);
-        var rows = Array(await GetAsync(Reader(server), $"/api/v1/runs/{world.RunId}/board"), "rows");
+        var rows = Array(await GetAsync(await ReaderAsync(server), $"/api/v1/runs/{world.RunId}/board"), "rows");
         var rollup = ByRef(rows, "1").GetProperty("rollup");
 
         Assert.Equal(1, rollup.GetProperty("review").GetInt32());
@@ -459,7 +459,7 @@ public sealed class V1ReadTests(PostgresFixture fixture)
         await WriteSeed.ChildAsync(world, world.PhaseId, "F-4", kind: "followup", status: ItemStatus.Cancelled);
 
         await using var server = await StartAsync(fixture, world.Slug);
-        var overview = await GetAsync(Reader(server), "/api/v1/overview");
+        var overview = await GetAsync(await ReaderAsync(server), "/api/v1/overview");
 
         Assert.Equal(2, overview.GetProperty("honesty").GetProperty("followupsOpen").GetInt32());
     }
@@ -482,7 +482,7 @@ public sealed class V1ReadTests(PostgresFixture fixture)
         }
 
         await using var server = await StartAsync(fixture, world.Slug);
-        var reader = Reader(server);
+        var reader = await ReaderAsync(server);
 
         var full = await GetAsync(reader, $"/api/v1/journal?scope={world.RunId}&since=0");
         var total = full.GetProperty("events").GetArrayLength();
@@ -506,7 +506,7 @@ public sealed class V1ReadTests(PostgresFixture fixture)
         var world = await WriteSeed.CreateAsync(fixture);
         await using var server = await StartAsync(fixture, world.Slug);
 
-        var response = await Reader(server).GetAsync($"/api/v1/inbox?project={Guid.CreateVersion7()}", Ct);
+        var response = await (await ReaderAsync(server)).GetAsync($"/api/v1/inbox?project={Guid.CreateVersion7()}", Ct);
 
         Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
     }
@@ -526,7 +526,7 @@ public sealed class V1ReadTests(PostgresFixture fixture)
         await WriteSeed.ChildAsync(world, withCancelled, "4.1", status: ItemStatus.Cancelled);
 
         await using var server = await StartAsync(fixture, world.Slug);
-        var reader = Reader(server);
+        var reader = await ReaderAsync(server);
         var rows = Array(await GetAsync(reader, $"/api/v1/runs/{world.RunId}/board"), "rows");
 
         // 1.1 open, phase 2 open and empty, phase 3 done and empty, 4.1 cancelled; phases 1 and 4 and F-1 are not items.

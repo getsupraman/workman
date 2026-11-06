@@ -185,9 +185,9 @@ public sealed partial class RenderedCallTests(PostgresFixture fixture)
     }
 
     /// <summary>
-    /// The static controller's tools/list, unioned with a minted controller's that carries every
-    /// grant and with a static controller's whose request carries X-Workman-Client: some tools are
-    /// shown only to granted sessions (work_import) or only to a keyed static one (work_session).
+    /// A controller's tools/list, unioned with a minted controller's that carries every grant and with
+    /// an OAuth token's whose request carries X-Workman-Client: some tools are shown only to granted
+    /// sessions (work_import) or only to a keyed OAuth one (work_session).
     /// </summary>
     private async Task<Dictionary<string, HashSet<string>>> DeclaredAsync()
     {
@@ -202,7 +202,7 @@ public sealed partial class RenderedCallTests(PostgresFixture fixture)
                  {
                      (ReadServer.ControllerToken, null),
                      (ImportVisibilityTests.Token(minted), null),
-                     (ReadServer.ControllerToken, keyed),
+                     (await server.OAuthTokenAsync(Ct), keyed),
                  })
         {
             await using var client = await server.ConnectAsync(token, Ct, headers);

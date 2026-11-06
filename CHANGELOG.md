@@ -7,6 +7,28 @@ All notable changes to the Workman server and the `workman` plugin are recorded 
 
 ## [Unreleased]
 
+## [3.0.0] — 2026-11-06
+
+Server 3.0.0. No migration.
+
+### Removed
+
+- The static role tokens and the reader token. `Workman:Auth:WorkerToken`, `OrchestratorToken`, `ControllerToken`
+  and `ReaderToken` (`WORKMAN_WORKER_TOKEN`, `WORKMAN_ORCHESTRATOR_TOKEN`, `WORKMAN_CONTROLLER_TOKEN`,
+  `WORKMAN_READER_TOKEN`) are no longer read, and `Workman:Workspace`, their workspace binding, goes with them.
+  People sign in with OAuth; agents use the per-session `wss_` tokens a signed-in session mints; the dashboard
+  keeps its cookie. A former static token is answered 401. The bearer scheme is now `WorkmanSessionToken`.
+- A worker or orchestrator session named by `X-Workman-Agent` or `X-Workman-Client`: only an OAuth caller names
+  its session by header (or `work_session`) now; a minted token's session is its credential's.
+
+### Changed
+
+- Every request that ends 401 logs one Information line (`Workman.Auth.Challenge`): method, path,
+  `X-Workman-Client`, `X-Workman-Agent`, `User-Agent`, whether an `Authorization` header was present, and why
+  each bearer scheme refused it. Never the `Authorization` header's value.
+- The server instructions tell agents never to run `claude mcp get/list` or start a claude process to check
+  Workman.
+
 ## [2.4.2] — 2026-11-06
 
 Server 2.4.2. The plugin stays at 2.3.3. No migration.

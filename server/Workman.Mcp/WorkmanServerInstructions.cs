@@ -50,5 +50,7 @@ public static class WorkmanServerInstructions
         DO NOT: create a task without a verification command that could actually fail; record a status
         you did not verify yourself; re-read a document work_brief already gave you; or paste code or
         diffs into a note — store the commit sha and the file path instead.
+        NEVER run `claude mcp get/list` or start a claude process to check Workman: a token-less
+        check blocks every agent's Workman tools for 15 minutes.
         """;
 }

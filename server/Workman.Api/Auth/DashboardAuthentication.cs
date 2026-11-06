@@ -31,7 +31,7 @@ public sealed class DashboardOptions
 
     /// <summary>
     /// Both halves are compared through their digests, so neither the comparison nor its duration
-    /// leaks the configured value. <see cref="StaticTokenHandler"/> is the precedent.
+    /// leaks the configured value.
     /// </summary>
     public bool Matches(string? username, string? password)
         => Configured
@@ -61,7 +61,7 @@ public static class DashboardAuth
     /// The policy every pre-v1 <c>/api</c> route carries. It names the cookie scheme and only the
     /// cookie scheme, which is the whole of doc 08 §4's "two auth schemes that never cross": a bearer
     /// token presented to those routes is not evaluated by a handler that could accept it, and the
-    /// three bearer policies likewise name only <see cref="StaticTokenHandler.SchemeName"/>. The
+    /// bearer policies likewise name only <see cref="SessionTokenHandler.SchemeName"/>. The
     /// read-only <c>/api/v1</c> and <c>/api/stream</c> are the deliberate exception (doc 10 rule 5).
     /// </summary>
     public const string Policy = "dashboard";

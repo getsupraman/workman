@@ -10,7 +10,7 @@ namespace Workman.Api.App.V1;
 /// </summary>
 public static partial class ApiV1
 {
-    /// <summary>Cookie, any agent token, or a reader token (rule 5).</summary>
+    /// <summary>Cookie or any agent token (rule 5).</summary>
     public const string Policy = "api-v1-read";
 
     public const string Header = WorkmanHeaders.Api;
@@ -22,8 +22,6 @@ public static partial class ApiV1
     private const int ItemEventLimit = 50;
     private const int SearchDefaultLimit = 20;
     private const int SearchMaxLimit = 50;
-
-    public static bool IsReader(ClaimsPrincipal user) => user.IsInRole(WorkmanPolicies.Reader);
 
     /// <summary>
     /// Ahead of authentication, so a 401 carries the header too: a client must be able to tell a v1
