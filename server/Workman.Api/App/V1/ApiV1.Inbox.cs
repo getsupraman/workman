@@ -210,16 +210,10 @@ public static partial class ApiV1
             _ => null,
         };
 
-    /// <summary>The first non-empty line of <paramref name="text"/>, cut with an ellipsis so that with <paramref name="suffix"/> it fits <see cref="DetailLength"/>.</summary>
+    /// <summary>The first non-empty line of <paramref name="text"/>, shortened so that with <paramref name="suffix"/> it fits <see cref="DetailLength"/>.</summary>
     private static string? OneLine(string? text, string suffix = "")
     {
         var line = text?.Split('\n').Select(l => l.Trim()).FirstOrDefault(l => l.Length > 0);
-        if (line is null)
-        {
-            return null;
-        }
-
-        var room = Math.Max(2, DetailLength - suffix.Length);
-        return (line.Length > room ? line[..(room - 1)].TrimEnd() + "…" : line) + suffix;
+        return line is null ? null : Glyph.Row(line, Math.Max(2, DetailLength - suffix.Length)) + suffix;
     }
 }

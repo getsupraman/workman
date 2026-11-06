@@ -30,7 +30,8 @@ is shortened only where the section below allows it. Refs, status and evidence n
 Text is shortened with `…` in exactly two places, and only by `Glyph.Row`:
 
 1. **A one-line row of a list view** — `work_tree`, `work_next`, `work_search`, board rows, the
-   finding and followup lines of `work_threads`, attention lines, the head row of `work_get` — and
+   finding and followup lines of `work_threads`, attention lines, the head row of `work_get`, the
+   `detail` of a `GET /api/v1/inbox` row (doc 10) — and
    only when the row carries the ref of the thing, so `work_get(ref)` prints it whole.
 2. **A write confirmation echoing the caller's own input** — `OK  note recorded` and the preview of
    the body just sent.

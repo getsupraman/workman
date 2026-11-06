@@ -25,6 +25,7 @@ public sealed partial class NoClipSourceTests
         ["Board/BoardReader.Views.cs:SearchAsync"] = "row: a search hit carries its ref; work_get prints it",
         ["Board/BoardReader.Views.cs:ThreadsAsync"] = "row: a finding/followup row carries its ref; work_get prints the title",
         ["Board/BoardReader.cs:AttentionAsync"] = "row: the blocker attention line carries the finding ref",
+        ["App/V1/ApiV1.Inbox.cs:OneLine"] = "row: an inbox row's detail carries the item ref and url; the item page prints it whole",
         ["Writing/WorkWriter.Threads.cs:NoteAsync"] = "echo: the note body the caller just sent",
         ["Writing/WorkWriter.Threads.cs:AssumeAsync"] = "echo: the statement the caller just sent",
         ["Writing/WorkWriter.Threads.cs:FindingAsync"] = "echo: the finding titles the caller just sent",
