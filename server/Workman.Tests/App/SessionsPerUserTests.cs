@@ -118,6 +118,37 @@ public sealed class SessionsPerUserTests(PostgresFixture fixture)
         Assert.Empty(await ListedAsync(u2[1].Http, $"/api/v1/sessions?claudeSessionId={claude}"));
     }
 
+    [Fact]
+    public async Task SessionsPerUser_takeover_from_never_reaches_another_users_row()
+    {
+        var world = await ProjectWorld.CreateAsync(fixture);
+        await using var server = world.Server;
+        var u1 = await world.CredentialsAsync(world.User1);
+        var u2 = await world.CredentialsAsync(world.User2);
+
+        var mine = await u1[1].Http.PostAsync(
+            "/api/agent-sessions", AppServer.Json(new { name = "aw-shared", role = "worker", launchedBy = "foreman/x" }), Ct);
+        Assert.Equal(HttpStatusCode.Created, mine.StatusCode);
+        var id = JsonDocument.Parse(await mine.Content.ReadAsStringAsync(Ct)).RootElement.GetProperty("sessionId").GetGuid();
+        var before = await SessionStateAsync(world, id);
+
+        // The other user's mint lands on a row of their own: it is created fresh, and nothing is taken over.
+        var theirs = await u2[1].Http.PostAsync(
+            "/api/agent-sessions",
+            AppServer.Json(new { name = "aw-shared", role = "worker", launchedBy = "supraman/x", takeoverFrom = "foreman/x", replace = true }),
+            Ct);
+        Assert.Equal(HttpStatusCode.Created, theirs.StatusCode);
+        Assert.NotEqual(id, JsonDocument.Parse(await theirs.Content.ReadAsStringAsync(Ct)).RootElement.GetProperty("sessionId").GetGuid());
+
+        Assert.Equal(before, await SessionStateAsync(world, id));
+        await using var connection = await world.Fixture.DataSource.OpenConnectionAsync(Ct);
+        Assert.Equal("foreman/x", await connection.QuerySingleAsync<string>(
+            "SELECT launched_by FROM agent_session WHERE id = @id;", new { id }));
+        Assert.Equal(0, await connection.QuerySingleAsync<int>(
+            "SELECT count(*)::int FROM event WHERE workspace_id = @workspace AND kind = 'session_launcher_taken_over';",
+            new { workspace = world.WorkspaceId }));
+    }
+
     private static async Task<HttpStatusCode> CookieReleaseAsync(HttpClient cookie, Guid id)
     {
         using var request = new HttpRequestMessage(HttpMethod.Post, $"/api/sessions/{id}/release");

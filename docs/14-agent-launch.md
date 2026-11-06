@@ -41,7 +41,7 @@ A worker is `403`; the dashboard cookie is not a bearer.
 
 | Call | Who | Does |
 |---|---|---|
-| `POST /api/agent-sessions` `{name, role, launchedBy?, origin?, cwd?, externalRole?, claudeSessionId?, ttlHours?, replace?, repo?:{remote?, root?}, grants?:["import"]}` | as above | creates/updates the `agent_session` row for `name`, issues a token `wss_<base64url 32 bytes>`, stores only its SHA-256, returns `201 {sessionId, name, role, token, expiresAt}` **once** |
+| `POST /api/agent-sessions` `{name, role, launchedBy?, origin?, cwd?, externalRole?, claudeSessionId?, ttlHours?, replace?, takeoverFrom?, repo?:{remote?, root?}, grants?:["import"]}` | as above | creates/updates the `agent_session` row for `name`, issues a token `wss_<base64url 32 bytes>`, stores only its SHA-256, returns `201 {sessionId, name, role, token, expiresAt}` **once** |
 | `PATCH /api/agent-sessions/{id}` `{claudeSessionId}` | its minter, or a controller | sets the Claude session uuid (history kept as an event, doc 11) |
 | `DELETE /api/agent-sessions/{id}` | its minter, or a controller | revokes: `revoked_at = now()`, live claims of that session released (`release_reason = 'revoked'`) |
 | `POST /api/agent-sessions/{id}/release` | a **controller** only | frees the name (doc 11 "Releasing a name"): the row is renamed `<name>~released~<id>`, its token revoked, `session_name_released` journaled; `200 {sessionId, name, releasedAs}`, `409` while it holds live claims |
@@ -57,8 +57,12 @@ Rules:
   `replace` does not override it. A mint for a header-named row with the same launcher attaches the
   token to that row. **Takeover:** with `replace: true`, a mint whose `launchedBy` is set takes a row
   whose `launched_by` is NULL only when the row's `claude_session_id` is set and equals the mint's
-  `claudeSessionId`; the row then records the launcher (journal `session_launcher_taken_over`). Any
-  other mismatch stays `409`, and its message names the release path above.
+  `claudeSessionId`; the row then records the launcher (journal `session_launcher_taken_over`).
+  **Renamed launcher (server 3.0.2):** with `replace: true`, a mint whose `launchedBy` differs from the
+  row's takes the row when `takeoverFrom` equals the row's current `launched_by` (trimmed, ordinal,
+  never NULL); the row keeps its id, claims and history, records the new launcher, and the journal gets
+  `session_launcher_taken_over {from, to, claudeSessionId}`. Any other mismatch stays `409`, and its
+  message names `takeoverFrom` and the release path above.
 - `externalRole` fills `external_role` exactly as `X-Workman-Foreman-Role` does.
 - **Grants:** `grants` is a set of capabilities stored on the row (`agent_session.grants`); an unknown
   name is `400`, and `import` on a `worker` role is `400` — `work_import` writes plan items, an

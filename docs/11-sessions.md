@@ -34,15 +34,22 @@ act in that workspace;
 with that token *is* that session: the name comes from the credential, `X-Workman-Agent` is ignored,
 and the other headers still fill the row as above. `externalRole` fills `external_role` exactly as
 `X-Workman-Foreman-Role` does. The collision rule below holds for a mint too: a name held under a
-different `launched_by` is refused (409), and `replace` does not override it — with one exception, the
-**takeover** (2026-10-28, unit `shared-v1/name-takeover`): a mint with `replace: true` and a non-null
+different `launched_by` is refused (409), and `replace` does not override it — with two exceptions, the
+**takeovers**. The first (2026-10-28, unit `shared-v1/name-takeover`): a mint with `replace: true` and a non-null
 `launchedBy` may take a row whose `launched_by` is NULL when that row's `claude_session_id` is
 non-null and equals the mint's `claudeSessionId` (ordinal, both trimmed). That is a hand-named session
 later resumed by a launcher, proven by its Claude session id. The row records the new `launched_by`,
 keeps its id, claims and history, its old token (if any) is replaced as in any `replace`, and the
-journal gets `session_launcher_taken_over` (`{from: null, to, claudeSessionId}`) on the session. Every
-other case stays 409: no id on the row, ids that differ, `replace` false, two different non-null
-launchers, and a mint with no launcher onto a launcher's row. The 409 names the release path below.
+journal gets `session_launcher_taken_over` (`{from: null, to, claudeSessionId}`) on the session. The
+second, **`takeoverFrom`** (server 3.0.2, unit `v3-0-2/launcher-takeover`), is a launcher renamed under
+the same user (`foreman/x` → `supraman/x`): a mint with `replace: true`, a non-null `launchedBy` that
+differs from the row's, and `takeoverFrom` (trimmed as `launchedBy` is) equal to the row's current
+`launched_by` (ordinal) takes that row the same way, and the journal gets `session_launcher_taken_over`
+with `{from: <old>, to: <new>, claudeSessionId}`. Rows are per user, so the row found is already the
+caller's own; another user's mint of the name makes their own row. A row whose `launched_by` is NULL is
+never taken with `takeoverFrom`. Every other case stays 409: no id on the row, ids that differ, `replace`
+false, two different non-null launchers without a matching `takeoverFrom`, and a mint with no launcher
+onto a launcher's row. The 409 names `takeoverFrom` and the release path below.
 `replace: true` keeps the row, its id, claims and history, and swaps only the token. `DELETE /api/agent-sessions/{id}` revokes
 the token and releases the session's live claims (`release_reason = 'revoked'`; the items go back to
 `ready`, as an expired claim's do). Header-named sessions keep working for anything that cannot mint.

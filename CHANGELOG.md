@@ -7,6 +7,15 @@ All notable changes to the Workman server and the `workman` plugin are recorded 
 
 ## [Unreleased]
 
+## [3.0.2] — 2026-11-06
+
+### Server
+
+- **`POST /api/agent-sessions` takes `takeoverFrom`:** with `replace: true`, a launcher renamed under the same
+  user (`foreman/x` → `supraman/x`) takes its own row when `takeoverFrom` equals the row's `launchedBy`; the
+  row keeps its id, claims and history, and `session_launcher_taken_over` records `from` and `to`. Every other
+  launcher mismatch is still `409`.
+
 ## [3.0.1] — 2026-11-06
 
 Server 3.0.1 and plugin 3.0.1. No migration.

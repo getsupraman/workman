@@ -19,7 +19,8 @@ public sealed record MintSessionRequest(
     int? TtlHours = null,
     bool? Replace = null,
     RepoArg? Repo = null,
-    string[]? Grants = null);
+    string[]? Grants = null,
+    string? TakeoverFrom = null);
 
 public sealed record MintSessionResponse(Guid SessionId, string Name, string Role, string Token, DateTimeOffset ExpiresAt);
 
@@ -140,7 +141,8 @@ public static class AgentSessionEndpoints
                 grants,
                 OAuthClaim(context.User, OAuthTokenHandler.UserNameClaim),
                 OAuthClaim(context.User, OAuthTokenHandler.AuthorizationClaim),
-                CallerUser(context.User)),
+                CallerUser(context.User),
+                request.TakeoverFrom),
             cancellationToken);
 
         if (result.Minted is not { } minted)

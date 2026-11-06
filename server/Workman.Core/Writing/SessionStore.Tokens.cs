@@ -26,7 +26,8 @@ public sealed record MintRequest(
     IReadOnlyList<string>? Grants = null,
     string? MintedBySubject = null,
     string? MintedByAuthorizationId = null,
-    Guid? UserId = null);
+    Guid? UserId = null,
+    string? TakeoverFrom = null);
 
 /// <summary>The only place the token exists in the clear; the caller returns it once and drops it.</summary>
 public sealed record MintedToken(Guid SessionId, string Name, ActorRole Role, string Token, DateTimeOffset ExpiresAt);
@@ -120,11 +121,21 @@ public sealed partial class SessionStore
             cancellationToken: cancellationToken));
 
         // doc 11 — a launcher may adopt a launcher-less row only by proving it is the same Claude session.
-        var takeover = request.Replace
+        var sameClaudeSession = request.Replace
             && launchedBy is not null
             && row.LaunchedBy is null
             && row.ClaudeSessionId is not null
             && string.Equals(row.ClaudeSessionId, claudeId, StringComparison.Ordinal);
+
+        // doc 11 — a launcher renamed under the same user takes its row by naming the launcher it had.
+        var takeoverFrom = SessionFacts.Clean(request.TakeoverFrom);
+        var renamedLauncher = request.Replace
+            && launchedBy is not null
+            && takeoverFrom is not null
+            && !string.Equals(row.LaunchedBy, launchedBy, StringComparison.Ordinal)
+            && string.Equals(row.LaunchedBy, takeoverFrom, StringComparison.Ordinal);
+
+        var takeover = sameClaudeSession || renamedLauncher;
 
         if (!takeover && !string.Equals(row.LaunchedBy, launchedBy, StringComparison.Ordinal))
         {
@@ -132,7 +143,8 @@ public sealed partial class SessionStore
                 $"the session name \"{name}\" is held by a session launched by {row.LaunchedBy ?? "no launcher"}, "
                 + $"and this mint says {launchedBy ?? "no launcher"}; two launchers' sessions cannot share a name, "
                 + "and replace does not override that. A launcher takes over a name with no launcher only with "
-                + "replace: true and the claudeSessionId that row records. If that session is gone, a controller "
+                + "replace: true and the claudeSessionId that row records, and a renamed launcher takes over its own "
+                + "row only with replace: true and takeoverFrom set to the launcher the row records. If that session is gone, a controller "
                 + $"frees the name with {ReleasePath(row.Id)} (or Release on the dashboard's Sessions page), "
                 + "and the next mint creates it fresh");
         }
@@ -210,8 +222,10 @@ public sealed partial class SessionStore
                     workspace = workspaceId,
                     actor = Pg.Label(request.Role),
                     role = Pg.Label(request.Role),
-                    payload = JsonSerializer.Serialize(new { from = (string?)null, to = launchedBy, claudeSessionId = claudeId }),
-                    summary = Glyph.Flat($"session {name} taken over by launcher {launchedBy}, same Claude session {claudeId}"),
+                    payload = JsonSerializer.Serialize(new { from = row.LaunchedBy, to = launchedBy, claudeSessionId = claudeId }),
+                    summary = Glyph.Flat(renamedLauncher
+                        ? $"session {name} taken over by launcher {launchedBy} from launcher {row.LaunchedBy}"
+                        : $"session {name} taken over by launcher {launchedBy}, same Claude session {claudeId}"),
                     session = row.Id,
                 },
                 transaction,

@@ -158,6 +158,121 @@ public sealed class SessionNameTests(PostgresFixture fixture)
     }
 
     [Fact]
+    public async Task A_renamed_launcher_takes_over_its_row_with_takeover_from()
+    {
+        var world = await WriteSeed.CreateAsync(fixture);
+        await using var server = await StartAsync(world);
+
+        var (_, first) = await MintAsync(server, new
+        {
+            name = "aw-rename", role = "orchestrator", launchedBy = "foreman/x", claudeSessionId = "claude-r",
+        });
+        var id = first.GetProperty("sessionId").GetGuid();
+
+        await using (var client = await server.ConnectAsync(Token(first), Ct))
+        {
+            var (text, refused) = await ReadServer.CallEitherAsync(
+                client,
+                "work_status",
+                new Dictionary<string, object?> { ["ref"] = "1.1", ["to"] = "in_progress", ["tree"] = Tree() },
+                Ct);
+            Assert.False(refused, text);
+        }
+
+        var (status, second) = await MintAsync(server, new
+        {
+            name = "aw-rename", role = "orchestrator", launchedBy = "supraman/x", takeoverFrom = " foreman/x ",
+            claudeSessionId = "claude-r", replace = true,
+        });
+
+        Assert.Equal(HttpStatusCode.Created, status);
+        Assert.Equal(id, second.GetProperty("sessionId").GetGuid());
+        Assert.Equal("supraman/x", (await RowAsync(world, "aw-rename")).LaunchedBy);
+        Assert.Equal(HttpStatusCode.Unauthorized, await InitializeAsync(server, Token(first)));
+        Assert.Equal(HttpStatusCode.OK, await InitializeAsync(server, Token(second)));
+
+        await using var db = fixture.NewContext();
+        Assert.Single(await db.AgentSessions.Where(s => s.WorkspaceId == world.WorkspaceId).ToListAsync(Ct));
+
+        var claim = await db.Claims.SingleAsync(c => c.ItemId == world.TaskId, Ct);
+        Assert.Equal(id, claim.SessionId);
+        Assert.Null(claim.ReleasedAt);
+
+        var taken = await db.Events.SingleAsync(
+            e => e.WorkspaceId == world.WorkspaceId && e.Kind == "session_launcher_taken_over", Ct);
+        Assert.Equal(id, taken.SessionId);
+        var payload = JsonDocument.Parse(taken.Payload).RootElement;
+        Assert.Equal("foreman/x", payload.GetProperty("from").GetString());
+        Assert.Equal("supraman/x", payload.GetProperty("to").GetString());
+        Assert.Equal("claude-r", payload.GetProperty("claudeSessionId").GetString());
+        Assert.Contains("foreman/x", taken.Summary, StringComparison.Ordinal);
+        Assert.Contains("supraman/x", taken.Summary, StringComparison.Ordinal);
+
+        // From here the new launcher's own rule holds: the old one no longer mints the name.
+        await AssertNoNewTakeoverAsync(server, world, "aw-rename", "supraman/x",
+            new { name = "aw-rename", role = "orchestrator", launchedBy = "foreman/x", replace = true });
+    }
+
+    [Fact]
+    public async Task A_renamed_launcher_without_takeover_from_is_refused()
+    {
+        var world = await WriteSeed.CreateAsync(fixture);
+        await using var server = await StartAsync(world);
+        await MintAsync(server, new { name = "aw-nofrom", role = "worker", launchedBy = "foreman/x" });
+
+        var (status, conflict) = await MintAsync(server, new
+        {
+            name = "aw-nofrom", role = "worker", launchedBy = "supraman/x", replace = true,
+        });
+        Assert.Equal(HttpStatusCode.Conflict, status);
+        Assert.Contains("takeoverFrom", Error(conflict), StringComparison.Ordinal);
+
+        await AssertRefusedAsync(server, world, "aw-nofrom", "foreman/x",
+            new { name = "aw-nofrom", role = "worker", launchedBy = "supraman/x", takeoverFrom = "  ", replace = true });
+    }
+
+    [Fact]
+    public async Task A_takeover_from_that_does_not_match_the_row_is_refused()
+    {
+        var world = await WriteSeed.CreateAsync(fixture);
+        await using var server = await StartAsync(world);
+        await MintAsync(server, new { name = "aw-wrong", role = "worker", launchedBy = "foreman/x" });
+
+        await AssertRefusedAsync(server, world, "aw-wrong", "foreman/x",
+            new { name = "aw-wrong", role = "worker", launchedBy = "supraman/x", takeoverFrom = "foreman/y", replace = true });
+        await AssertRefusedAsync(server, world, "aw-wrong", "foreman/x",
+            new { name = "aw-wrong", role = "worker", launchedBy = "supraman/x", takeoverFrom = "FOREMAN/X", replace = true });
+        await AssertRefusedAsync(server, world, "aw-wrong", "foreman/x",
+            new { name = "aw-wrong", role = "worker", takeoverFrom = "foreman/x", replace = true });
+    }
+
+    [Fact]
+    public async Task A_takeover_from_needs_replace()
+    {
+        var world = await WriteSeed.CreateAsync(fixture);
+        await using var server = await StartAsync(world);
+        await MintAsync(server, new { name = "aw-from-noreplace", role = "worker", launchedBy = "foreman/x" });
+
+        await AssertRefusedAsync(server, world, "aw-from-noreplace", "foreman/x",
+            new { name = "aw-from-noreplace", role = "worker", launchedBy = "supraman/x", takeoverFrom = "foreman/x" });
+        await AssertRefusedAsync(server, world, "aw-from-noreplace", "foreman/x",
+            new { name = "aw-from-noreplace", role = "worker", launchedBy = "supraman/x", takeoverFrom = "foreman/x", replace = false });
+    }
+
+    [Fact]
+    public async Task A_takeover_from_never_takes_a_launcherless_row()
+    {
+        var world = await WriteSeed.CreateAsync(fixture);
+        await using var server = await StartAsync(world);
+        await HeaderSessionAsync(server, "aw-from-null", claudeSessionId: null);
+
+        await AssertRefusedAsync(server, world, "aw-from-null", null,
+            new { name = "aw-from-null", role = "worker", launchedBy = "supraman/x", takeoverFrom = "foreman/x", replace = true });
+        await AssertRefusedAsync(server, world, "aw-from-null", null,
+            new { name = "aw-from-null", role = "worker", launchedBy = "supraman/x", takeoverFrom = "", replace = true });
+    }
+
+    [Fact]
     public async Task A_released_name_mints_fresh_and_the_old_row_keeps_its_history()
     {
         var world = await WriteSeed.CreateAsync(fixture);
@@ -316,6 +431,24 @@ public sealed class SessionNameTests(PostgresFixture fixture)
 
         await using var db = fixture.NewContext();
         Assert.False(await db.Events.AnyAsync(
+            e => e.WorkspaceId == world.WorkspaceId && e.Kind == "session_launcher_taken_over", Ct));
+    }
+
+    /// <summary>A refusal after a takeover already happened: the row and the one takeover event stay as they are.</summary>
+    private async Task AssertNoNewTakeoverAsync(AppServer server, WriteWorld world, string name, string launcher, object body)
+    {
+        var before = await RowAsync(world, name);
+        var (status, conflict) = await MintAsync(server, body);
+
+        Assert.Equal(HttpStatusCode.Conflict, status);
+        Assert.Contains("two launchers", Error(conflict), StringComparison.Ordinal);
+
+        var after = await RowAsync(world, name);
+        Assert.Equal(launcher, after.LaunchedBy);
+        Assert.Equal(before.TokenHash, after.TokenHash);
+
+        await using var db = fixture.NewContext();
+        Assert.Equal(1, await db.Events.CountAsync(
             e => e.WorkspaceId == world.WorkspaceId && e.Kind == "session_launcher_taken_over", Ct));
     }
 
