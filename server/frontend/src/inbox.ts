@@ -22,12 +22,16 @@ const KIND_ORDER = Object.keys(INBOX_KINDS)
 const kindRank = (kind: string) => KIND_ORDER.indexOf(kind) + 1 || 99
 
 /** The rows a person acts on. An unknown audience is shown to the person rather than hidden. */
-export const needsYou = (rows: InboxRow[]) => rows.filter((r) => r.audience !== 'controller')
+export const needsYou = (rows: InboxRow[]) => shown(rows).filter((r) => r.audience !== 'controller')
+
+/** Unread notes reach their reader in its brief; the page shows none of them (doc 13). */
+const HIDDEN_KINDS = new Set(['unconsumed_note'])
+const shown = (rows: InboxRow[]) => rows.filter((r) => !HIDDEN_KINDS.has(r.kind))
 
 /** The count the sidebar badge and the overview print: the person's rows only, unknown until the inbox loads. */
 export const needsYouCount = (box: Inbox | undefined) => (box === undefined ? undefined : needsYou(box.rows).length)
 
-export const forController =(rows: InboxRow[]) => rows.filter((r) => r.audience === 'controller')
+export const forController = (rows: InboxRow[]) => shown(rows).filter((r) => r.audience === 'controller')
 
 /**
  * The card's meta facts after the kind and ref, in reading order: who and where, then a count
@@ -83,20 +87,32 @@ export function decisionRow(row: InboxRow, projects?: readonly ProjectLike[]): D
   }
 }
 
-export type HousekeepingGroup ={ key: string; kind: string; run: InboxRow['run']; label: string; rows: InboxRow[] }
+/** A housekeeping row on one line: ref · title · who. The view adds the age. */
+export const choreRow = (row: InboxRow) => ({
+  ref: row.item.qualifiedRef,
+  title: row.item.title,
+  actor: row.actor,
+  since: row.since,
+})
+
+/** `line` is what the page prints for the group: "5 not verified · Run A". */
+export type HousekeepingGroup = { key: string; kind: string; run: InboxRow['run']; label: string; line: string; rows: InboxRow[] }
 
 /** The controller's rows, one group per kind and run ("5 not verified in run-a"), kinds in `INBOX_KINDS` order. */
 export function groupHousekeeping(rows: InboxRow[]): HousekeepingGroup[] {
   const groups = new Map<string, HousekeepingGroup>()
   for (const row of forController(rows)) {
     const key = `${row.kind}:${row.run?.id ?? ''}`
-    const group = groups.get(key) ?? { key, kind: row.kind, run: row.run, label: '', rows: [] }
+    const group = groups.get(key) ?? { key, kind: row.kind, run: row.run, label: '', line: '', rows: [] }
     group.rows.push(row)
     groups.set(key, group)
   }
 
   return [...groups.values()]
-    .map((g) => ({ ...g, label: `${inboxKind(g.kind).many(g.rows.length)}${g.run ? ` in ${g.run.title}` : ''}` }))
+    .map((g) => {
+      const many = inboxKind(g.kind).many(g.rows.length)
+      return { ...g, label: `${many}${g.run ? ` in ${g.run.title}` : ''}`, line: `${many}${g.run ? ` · ${short(g.run.title)}` : ''}` }
+    })
     .sort((a, b) => kindRank(a.kind) - kindRank(b.kind) || (a.run?.title ?? '').localeCompare(b.run?.title ?? ''))
 }
 

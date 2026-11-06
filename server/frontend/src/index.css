@@ -328,6 +328,12 @@ a.group-h:hover { color: var(--accent); }
 .inbox-ref { font-family: var(--font-mono); font-size: 11.5px; margin-left: 2px; }
 .inbox-d { margin-top: 3px; color: var(--ink-2); font-size: 13px; overflow-wrap: anywhere; }
 .inbox-row .item-side { white-space: nowrap; }
+.chore-group { width: 100%; text-align: left; border-top: 1px solid var(--line-2); }
+.chore-group:hover { background: var(--bg); }
+.chore-row { padding-top: 6px; padding-bottom: 6px; }
+.chore-t { font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.chore-who { color: var(--ink-3); }
+.chore-row .item-side { white-space: nowrap; }
 
 /* Copy a callable ref (doc 13): a quiet icon beside the ref, "Copied" in its place for a moment.
    The strut is a line of the surrounding font: the box takes its baseline and the button centres on

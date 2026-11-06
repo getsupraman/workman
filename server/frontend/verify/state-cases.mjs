@@ -20,7 +20,7 @@ import { MEMBERS_ANCHOR, memberLine, membersHref, projectOnPath, shareMarker } f
 import { PHONE_QUERY, closesOnMove, pageName } from '../src/menu.ts'
 import { appLine, revokeWarning, sessionsLabel } from '../src/apps.ts'
 import { BOARDS_MAX, boardsRead } from '../src/boards.ts'
-import { cardFacts, decisionRow, forController, groupHousekeeping, needsYou, needsYouCount, rowProject } from '../src/inbox.ts'
+import { cardFacts, choreRow, decisionRow, forController, groupHousekeeping, needsYou, needsYouCount, rowProject } from '../src/inbox.ts'
 import { expiresIn, isLastAdmin, isLinkPath, joinStep, joinToken, nameProblem, passwordMessage, passwordProblem, resetStep, resetToken, roleLabel, showSwitcher, slugFrom, slugProblem } from '../src/admin.ts'
 
 let failures = 0
@@ -735,6 +735,31 @@ console.log('── inbox: the decision row (title first, muted kind and ref, th
   check('project unknown to the overview: the ref segment', rowProject(human('question'), []), 'acme')
   check('project before the overview loads: the ref segment', rowProject(human('question'), undefined), 'acme')
   check('a row with no run names no run', decisionRow(human('question', { run: null }), inboxProjects).facts, ['Acme Store'])
+}
+
+console.log('── inbox: housekeeping, one line per kind and run; unread notes nowhere ──')
+{
+  const withNotes = [
+    ...mixed,
+    inboxRow('unconsumed_note', 'controller', { id: 'n1', count: 2 }),
+    inboxRow('unconsumed_note', 'human', { id: 'n2' }),
+    inboxRow('unconsumed_note', 'someone', { id: 'n3' }),
+  ]
+  check('group lines: kind count · run, kinds in order', groupHousekeeping(withNotes).map((g) => g.line), [
+    '1 claim expired · Run A',
+    '2 not verified · Run A',
+    '1 not verified · Run B',
+  ])
+  check('a group line with no run has no separator', groupHousekeeping([inboxRow('stale_in_progress', 'controller', { run: null })])[0].line, '1 stalled')
+  check('unread notes: no housekeeping group', groupHousekeeping(withNotes).some((g) => g.kind === 'unconsumed_note'), false)
+  check('unread notes: not in the controller rows', forController(withNotes).length, 4)
+  check('unread notes: never a person row, whatever the audience', needsYou(withNotes).map((r) => r.kind), ['question', 'blocked'])
+  check('unread notes: not in the badge count', needsYouCount({ rows: withNotes }), 2)
+  check(
+    'chore row: ref, title, who, since',
+    choreRow(inboxRow('done_unverified', 'controller', { item: { id: 'u9', qualifiedRef: 'run-a/3.1', title: 'Ship it' }, actor: 'wm-2' })),
+    { ref: 'run-a/3.1', title: 'Ship it', actor: 'wm-2', since: '2026-11-06T10:00:00Z' },
+  )
 }
 
 console.log(failures === 0 ? '\nAll checks passed.' : `\n${failures} check(s) failed.`)

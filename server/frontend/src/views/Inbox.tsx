@@ -2,7 +2,7 @@ import { For, Index, Show, createSignal } from 'solid-js'
 import { A } from '@solidjs/router'
 import type { InboxRow } from '../api.ts'
 import { inbox, overview } from '../store.ts'
-import { decisionRow, groupHousekeeping, groupInbox, needsYou, type HousekeepingGroup } from '../inbox.ts'
+import { choreRow, decisionRow, groupHousekeeping, groupInbox, inboxKind, needsYou, type HousekeepingGroup } from '../inbox.ts'
 import { itemHref } from '../nav.ts'
 import { ago, plural } from '../format.ts'
 import { CopyRef, Dot, Known } from '../ui.tsx'
@@ -38,15 +38,41 @@ export function InboxRowView(props: { row: InboxRow; asOf: string; href?: string
   )
 }
 
-/** One housekeeping group. Open state lives with the page, keyed by group, so a refresh keeps it. */
+/** A housekeeping row on one line: ref · title · who, and the age. */
+function ChoreRowView(props: { row: InboxRow; asOf: string; href?: string; selected?: boolean }) {
+  const c = () => choreRow(props.row)
+
+  return (
+    <A
+      class={`item chore-row${props.selected ? ' on' : ''}`}
+      href={props.href ?? itemHref(props.row.item, props.row.run)}
+      noScroll
+      aria-current={props.selected ? 'page' : undefined}
+    >
+      <span />
+      <div class="chore-t">
+        <span class="item-ref">{c().ref}</span>
+        {c().title}
+        <Show when={c().actor}>{(actor) => <span class="chore-who"> · {actor()}</span>}</Show>
+      </div>
+      <div class="item-side" title={new Date(c().since).toLocaleString()}>
+        {ago(c().since, props.asOf)}
+      </div>
+    </A>
+  )
+}
+
+/** One housekeeping group: one line per kind and run. Open state lives with the page, keyed by group, so a refresh keeps it. */
 function Group(props: { group: HousekeepingGroup; asOf: string; open: boolean; toggle: () => void }) {
   return (
     <>
-      <button type="button" class="row-more runs-more" aria-expanded={props.open} onClick={() => props.toggle()}>
-        {props.open ? '▾' : '▸'} {props.group.label}
+      <button type="button" class="item chore-group" aria-expanded={props.open} onClick={() => props.toggle()}>
+        <Dot k={inboxKind(props.group.kind).dot} />
+        <span class="item-t">{props.group.line}</span>
+        <span class="item-side">{props.open ? '▾' : '▸'}</span>
       </button>
       <Show when={props.open}>
-        <Index each={props.group.rows}>{(row) => <InboxRowView row={row()} asOf={props.asOf} />}</Index>
+        <Index each={props.group.rows}>{(row) => <ChoreRowView row={row()} asOf={props.asOf} />}</Index>
       </Show>
     </>
   )
