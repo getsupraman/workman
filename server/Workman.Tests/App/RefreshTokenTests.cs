@@ -1,8 +1,11 @@
+using System.Collections.Concurrent;
 using System.Net;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using OpenIddict.Abstractions;
 using OpenIddict.Server;
+using Workman.Api.Auth.OAuth;
 using Workman.Tests.Store;
 using Xunit;
 using static OpenIddict.Abstractions.OpenIddictConstants;
@@ -13,7 +16,8 @@ namespace Workman.Tests.App;
 /// <summary>
 /// m57: a refresh token is an opaque handle to a row of <c>openiddict_token</c>, short enough for the 2560-byte
 /// blob Windows Credential Manager stores, where Foreman keeps it. One the server issued before, a self-contained
-/// JWE, still redeems — into a handle — so no client has to sign in again. Revocation and reuse behave as they did.
+/// JWE, still redeems — into a handle — so no client has to sign in again. Revocation behaves as it did; a reused one
+/// redeems again for ten minutes (F-03).
 /// </summary>
 [Collection(StoreCollection.Name)]
 public sealed class RefreshTokenTests(PostgresFixture fixture)
@@ -114,40 +118,74 @@ public sealed class RefreshTokenTests(PostgresFixture fixture)
     }
 
     /// <summary>
-    /// What the server did before: a redeemed refresh token works again inside OpenIddict's reuse leeway (30 seconds,
-    /// for a client's concurrent refreshes), and past it is refused and takes every token of its authorization along.
+    /// F-03: a redeemed refresh token works again inside the reuse leeway, ten minutes, so a client that refreshes
+    /// twice or late keeps its sign-in: once at once, once five minutes on.
     /// </summary>
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
-    public async Task A_redeemed_RefreshToken_is_reusable_only_inside_the_leeway_in_either_format(bool legacy)
+    public async Task A_redeemed_RefreshToken_is_reusable_for_ten_minutes_in_either_format(bool legacy)
+    {
+        Assert.Equal(TimeSpan.FromMinutes(10), OAuthServer.RefreshTokenReuseLeeway);
+
+        var slug = Slug();
+        var tokens = await IssueAsync(slug, legacy);
+        var clock = new ShiftedClock();
+        await using var server = await StartAsync(slug, reference: true, clock: clock);
+
+        var once = await OAuthTests.RefreshAsync(server.NewClient(), tokens.ClientId, tokens.RefreshToken!);
+        var twice = await OAuthTests.RefreshAsync(server.NewClient(), tokens.ClientId, tokens.RefreshToken!);
+        AssertHandle(once.RefreshToken!);
+        AssertHandle(twice.RefreshToken!);
+
+        clock.Advance(TimeSpan.FromMinutes(5));
+        var late = await OAuthTests.RefreshAsync(server.NewClient(), tokens.ClientId, tokens.RefreshToken!);
+        AssertHandle(late.RefreshToken!);
+        Assert.Equal(Statuses.Valid, await StatusAsync(server, once.RefreshToken!));
+    }
+
+    /// <summary>
+    /// Past the leeway a reuse is refused and takes every token of its authorization along, as OpenIddict does, and
+    /// leaves one Warning that names the client and the authorization and no token.
+    /// </summary>
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task A_RefreshToken_reused_after_ten_minutes_is_refused_revokes_its_authorization_and_logs_one_warning(bool legacy)
     {
         var slug = Slug();
         var tokens = await IssueAsync(slug, legacy);
-        await using (var server = await StartAsync(slug, reference: true))
-        {
-            var once = await OAuthTests.RefreshAsync(server.NewClient(), tokens.ClientId, tokens.RefreshToken!);
-            var twice = await OAuthTests.RefreshAsync(server.NewClient(), tokens.ClientId, tokens.RefreshToken!);
-            AssertHandle(once.RefreshToken!);
-            AssertHandle(twice.RefreshToken!);
-        }
+        var clock = new ShiftedClock();
+        var lines = new LogLines();
+        await using var server = await StartAsync(slug, reference: true, clock: clock, lines: lines);
 
-        var later = Slug();
-        tokens = await IssueAsync(later, legacy, leeway: TimeSpan.Zero);
-        await using (var server = await StartAsync(later, reference: true, leeway: TimeSpan.Zero))
-        {
-            var successor = await OAuthTests.RefreshAsync(server.NewClient(), tokens.ClientId, tokens.RefreshToken!);
+        var successor = await OAuthTests.RefreshAsync(server.NewClient(), tokens.ClientId, tokens.RefreshToken!);
+        var authorizationId = await AuthorizationIdAsync(server, successor.RefreshToken!);
+        Assert.Empty(lines.Of(OAuthServer.ReuseLogCategory));
 
-            await AssertRefusedAsync(server, tokens.ClientId, tokens.RefreshToken!);
-            Assert.Equal(Statuses.Revoked, await StatusAsync(server, successor.RefreshToken!));
-            await AssertRefusedAsync(server, tokens.ClientId, successor.RefreshToken!);
+        clock.Advance(OAuthServer.RefreshTokenReuseLeeway + TimeSpan.FromSeconds(1));
+        await AssertRefusedAsync(server, tokens.ClientId, tokens.RefreshToken!);
+
+        Assert.Equal(Statuses.Revoked, await StatusAsync(server, successor.RefreshToken!));
+        await AssertRefusedAsync(server, tokens.ClientId, successor.RefreshToken!);
+
+        var warning = Assert.Single(lines.Of(OAuthServer.ReuseLogCategory));
+        Assert.Equal(LogLevel.Warning, warning.Level);
+        Assert.Contains($"client {tokens.ClientId}", warning.Text, StringComparison.Ordinal);
+        Assert.Contains($"authorization {authorizationId}", warning.Text, StringComparison.Ordinal);
+
+        // Neither token, on any line any category writes at the level the server logs at (OpenIddict traces them).
+        foreach (var line in lines.All)
+        {
+            Assert.DoesNotContain(tokens.RefreshToken!, line.Text, StringComparison.Ordinal);
+            Assert.DoesNotContain(successor.RefreshToken!, line.Text, StringComparison.Ordinal);
         }
     }
 
     /// <summary>A sign-in on a host configured as the server was before (<paramref name="legacy"/>) or as it is.</summary>
-    private async Task<OAuthTests.TokenSet> IssueAsync(string slug, bool legacy, TimeSpan? leeway = null)
+    private async Task<OAuthTests.TokenSet> IssueAsync(string slug, bool legacy)
     {
-        await using var server = await StartAsync(slug, reference: !legacy, leeway);
+        await using var server = await StartAsync(slug, reference: !legacy);
         var tokens = await SignInAsync(server);
         if (legacy)
         {
@@ -164,26 +202,36 @@ public sealed class RefreshTokenTests(PostgresFixture fixture)
     /// <summary>
     /// One deployment across a restart: the public URL and the database are what two hosts share. With
     /// <paramref name="reference"/> false the host issues refresh tokens as 1.0.0 did, self-contained; with true it
-    /// runs the server's own configuration, so a test of it fails if that stops issuing handles.
+    /// runs the server's own configuration, so a test of it fails if that stops issuing handles. The
+    /// <paramref name="clock"/> is the OpenIddict server's, which the reuse leeway is measured on; the redemption
+    /// date it is measured from stays on the real one.
     /// </summary>
-    private Task<AppServer> StartAsync(string slug, bool reference, TimeSpan? leeway = null)
+    private Task<AppServer> StartAsync(string slug, bool reference, ShiftedClock? clock = null, LogLines? lines = null)
         => AppServer.StartAsync(
             fixture.ConnectionString,
             slug,
             Ct,
             publicUrl: PublicUrl,
-            configure: builder => builder.Services.PostConfigure<OpenIddictServerOptions>(options =>
+            configure: builder =>
             {
-                if (!reference)
+                builder.Services.PostConfigure<OpenIddictServerOptions>(options =>
                 {
-                    options.UseReferenceRefreshTokens = false;
-                }
+                    if (!reference)
+                    {
+                        options.UseReferenceRefreshTokens = false;
+                    }
 
-                if (leeway is { } value)
+                    if (clock is not null)
+                    {
+                        options.TimeProvider = clock;
+                    }
+                });
+
+                if (lines is not null)
                 {
-                    options.RefreshTokenReuseLeeway = value;
+                    builder.Logging.AddProvider(lines).AddFilter<LogLines>(null, LogLevel.Information);
                 }
-            }));
+            });
 
     private static async Task<OAuthTests.TokenSet> SignInAsync(AppServer server)
     {
@@ -242,6 +290,45 @@ public sealed class RefreshTokenTests(PostgresFixture fixture)
         var token = await tokens.FindByReferenceIdAsync(handle, Ct);
         Assert.NotNull(token);
         return await read(tokens, token);
+    }
+
+    /// <summary>The system clock, moved forward by however much the test has advanced it.</summary>
+    private sealed class ShiftedClock : TimeProvider
+    {
+        private long _offsetTicks;
+
+        public void Advance(TimeSpan by) => Interlocked.Add(ref _offsetTicks, by.Ticks);
+
+        public override DateTimeOffset GetUtcNow() => base.GetUtcNow() + TimeSpan.FromTicks(Interlocked.Read(ref _offsetTicks));
+    }
+
+    private sealed record Line(string Category, LogLevel Level, string Text);
+
+    private sealed class LogLines : ILoggerProvider
+    {
+        private readonly ConcurrentQueue<Line> _lines = new();
+
+        public IEnumerable<Line> All => _lines.ToArray();
+
+        public IEnumerable<Line> Of(string category) => All.Where(line => line.Category == category);
+
+        public ILogger CreateLogger(string categoryName) => new Logger(categoryName, _lines);
+
+        public void Dispose()
+        {
+        }
+
+        private sealed class Logger(string category, ConcurrentQueue<Line> lines) : ILogger
+        {
+            public IDisposable? BeginScope<TState>(TState state)
+                where TState : notnull
+                => null;
+
+            public bool IsEnabled(LogLevel logLevel) => true;
+
+            public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception, Func<TState, Exception?, string> formatter)
+                => lines.Enqueue(new Line(category, logLevel, formatter(state, exception) + (exception is null ? string.Empty : $" {exception}")));
+        }
     }
 
     private static void Report(string line) => TestContext.Current.TestOutputHelper?.WriteLine(line);

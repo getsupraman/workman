@@ -63,6 +63,15 @@ public static class OAuthServer
     /// </summary>
     public static readonly TimeSpan RefreshTokenLifetime = TimeSpan.FromDays(30);
 
+    /// <summary>
+    /// How long a rotated refresh token still redeems. Past it, a reuse makes OpenIddict revoke every token of the
+    /// authorization (<see cref="LogRefreshTokenReuse"/>); the 30-second default cut off clients that refresh late.
+    /// </summary>
+    public static readonly TimeSpan RefreshTokenReuseLeeway = TimeSpan.FromMinutes(10);
+
+    /// <summary>The log category of <see cref="LogRefreshTokenReuse"/>.</summary>
+    public const string ReuseLogCategory = "Workman.Auth.OAuth.RefreshReuse";
+
     public static string Resource(string origin) => origin + McpPath;
 
     public static string ApiResource(string origin) => origin + ApiPath;
@@ -98,7 +107,8 @@ public static class OAuthServer
                 server.AllowAuthorizationCodeFlow()
                     .AllowRefreshTokenFlow()
                     .RequireProofKeyForCodeExchange()
-                    .SetRefreshTokenLifetime(RefreshTokenLifetime);
+                    .SetRefreshTokenLifetime(RefreshTokenLifetime)
+                    .SetRefreshTokenReuseLeeway(RefreshTokenReuseLeeway);
 
                 // A refresh token is a 43-character handle to its payload in openiddict_token: self-contained it
                 // outgrew the 2560-byte blob Windows Credential Manager stores (Foreman, m57). One issued before
@@ -128,6 +138,7 @@ public static class OAuthServer
                 server.AddEventHandler(RequireKnownResourceOnToken);
                 server.AddEventHandler(AdvertiseRegistration);
                 server.AddEventHandler(RevokeAuthorizationWithRefreshToken);
+                server.AddEventHandler(LogRefreshTokenReuse);
             })
             .AddValidation(validation =>
             {
@@ -326,6 +337,58 @@ public static class OAuthServer
                     context.CancellationToken);
             })
             .SetOrder(OpenIddictServerHandlers.Revocation.RevokeToken.Descriptor.Order + 1000)
+            .SetType(OpenIddictServerHandlerType.Custom)
+            .Build();
+
+    /// <summary>
+    /// A Warning, with the client and authorization ids and never the token, for the reuse OpenIddict's
+    /// <c>ValidateTokenEntry</c> is about to punish: a redeemed refresh token presented past
+    /// <see cref="RefreshTokenReuseLeeway"/>, which it refuses and answers by revoking every token of the
+    /// authorization. Just before that handler, on its own condition, because a rejection stops the pipeline
+    /// and nothing after it runs.
+    /// </summary>
+    private static readonly OpenIddictServerHandlerDescriptor LogRefreshTokenReuse =
+        OpenIddictServerHandlerDescriptor.CreateBuilder<OpenIddictServerEvents.ValidateTokenContext>()
+            .AddFilter<OpenIddictServerHandlerFilters.RequireDegradedModeDisabled>()
+            .AddFilter<OpenIddictServerHandlerFilters.RequireTokenStorageEnabled>()
+            .AddFilter<OpenIddictServerHandlerFilters.RequireTokenIdResolved>()
+            .UseInlineHandler(async context =>
+            {
+                if (context.Principal is not { } principal
+                    || !principal.HasTokenType(TokenTypeIdentifiers.RefreshToken)
+                    || context.AuthorizationId is not { Length: > 0 } authorizationId
+                    || context.TokenId is not { Length: > 0 } tokenId)
+                {
+                    return;
+                }
+
+                var services = (context.Transaction.GetHttpRequest()
+                                ?? throw new InvalidOperationException("No HTTP request on the OpenIddict transaction."))
+                    .HttpContext.RequestServices;
+                var tokens = services.GetRequiredService<IOpenIddictTokenManager>();
+
+                if (await tokens.FindByIdAsync(tokenId, context.CancellationToken) is not { } token
+                    || !await tokens.HasStatusAsync(token, Statuses.Redeemed, context.CancellationToken))
+                {
+                    return;
+                }
+
+                // ValidateTokenEntry's own test: no leeway, or a redemption date the leeway has run out on.
+                if (context.Options.RefreshTokenReuseLeeway is { } leeway
+                    && (await tokens.GetRedemptionDateAsync(token, context.CancellationToken) is not { } redeemed
+                        || context.Options.TimeProvider.GetUtcNow() < redeemed + leeway))
+                {
+                    return;
+                }
+
+                var clientId = context.Request?.ClientId ?? principal.GetPresenters().FirstOrDefault() ?? "-";
+                services.GetRequiredService<ILoggerFactory>().CreateLogger(ReuseLogCategory).LogWarning(
+                    "Refresh token reused past the {Leeway} leeway: client {ClientId}, authorization {AuthorizationId}; every token of the authorization is revoked.",
+                    context.Options.RefreshTokenReuseLeeway,
+                    clientId,
+                    authorizationId);
+            })
+            .SetOrder(OpenIddictServerHandlers.Protection.ValidateTokenEntry.Descriptor.Order - 1)
             .SetType(OpenIddictServerHandlerType.Custom)
             .Build();
 

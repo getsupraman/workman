@@ -9,7 +9,16 @@ All notable changes to the Workman server and the `workman` plugin are recorded 
 
 ## [3.0.1] — 2026-11-06
 
-### Plugin 3.0.1
+Server 3.0.1 and plugin 3.0.1. No migration.
+
+### Server
+
+- **A rotated refresh token still redeems for 10 minutes** (was OpenIddict's 30 seconds), so a client that
+  refreshes late or twice no longer has every token of its authorization revoked.
+- **A refresh token reused past that window is logged** at Warning under `Workman.Auth.OAuth.RefreshReuse`,
+  with the client id and the authorization id, never the token.
+
+### Plugin
 
 - **Minted tokens and launch records move to `~/.workman/agents/`** (directory `0700`, files `0600`):
   `mcp-<name>.json` and `<name>.json`. Nothing secret is written into the repo any more, so the
