@@ -34,8 +34,8 @@ export const needsYouCount = (box: Inbox | undefined) => (box === undefined ? un
 export const forController = (rows: InboxRow[]) => shown(rows).filter((r) => r.audience === 'controller')
 
 /**
- * The card's meta facts after the kind and ref, in reading order: who and where, then a count
- * the detail does not already say. `since` is not here; the card prints the age last.
+ * A row's who and where after the kind and ref, in reading order, then a count the detail does
+ * not already say. `since` is not here; the row prints the age on its first line.
  */
 export function cardFacts(row: InboxRow): string[] {
   const facts: string[] = []

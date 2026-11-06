@@ -3,7 +3,7 @@ import { A } from '@solidjs/router'
 import { setArchived, type Claim, type ProjectOverview, type RunOverview } from '../api.ts'
 import { account, boards, inbox, overview, refreshOverview } from '../store.ts'
 import { CLOSED, countTitle, counted, refState, tally } from '../state.ts'
-import { backlogHref, itemHref, projectHref, runHref } from '../nav.ts'
+import { backlogHref, inboxHref, itemHref, projectHref, runHref } from '../nav.ts'
 import { forController, honestyCells, needsYou, needsYouCount, openTasks } from '../inbox.ts'
 import { byActivity } from '../projects.ts'
 import { projectRuns, runRow } from '../lists.ts'
@@ -60,7 +60,7 @@ export default function Overview() {
                 return (
                   <>
                     <Index each={human().slice(0, INBOX_SHOWN)} fallback={<div class="empty">Nothing needs you.</div>}>
-                      {(row) => <InboxRowView row={row()} asOf={box().asOf} />}
+                      {(row) => <InboxRowView row={row()} asOf={box().asOf} href={inboxHref(row().item.id)} compact />}
                     </Index>
                     <Show when={human().length > INBOX_SHOWN}>
                       <A class="row-more" href="/inbox">

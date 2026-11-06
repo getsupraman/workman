@@ -25,7 +25,8 @@ import Detail, { asTab, type Tab } from './Detail.tsx'
 
 /**
  * One decision row, in the run plan list's language (`.item`, `.on`): the title first, the kind and
- * full ref muted under it, then the server's detail line. `compact` drops the detail (the overview).
+ * full ref muted under it, then the server's detail line. `compact` (the overview) keeps the title, the kind,
+ * the ref and the age.
  */
 export function InboxRowView(props: {
   row: InboxRow
@@ -47,11 +48,15 @@ export function InboxRowView(props: {
     >
       <Dot k={m().dot} />
       <div class="inbox-b">
-        <div class="inbox-t">{m().title}</div>
+        <div class="inbox-t" title={m().title}>
+          {m().title}
+        </div>
         <div class="inbox-m">
           {m().kind} · <span class="inbox-ref">{m().fullRef}</span>
           <CopyRef item={props.row.item} />
-          <For each={m().facts}>{(fact) => <>· {fact} </>}</For>
+          <Show when={!props.compact}>
+            <For each={m().facts}>{(fact) => <>· {fact} </>}</For>
+          </Show>
         </div>
         <Show when={!props.compact && m().detail}>{(detail) => <div class="inbox-d">{detail()}</div>}</Show>
       </div>
@@ -74,7 +79,7 @@ function ChoreRowView(props: { row: InboxRow; asOf: string; href?: string; selec
       aria-current={props.selected ? 'page' : undefined}
     >
       <span />
-      <div class="chore-t">
+      <div class="chore-t" title={c().title}>
         <span class="item-ref">{c().ref}</span>
         {c().title}
         <Show when={c().actor}>{(actor) => <span class="chore-who"> · {actor()}</span>}</Show>

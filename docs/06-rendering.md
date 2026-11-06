@@ -44,6 +44,11 @@ every refusal, route and `Next:` trailer, and anything a reader copies or runs �
 calls — even inside a list row (a row drops a route rather than print a cut one). What the server
 stores is stored whole too: a title, a result line or an event summary is never cut on the way in.
 
+The web dashboard follows the same rule in its own words (doc 13, *What may be cut*): a list row may
+be cut only when it carries the whole text in a tip and opens the item — the sidebar's run links,
+the overview run strips, the housekeeping rows of *Needs you* on one line, and the title of a
+*Needs you* decision row clamped to two lines. Refs and the copy value are never cut there either.
+
 A **count** may be capped (`+2 more`) only when the same line names the call that lists all of them.
 A text with no detail view at all is a gap, closed by printing it whole where it is listed — which is
 why `work_get` prints every `work_report` an item received, and `work_threads` an assumption's
