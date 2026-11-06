@@ -1,5 +1,5 @@
 import type { Honesty, Inbox, InboxRow, ProjectOverview } from './api.ts'
-import { plural } from './format.ts'
+import { plural, projectName, short } from './format.ts'
 
 type Kind = { label: string; dot: 'stop' | 'claimed' | 'note'; many: (n: number) => string }
 
@@ -42,7 +42,48 @@ export function cardFacts(row: InboxRow): string[] {
   return facts
 }
 
-export type HousekeepingGroup = { key: string; kind: string; run: InboxRow['run']; label: string; rows: InboxRow[] }
+type ProjectLike = { item: { ref: string; title: string } }
+
+/** `item.fullRef` starts with the project's ref; its name when the overview knows it, else that segment. */
+export function rowProject(row: InboxRow, projects: readonly ProjectLike[] | undefined): string {
+  const segment = row.item.fullRef?.split('/')[0] ?? ''
+  const project = projects?.find((p) => p.item.ref === segment)
+  return project ? projectName(project.item) : segment
+}
+
+/**
+ * What a decision row prints, in reading order (doc 13): line 1 the dot, the title and the age; line 2
+ * the muted kind, the full ref, then who and where; line 3 the server's detail, or no line at all. The
+ * row's `call` is not here, so no view can paint it.
+ */
+export type DecisionRow = {
+  dot: Kind['dot']
+  kind: string
+  title: string
+  fullRef: string
+  facts: string[]
+  detail: string | null
+  since: string
+}
+
+export function decisionRow(row: InboxRow, projects?: readonly ProjectLike[]): DecisionRow {
+  const facts = cardFacts(row)
+  const project = rowProject(row, projects)
+  if (project) facts.push(project)
+  if (row.run) facts.push(short(row.run.title))
+  const kind = inboxKind(row.kind)
+  return {
+    dot: kind.dot,
+    kind: kind.label,
+    title: row.item.title,
+    fullRef: row.item.fullRef,
+    facts,
+    detail: row.detail?.trim() ? row.detail : null,
+    since: row.since,
+  }
+}
+
+export type HousekeepingGroup ={ key: string; kind: string; run: InboxRow['run']; label: string; rows: InboxRow[] }
 
 /** The controller's rows, one group per kind and run ("5 not verified in run-a"), kinds in `INBOX_KINDS` order. */
 export function groupHousekeeping(rows: InboxRow[]): HousekeepingGroup[] {

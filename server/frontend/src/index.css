@@ -319,6 +319,15 @@ a.group-h:hover { color: var(--accent); }
 .item.gone .item-t { color: var(--ink-3); text-decoration: line-through; text-decoration-color: var(--idle); }
 .item-side { display: flex; gap: 6px; align-items: center; color: var(--ink-3); font-size: 12px; font-variant-numeric: tabular-nums; padding-top: 1px; }
 .who { color: var(--doing); font-weight: 500; }
+/* Needs you: the decision row is a plan-list .item with a title clamped to two lines, a muted meta line and the detail. */
+.inbox-row { padding-top: 10px; padding-bottom: 10px; border-bottom: 1px solid var(--line-2); }
+.inbox-row:last-child { border-bottom: 0; }
+.inbox-b { min-width: 0; }
+.inbox-t { font-size: 13.5px; font-weight: 500; overflow-wrap: anywhere; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; overflow: hidden; }
+.inbox-m { color: var(--ink-3); font-size: 12px; margin-top: 2px; overflow-wrap: anywhere; }
+.inbox-ref { font-family: var(--font-mono); font-size: 11.5px; margin-left: 2px; }
+.inbox-d { margin-top: 3px; color: var(--ink-2); font-size: 13px; overflow-wrap: anywhere; }
+.inbox-row .item-side { white-space: nowrap; }
 
 /* Copy a callable ref (doc 13): a quiet icon beside the ref, "Copied" in its place for a moment.
    The strut is a line of the surrounding font: the box takes its baseline and the button centres on

@@ -1,28 +1,39 @@
 import { For, Index, Show, createSignal } from 'solid-js'
 import { A } from '@solidjs/router'
 import type { InboxRow } from '../api.ts'
-import { inbox } from '../store.ts'
-import { cardFacts, groupHousekeeping, groupInbox, inboxKind, needsYou, type HousekeepingGroup } from '../inbox.ts'
+import { inbox, overview } from '../store.ts'
+import { decisionRow, groupHousekeeping, groupInbox, needsYou, type HousekeepingGroup } from '../inbox.ts'
 import { itemHref } from '../nav.ts'
 import { ago, plural } from '../format.ts'
 import { CopyRef, Dot, Known } from '../ui.tsx'
 
-export function InboxRowView(props: { row: InboxRow; asOf: string }) {
-  const r = () => props.row
-  const kind = () => inboxKind(r().kind)
+/**
+ * One decision row, in the run plan list's language (`.item`, `.on`): the title first, the kind and
+ * full ref muted under it, then the server's detail line. `compact` drops the detail (the overview).
+ */
+export function InboxRowView(props: { row: InboxRow; asOf: string; href?: string; selected?: boolean; compact?: boolean }) {
+  const m = () => decisionRow(props.row, overview()?.projects)
 
   return (
-    <A class="row" href={itemHref(r().item, r().run)}>
-      <Dot k={kind().dot} />
-      <div>
-        <div class="row-t">{r().item.title}</div>
-        <div class="row-m">
-          {kind().label} · {r().item.qualifiedRef} <CopyRef item={r().item} />
-          <For each={cardFacts(r())}>{(fact) => <>· {fact} </>}</For>· {ago(r().since, props.asOf)}
+    <A
+      class={`item inbox-row${props.selected ? ' on' : ''}`}
+      href={props.href ?? itemHref(props.row.item, props.row.run)}
+      noScroll
+      aria-current={props.selected ? 'page' : undefined}
+    >
+      <Dot k={m().dot} />
+      <div class="inbox-b">
+        <div class="inbox-t">{m().title}</div>
+        <div class="inbox-m">
+          {m().kind} · <span class="inbox-ref">{m().fullRef}</span>
+          <CopyRef item={props.row.item} />
+          <For each={m().facts}>{(fact) => <>· {fact} </>}</For>
         </div>
-        <Show when={r().detail}>{(detail) => <div class="row-d">{detail()}</div>}</Show>
+        <Show when={!props.compact && m().detail}>{(detail) => <div class="inbox-d">{detail()}</div>}</Show>
       </div>
-      <span />
+      <div class="item-side" title={new Date(m().since).toLocaleString()}>
+        {ago(m().since, props.asOf)}
+      </div>
     </A>
   )
 }

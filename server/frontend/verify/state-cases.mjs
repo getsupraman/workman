@@ -20,7 +20,7 @@ import { MEMBERS_ANCHOR, memberLine, membersHref, projectOnPath, shareMarker } f
 import { PHONE_QUERY, closesOnMove, pageName } from '../src/menu.ts'
 import { appLine, revokeWarning, sessionsLabel } from '../src/apps.ts'
 import { BOARDS_MAX, boardsRead } from '../src/boards.ts'
-import { cardFacts, forController, groupHousekeeping, needsYou, needsYouCount } from '../src/inbox.ts'
+import { cardFacts, decisionRow, forController, groupHousekeeping, needsYou, needsYouCount, rowProject } from '../src/inbox.ts'
 import { expiresIn, isLastAdmin, isLinkPath, joinStep, joinToken, nameProblem, passwordMessage, passwordProblem, resetStep, resetToken, roleLabel, showSwitcher, slugFrom, slugProblem } from '../src/admin.ts'
 
 let failures = 0
@@ -709,6 +709,33 @@ check('card: closed by, for not verified', cardFacts(inboxRow('done_unverified',
 check('card: agent and tree, for an expired claim', cardFacts(inboxRow('expired_claim', 'controller', { actor: 'aw-1', tree: 'p:/trees/a' })), ['by aw-1', 'on p:/trees/a'])
 check('card: note count only when several', cardFacts(inboxRow('unconsumed_note', 'controller', { count: 3 })), ['3 notes'])
 check('card: a question has no extra facts', cardFacts(inboxRow('question', 'human')), [])
+
+console.log('── inbox: the decision row (title first, muted kind and ref, the detail, never the call) ──')
+{
+  const inboxProjects = [{ item: { ref: 'acme', title: 'Acme Store — the shop' } }]
+  const human = (kind, over = {}) =>
+    inboxRow(kind, 'human', {
+      item: { id: 'i1', title: 'Pick the cache', fullRef: 'acme/run-a/2.1' },
+      call: 'work_status(ref:"run-a/2.1", to:"in_progress")',
+      ...over,
+    })
+  const question = decisionRow(human('question', { actor: 'wm-1', detail: 'Which cache do we keep?' }), inboxProjects)
+  check('question row: title, kind, full ref', [question.title, question.kind, question.fullRef], ['Pick the cache', 'Question', 'acme/run-a/2.1'])
+  check('question row: who, project, run', question.facts, ['by wm-1', 'Acme Store', 'Run A'])
+  check("question row: the intent's first line as given", question.detail, 'Which cache do we keep?')
+  const blocked = decisionRow(human('blocked', { detail: 'waits on: run-a/1.2' }), inboxProjects)
+  check('blocked row: the dot and kind', [blocked.dot, blocked.kind], ['stop', 'Blocked'])
+  check('blocked row: waits on, as the server wrote it', blocked.detail, 'waits on: run-a/1.2')
+  check('a null detail prints no line', decisionRow(human('blocked'), inboxProjects).detail, null)
+  check('a blank detail prints no line', decisionRow(human('question', { detail: '  ' }), inboxProjects).detail, null)
+  const odd = decisionRow(human('waiting_on_rain'), inboxProjects)
+  check('unknown kind: its words, the stop dot', [odd.kind, odd.dot], ['waiting on rain', 'stop'])
+  for (const [label, m] of [['question', question], ['blocked', blocked], ['unknown kind', odd]])
+    check(`${label} row: no field carries the call`, JSON.stringify(m).includes('work_status'), false)
+  check('project unknown to the overview: the ref segment', rowProject(human('question'), []), 'acme')
+  check('project before the overview loads: the ref segment', rowProject(human('question'), undefined), 'acme')
+  check('a row with no run names no run', decisionRow(human('question', { run: null }), inboxProjects).facts, ['Acme Store'])
+}
 
 console.log(failures === 0 ? '\nAll checks passed.' : `\n${failures} check(s) failed.`)
 if (failures > 0) process.exitCode = 1
