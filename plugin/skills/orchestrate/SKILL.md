@@ -257,7 +257,7 @@ Invoking this skill authorizes committing. **The orchestrator commits; workers n
   <1–3 lines: why, and any assumption taken>
   Task: <task ref> of <run ref>
 
-  Co-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>
+  <the Co-Authored-By line your session's attribution asks for>
   ```
 
 ---

@@ -60,7 +60,7 @@ public class ProjectMember
     /// <summary>The project's workspace, for the row-level policy and the reference to the membership.</summary>
     public Guid WorkspaceId { get; set; }
 
-    /// <summary>Null when no user added them: the migration, or a project created by a static token.</summary>
+    /// <summary>Null when no user added them: the migration, or a project created with no user (the importer).</summary>
     public Guid? AddedBy { get; set; }
 
     public DateTimeOffset AddedAt { get; set; }

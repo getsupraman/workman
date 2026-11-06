@@ -11,10 +11,10 @@ using static Workman.Tests.Store.Tokens;
 namespace Workman.Tests.Store;
 
 /// <summary>
-/// doc 15 §8: <see cref="RlsPerfTests"/>' hot reads as the owner, as a static token (the tenant role with no user) and
+/// doc 15 §8: <see cref="RlsPerfTests"/>' hot reads as the owner, with no user (the tenant role) and
 /// as a member (the tenant role with the user who is a member of the most projects of the largest workspace), against
 /// a database that already holds data. Opt-in: <c>-e WORKMAN_PROJECT_ACCESS_PERF="Host=…"</c>. pg_stat_statements
-/// keys a statement by its role and the static token and the member share one, so each mode runs as a pass of its
+/// keys a statement by its role and the no-user mode and the member share one, so each mode runs as a pass of its
 /// own, its server time read before the next pass resets it.
 /// </summary>
 public sealed class ProjectAccessPerfTests
@@ -57,7 +57,7 @@ public sealed class ProjectAccessPerfTests
         var modes = new (string Name, NpgsqlDataSource Source, Func<IDisposable?> Scope)[]
         {
             ("owner", ownerSource, () => null),
-            ("static", tenantSource, () => TenantScope.Enter(ws)),
+            ("no user", tenantSource, () => TenantScope.Enter(ws)),
             ("member", tenantSource, () => TenantScope.EnterAs(ws, member)),
         };
 

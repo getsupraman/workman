@@ -11,7 +11,7 @@ using static Workman.Tests.Store.Tokens;
 namespace Workman.Tests.App;
 
 /// <summary>
-/// doc 02 §12b: who may work in a project. A project is its creator's until shared; a static token, which has no
+/// doc 02 §12b: who may work in a project. A project is its creator's until shared; a credential with no
 /// user, gives it every member of the workspace. The sharing API is the dashboard's (doc 10, "Outside v1"): a
 /// member of the project or an admin of its workspace may share it, and everyone else — another tenant's user
 /// included (C63) — gets the 404 an unknown id gets.

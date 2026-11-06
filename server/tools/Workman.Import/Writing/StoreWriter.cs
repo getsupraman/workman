@@ -119,7 +119,7 @@ public sealed class StoreWriter(string connectionString, string workspaceSlug = 
 
         db.ProjectConfigs.Add(new ProjectConfig { ItemId = project.Id, RepoRoot = run.RepoRoot });
 
-        // The importer has no user, so the project gets every member of the workspace, as one a static token
+        // The importer has no user, so the project gets every member of the workspace, as one with no user
         // creates does (doc 02 §12b).
         db.ProjectMembers.AddRange(await db.TenantMemberships
             .Where(m => m.WorkspaceId == workspace.Id)

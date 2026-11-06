@@ -15,13 +15,13 @@ public class AgentSession
     public Guid WorkspaceId { get; set; }
 
     /// <summary>
-    /// The signed-in user whose credential named or minted the session; null for a static token's. While it is
+    /// The signed-in user whose credential named or minted the session; null when no user did (the importer, a test). While it is
     /// set the session's token works only while that user may enter the workspace. No foreign key, so a user
     /// row going away cannot null it into a static session.
     /// </summary>
     public Guid? UserId { get; set; }
 
-    /// <summary>Unique per (workspace, user), a null user being one more: the static tokens share theirs.</summary>
+    /// <summary>Unique per (workspace, user), a null user being one more: the credentials with no user share theirs.</summary>
     public string Name { get; set; } = "";
 
     public string? ClaudeSessionId { get; set; }
@@ -62,7 +62,7 @@ public class AgentSession
 
     public DateTimeOffset? RevokedAt { get; set; }
 
-    /// <summary>The minted session that minted this one; null when a static token did.</summary>
+    /// <summary>The minted session that minted this one; null when no minted session did.</summary>
     public Guid? MintedBySessionId { get; set; }
 
     /// <summary>

@@ -214,7 +214,7 @@ public sealed class AgentSessionTests(PostgresFixture fixture)
         Assert.Contains("aw-worker", history, StringComparison.Ordinal);
     }
 
-    /// <summary>The nesting of the static tokens holds for minted ones: a controller sees what all three see.</summary>
+    /// <summary>Minted roles nest: a controller sees what all three see.</summary>
     [Fact]
     public async Task Minted_roles_nest_as_the_static_ones_do()
     {

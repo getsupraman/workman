@@ -11,7 +11,7 @@ namespace Workman.Tests.App;
 
 /// <summary>
 /// m62. Users share role names — every OAuth controller is <c>controller</c> — so a claim with no session is the
-/// caller's own only when the user matches as well as the name. A claim with no user stays a static token's, as before.
+/// caller's own only when the user matches as well as the name. A claim with no user belongs to no user.
 /// </summary>
 [Collection(StoreCollection.Name)]
 public sealed class ClaimHolderUserTests(PostgresFixture fixture)

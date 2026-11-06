@@ -184,7 +184,7 @@ public sealed class ApiOAuthTests(PostgresFixture fixture)
             Assert.Empty(await response.Content.ReadAsStringAsync(Ct));
         }
 
-        // A wrong static token still gets the bare 401.
+        // A wrong bearer still gets the bare 401.
         var wrong = Bearer(server, "not-a-configured-token");
         var bare = await wrong.GetAsync("/api/v1/overview", Ct);
         Assert.Equal(HttpStatusCode.Unauthorized, bare.StatusCode);
