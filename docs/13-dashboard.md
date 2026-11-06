@@ -42,6 +42,19 @@ returns focus where it was. One input filters two groups:
   come first, so a typed ref and Enter open it. With no hits it names what was searched and that a
   ref works bare or as `run/ref` and `project/run/ref`.
 
+**Keyboard** (rules in `src/listnav.ts`, listeners in `src/listkeys.ts`). Global keys never act
+while focus is in an input, textarea, select or contenteditable, or while the palette or another
+modal is open, or once a handler before them took the key; they listen on the document in the bubble
+phase, so the palette's and the shell's capture handlers win. Ctrl+P, **/** and Esc keep their owners
+above; Alt+←/→ stay the browser's back and forward; the split handle keeps ←/→ while it has focus.
+
+| Key | Where | What it does |
+|---|---|---|
+| ↓ / ↑ | run page | selects the next / previous row of the plan as drawn (phase heads and rows, under the current filter and cancelled toggle) and shows it in the detail panel; the URL keeps filter, tab and cancelled. No selection: ↓ takes the first row, ↑ the last. The ends hold, no wrap. The row scrolls into view (`block: nearest`) |
+| Home / End | run page | the first / last row |
+
+No modifier may be held for these.
+
 **The project list** (`src/Shell.tsx`, rules in `src/projects.ts`):
 
 - A search box above it filters by name, full title and ref, client-side, ignoring case. While it

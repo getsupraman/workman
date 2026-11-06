@@ -7,6 +7,7 @@ import { refState } from './state.ts'
 import { Pill, ProjectName } from './ui.tsx'
 import { arrange, commands, entryHref, isPaletteChord, isSlash, matchCommands, type Entry, type PaletteAccount } from './palette.ts'
 import { switchWorkspace } from './tenant.ts'
+import { typingIn } from './listnav.ts'
 import { projectOnPath } from './sharing.ts'
 
 const DEBOUNCE_MS = 150
@@ -15,11 +16,6 @@ const [open, setOpen] = createSignal(false)
 
 /** Opens the palette from anywhere; the sidebar's search field calls this. */
 export const openPalette = () => setOpen(true)
-
-/** Where a key would be typed rather than taken as a shortcut. */
-const typingIn = (target: EventTarget | null): boolean =>
-  target instanceof HTMLElement &&
-  (target.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName))
 
 /**
  * The command palette (doc 13): Ctrl+P / Cmd+P or `/` from any page. Commands match here; items

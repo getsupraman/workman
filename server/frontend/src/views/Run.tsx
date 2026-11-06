@@ -1,10 +1,12 @@
-import { For, Index, Show } from 'solid-js'
+import { For, Index, Show, createEffect, on } from 'solid-js'
 import { A, useNavigate, useParams, useSearchParams } from '@solidjs/router'
 import * as api from '../api.ts'
 import type { Board, BoardRow, ItemRef } from '../api.ts'
 import { load } from '../store.ts'
 import { CLOSED, findingsOpen, progress, rowState, tally } from '../state.ts'
-import { FILTERS, asFilter, cancelledLines, plan, planQuery as query, type Filter } from '../plan.ts'
+import { FILTERS, asFilter, cancelledLines, plan, planOrder, planQuery as query, type Filter } from '../plan.ts'
+import { step } from '../listnav.ts'
+import { reveal, useListKeys } from '../listkeys.ts'
 import { SHOW_CANCELLED, boardHref, runHref } from '../nav.ts'
 import { UNKNOWN, claimHolder, short } from '../format.ts'
 import { CancelledToggle, CopyRef, Dot, ProjectName, Segs } from '../ui.tsx'
@@ -40,6 +42,32 @@ export default function Run() {
 
   const navigate = useNavigate()
   const close = () => navigate(`${runHref(params.run)}${query(filter(), tab(), cancelled())}`, { scroll: false })
+  // ArrowUp/ArrowDown, Home/End walk the plan as it is drawn: the panel follows the selection.
+  let keyed = false
+  useListKeys((m) => {
+    const b = board.data()
+    if (!b) return false
+    const order = planOrder(plan(b, filter(), cancelled()))
+    const to = step(order, order.find((r) => r.item.id === params.item), m)
+    if (to === undefined) return false
+    if (to.item.id !== params.item) {
+      keyed = true
+      navigate(href(to.item), { scroll: false })
+    }
+    return true
+  })
+  createEffect(
+    on(
+      () => params.item,
+      () => {
+        if (!keyed) return
+        keyed = false
+        reveal('.plan-list [aria-current="page"]')
+      },
+      { defer: true },
+    ),
+  )
+
   const sheetTitle = () => {
     const item = page.data()?.item
     return item ? `${item.ref} · ${short(item.title)}` : 'Item detail'
@@ -178,6 +206,7 @@ function PlanList(props: {
                 class={`group-h${props.selected === head().item.id ? ' on' : ''}`}
                 href={props.href(head().item)}
                 noScroll
+                aria-current={props.selected === head().item.id ? 'page' : undefined}
               >
                 <Dot k={rowState(head()).k} style={{ 'margin-top': 0 }} />
                 {head().item.title}

@@ -92,6 +92,10 @@ export function plan(board: Board, filter: Filter, cancelled = false): PlanGroup
   ]
 }
 
+/** The plan's links in render order — each phase head, then its rows — which ArrowUp/ArrowDown walk. */
+export const planOrder = (groups: PlanGroup[]): BoardRow[] =>
+  groups.flatMap((g) => [...(g.head ? [g.head] : []), ...g.rows.map((r) => r.row)])
+
 const listed = (groups: PlanGroup[]) => groups.reduce((n, g) => n + g.rows.length + (g.head ? 1 : 0), 0)
 
 /** How many cancelled lines the plan would add under All: the number the toggle shows. */

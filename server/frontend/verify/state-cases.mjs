@@ -6,7 +6,8 @@
  *   node verify/state-cases.mjs
  */
 import { CLOSED, LEAF, answer, countTitle, counted, findingsOpen, independent, progress, state, tally } from '../src/state.ts'
-import { DEFAULT_FILTER, FILTERS, asFilter, cancelledLines, plan, planQuery, withoutCancelled } from '../src/plan.ts'
+import { DEFAULT_FILTER, FILTERS, asFilter, cancelledLines, plan, planOrder, planQuery, withoutCancelled } from '../src/plan.ts'
+import { listMove, runMove, step, typingIn } from '../src/listnav.ts'
 import { boardHref, copyValue, itemHref, pathCrumbs, routeReads } from '../src/nav.ts'
 import { appIconHref, consentForm, consentStep, consentView, hiddenFields, iconStep, initials, isConnectPath, returnTarget, scopeLines, signInHref, signInStart, signInStep } from '../src/connect.ts'
 import { formerName, isReleased, releasable, tokenLabel } from '../src/sessions.ts'
@@ -409,6 +410,29 @@ check('a live name offers Release', releasable({ session: { name: 'mw-workflow' 
 check('a released row offers nothing', releasable({ session: { name: tomb } }), false)
 check('every token state reads', ['none', 'live', 'revoked', 'expired'].map(tokenLabel), ['named by header, no token', 'token live', 'token revoked', 'token expired'])
 
+console.log('\n── list keys: which keys move, when they stand down, where they land ───────')
+const k = (over) => ({ key: 'ArrowDown', ctrlKey: false, metaKey: false, altKey: false, shiftKey: false, ...over })
+check('ArrowDown is next, ArrowUp prev', [listMove(k({}), false, false), listMove(k({ key: 'ArrowUp' }), false, false)], ['next', 'prev'])
+check('Home is first, End last', [listMove(k({ key: 'Home' }), false, false), listMove(k({ key: 'End' }), false, false)], ['first', 'last'])
+check('other keys are not ours', [listMove(k({ key: 'j' }), false, false), listMove(k({ key: 'Enter' }), false, false)], [null, null])
+check('focus in a text field: the key is typed', listMove(k({}), true, false), null)
+check('the palette or a modal open: nothing moves', listMove(k({}), false, true), null)
+check('any modifier held: nothing moves', ['ctrlKey', 'metaKey', 'altKey', 'shiftKey'].map((m) => listMove(k({ [m]: true }), false, false)), [null, null, null, null])
+check('a key a handler already took is left alone', listMove(k({ defaultPrevented: true }), false, false), null)
+check('typing: input, textarea, select', ['INPUT', 'TEXTAREA', 'SELECT'].map((tagName) => typingIn({ tagName })), [true, true, true])
+check('typing: contenteditable', typingIn({ tagName: 'DIV', isContentEditable: true }), true)
+check('not typing: a link, the body, no target', [typingIn({ tagName: 'A' }), typingIn({ tagName: 'BODY' }), typingIn(null)], [false, false, false])
+const abc = ['a', 'b', 'c']
+check('next and prev', [step(abc, 'b', 'next'), step(abc, 'b', 'prev')], ['c', 'a'])
+check('first and last', [step(abc, 'b', 'first'), step(abc, 'b', 'last')], ['a', 'c'])
+check('the ends hold: Down on the last, Up on the first', [step(abc, 'c', 'next'), step(abc, 'a', 'prev')], ['c', 'a'])
+check('no selection: Down takes the first, Up the last', [step(abc, undefined, 'next'), step(abc, undefined, 'prev')], ['a', 'c'])
+check('a selection not in the list counts as none', step(abc, 'z', 'next'), 'a')
+check('an empty list: nowhere to go', [step([], undefined, 'next'), step([], 'a', 'first')], [undefined, undefined])
+check('the run page walks heads and rows as drawn (All)', planOrder(plan(board, 'all')).map((r) => r.item.title), [
+  'loose', 'P1', 'task', 'task', 'task', 'P2', 'task', 'subtask', 'task',
+])
+check('the run page walks the Open filter only', planOrder(plan(board, 'open')).map((r) => r.item.id), ['id-2', 'id-7', 'id-8', 'id-9', 'id-10'])
 console.log('\n── the command palette: what opens it, what matches, what Enter opens ───────')
 const key = (over) => ({ key: 'p', ctrlKey: false, metaKey: false, altKey: false, shiftKey: false, ...over })
 check('Ctrl+P opens', isPaletteChord(key({ ctrlKey: true })), true)
