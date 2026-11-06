@@ -4,15 +4,19 @@ import * as api from '../api.ts'
 import type { InboxRow, ItemRef } from '../api.ts'
 import { inbox, load, overview } from '../store.ts'
 import {
+  INBOX_FILTERS,
+  asInboxFilter,
   choreRow,
   decisionRow,
+  filterInbox,
   groupHousekeeping,
-  groupInbox,
   inboxKind,
   inboxOrder,
   keepSelected,
   needsYou,
+  withInboxFilter,
   type HousekeepingGroup,
+  type InboxFilter,
 } from '../inbox.ts'
 import { SHOW_CANCELLED, inboxHref, itemHref } from '../nav.ts'
 import { DEFAULT_FILTER, planQuery } from '../plan.ts'
@@ -118,8 +122,9 @@ function Group(props: {
 
 export default function Inbox() {
   const params = useParams<{ item?: string }>()
-  const [search] = useSearchParams<{ tab?: string; cancelled?: string }>()
+  const [search] = useSearchParams<{ tab?: string; cancelled?: string; kind?: string }>()
   const tab = () => asTab(search.tab)
+  const filter = () => asInboxFilter(search.kind)
   const cancelled = () => search.cancelled === SHOW_CANCELLED
   const navigate = useNavigate()
   const page = load(() => params.item, api.item)
@@ -135,7 +140,13 @@ export default function Inbox() {
   const rows = () => inbox()?.rows ?? []
   const groups = () => groupHousekeeping(rows())
   const human = createMemo<{ rows: InboxRow[]; resolved: string | null }>(
-    (before) => keepSelected(before.rows, needsYou(rows()), params.item),
+    (before) => {
+      const all = needsYou(rows())
+      const now = filterInbox(all, filter())
+      // Filtered out is not resolved: only an item that left the inbox is kept in place.
+      if (params.item !== undefined && all.some((r) => r.item.id === params.item)) return { rows: now, resolved: null }
+      return keepSelected(before.rows, now, params.item)
+    },
     { rows: [], resolved: null },
   )
   const inInbox = (id: string) => rows().some((r) => r.item.id === id)
@@ -143,11 +154,15 @@ export default function Inbox() {
   /** On this page an inbox item opens beside the list; anything else goes to its own page. */
   const href = (item: Pick<ItemRef, 'id' | 'kind'>, tabFor: Tab = tab(), cancelledFor = cancelled()) =>
     inInbox(item.id) || item.id === params.item
-      ? `${inboxHref(item.id)}${planQuery(DEFAULT_FILTER, tabFor, cancelledFor)}`
+      ? `${inboxHref(item.id)}${withInboxFilter(planQuery(DEFAULT_FILTER, tabFor, cancelledFor), filter())}`
       : itemHref(item, null)
   const rowHref = (row: InboxRow) => href(row.item)
 
-  const close = () => navigate(inboxHref(), { scroll: false })
+  /** The filter bar's link: the selection and its tab stay, only the filter changes. */
+  const filterHref = (f: InboxFilter) =>
+    `${params.item ? inboxHref(params.item) : inboxHref()}${withInboxFilter(planQuery(DEFAULT_FILTER, tab(), cancelled()), f)}`
+
+  const close = () => navigate(`${inboxHref()}${withInboxFilter('', filter())}`, { scroll: false })
 
   // ArrowUp/ArrowDown, Home/End walk the rows as drawn: the panel follows the selection.
   let keyed = false
@@ -202,19 +217,22 @@ export default function Inbox() {
               return (
                 <div class="stack inbox-list">
                   <div>
-                    <Show when={waiting().length > 0}>
-                      <div class="summary">
-                        <For each={groupInbox(waiting())}>
-                          {(group) => (
-                            <span class="chip">
-                              {group.label} <b>{group.rows.length}</b>
-                            </span>
-                          )}
-                        </For>
-                      </div>
-                    </Show>
                     <div class="panel">
-                      <Index each={human().rows} fallback={<div class="empty">Nothing needs you.</div>}>
+                      <Show when={waiting().length > 0}>
+                        <nav class="filters" aria-label="Filter Needs you">
+                          <For each={INBOX_FILTERS}>
+                            {([key, label]) => (
+                              <A href={filterHref(key)} class={filter() === key ? 'on' : ''} noScroll>
+                                {label} <b class="filter-n">{filterInbox(waiting(), key).length}</b>
+                              </A>
+                            )}
+                          </For>
+                        </nav>
+                      </Show>
+                      <Index
+                        each={human().rows}
+                        fallback={<div class="empty">{waiting().length > 0 ? 'Nothing matches this filter.' : 'Nothing needs you.'}</div>}
+                      >
                         {(row) => (
                           <InboxRowView
                             row={row()}

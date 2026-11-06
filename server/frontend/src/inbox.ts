@@ -33,6 +33,30 @@ export const needsYouCount = (box: Inbox | undefined) => (box === undefined ? un
 
 export const forController = (rows: InboxRow[]) => shown(rows).filter((r) => r.audience === 'controller')
 
+/** Needs you's filter bar, as the run page's: `?kind=`, All by default. */
+export const INBOX_FILTERS = [
+  ['all', 'All'],
+  ['question', 'Questions'],
+  ['blocked', 'Blocked'],
+] as const
+
+export type InboxFilter = (typeof INBOX_FILTERS)[number][0]
+
+export const asInboxFilter = (value: string | undefined): InboxFilter =>
+  INBOX_FILTERS.some(([key]) => key === value) ? (value as InboxFilter) : 'all'
+
+/** The person's rows under a filter; All keeps a kind the bar does not name. */
+export const filterInbox = (rows: InboxRow[], filter: InboxFilter): InboxRow[] =>
+  filter === 'all' ? rows : rows.filter((r) => r.kind === filter)
+
+/** `query` (a `?…` string or empty) with the filter added; All adds nothing. */
+export function withInboxFilter(query: string, filter: InboxFilter): string {
+  if (filter === 'all') return query
+  const q = new URLSearchParams(query)
+  q.set('kind', filter)
+  return `?${q}`
+}
+
 /**
  * A row's who and where after the kind and ref, in reading order, then a count the detail does
  * not already say. `since` is not here; the row prints the age on its first line.

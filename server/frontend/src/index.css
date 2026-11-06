@@ -306,6 +306,7 @@ a.row:hover { background: var(--bg); }
 .filters { display: flex; flex-wrap: wrap; gap: 4px; padding: 10px 14px; border-bottom: 1px solid var(--line-2); }
 .filters a, .tabs a { padding: 4px 10px; border-radius: 8px; font-size: 12.5px; color: var(--ink-2); font-weight: 500; }
 .filters a.on, .tabs a.on { background: var(--accent-soft); color: var(--accent); }
+.filters .filter-n { margin-left: 3px; font-weight: 600; }
 .group-h { display: flex; align-items: center; gap: 8px; padding: 14px 18px 6px; font-weight: 600; font-size: 13px; }
 a.group-h:hover { color: var(--accent); }
 .group-h.on { color: var(--accent); }

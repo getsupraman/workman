@@ -20,7 +20,7 @@ import { MEMBERS_ANCHOR, memberLine, membersHref, projectOnPath, shareMarker } f
 import { PHONE_QUERY, closesOnMove, pageName } from '../src/menu.ts'
 import { appLine, revokeWarning, sessionsLabel } from '../src/apps.ts'
 import { BOARDS_MAX, boardsRead } from '../src/boards.ts'
-import { cardFacts, choreRow, decisionRow, forController, groupHousekeeping, inboxOrder, keepSelected, needsYou, needsYouCount, rowProject } from '../src/inbox.ts'
+import { asInboxFilter, cardFacts, choreRow, decisionRow, filterInbox, forController, groupHousekeeping, inboxOrder, keepSelected, needsYou, needsYouCount, rowProject, withInboxFilter } from '../src/inbox.ts'
 import { expiresIn, isLastAdmin, isLinkPath, joinStep, joinToken, nameProblem, passwordMessage, passwordProblem, resetStep, resetToken, roleLabel, showSwitcher, slugFrom, slugProblem } from '../src/admin.ts'
 
 let failures = 0
@@ -786,6 +786,12 @@ console.log('── inbox: the item beside the list, and the keys that walk it �
   check('the selection moves on: the resolved row goes', [ids(moved), moved.resolved], [['b1'], null])
   check('nothing selected: no row kept', ids(keepSelected([q, b], [b], undefined)), ['b1'])
   check('kept at the end when the list shrank under it', ids(keepSelected([q, b], [q], 'b1')), ['q1', 'b1'])
+
+  check('filter: All keeps every person row', ids({ rows: filterInbox([q, b], 'all') }), ['q1', 'b1'])
+  check('filter: Questions keeps the questions', ids({ rows: filterInbox([q, b], 'question') }), ['q1'])
+  check('filter: Blocked keeps the blocked', ids({ rows: filterInbox([q, b], 'blocked') }), ['b1'])
+  check('filter: an unknown or missing ?kind= is All', [asInboxFilter('nope'), asInboxFilter(undefined), asInboxFilter('blocked')], ['all', 'all', 'blocked'])
+  check('filter: in the query beside tab, All adds nothing', [withInboxFilter('', 'all'), withInboxFilter('', 'question'), withInboxFilter('?tab=notes', 'blocked')], ['', '?kind=question', '?tab=notes&kind=blocked'])
 
   check('href: the list, and an item beside it', [inboxHref(), inboxHref('q1')], ['/inbox', '/inbox/q1'])
   check('reads for /inbox', routeReads('/inbox'), ['/api/v1/inbox'])

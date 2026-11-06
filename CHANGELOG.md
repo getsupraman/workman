@@ -7,6 +7,11 @@ All notable changes to the Workman server and the `workman` plugin are recorded 
 
 ## [Unreleased]
 
+### Dashboard
+
+- **Needs you has a filter bar** like a run page's: *All*, *Questions*, *Blocked*, each with its count
+  (`?kind=`); the filter stays when a row is opened beside the list, and ↓/↑ walk only the rows it shows.
+
 ## [3.0.2] — 2026-11-06
 
 Server 3.0.2 (server and dashboard). No migration; the plugin stays 3.0.1.
