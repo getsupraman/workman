@@ -1,11 +1,12 @@
 // @ts-check
-// setup.sh / setup.ps1 --url: a remote server is registered with OAuth and the session helper, proved,
-// and nothing of Docker is touched. `claude` and `docker` are fakes (fixtures/fake-cli.mjs); the
+// setup.sh: --url registers a remote server with OAuth and the session helper, proves it, and touches
+// nothing of Docker; the local install does the same against a loopback server. Both write
+// ~/.workman/server.json (rule C181). `claude` and `docker` are fakes (fixtures/fake-cli.mjs); the
 // "remote" server is a loopback HTTP server, which --url accepts as plain http on 127.0.0.1 only.
 import { test, before, after } from 'node:test'
 import assert from 'node:assert/strict'
 import { execFile, spawnSync } from 'node:child_process'
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync, chmodSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync, chmodSync } from 'node:fs'
 import http from 'node:http'
 import os from 'node:os'
 import path from 'node:path'
@@ -25,7 +26,6 @@ function findBash() {
     return null
 }
 const BASH = findBash()
-const PWSH = spawnSync('pwsh', ['-NoProfile', '-Command', 'exit 0']).status === 0 ? 'pwsh' : null
 
 /** @type {'ok' | 'no401' | 'nometa' | 'badprm'} */
 let mode = 'ok'
@@ -36,6 +36,7 @@ let origin = ''
 before(async () => {
     server = http.createServer((req, res) => {
         const prm = `${origin}/.well-known/oauth-protected-resource/mcp`
+        if (req.method === 'GET' && req.url === '/health') { res.writeHead(200); res.end('ok'); return }
         if (req.method === 'POST' && req.url === '/mcp') {
             if (mode === 'no401') { res.writeHead(200, { 'Content-Type': 'application/json' }); res.end('{}'); return }
             const headers = mode === 'nometa' ? {} : { 'WWW-Authenticate': `Bearer resource_metadata="${prm}"` }
@@ -58,40 +59,37 @@ after(() => new Promise((resolve) => server.close(() => resolve(undefined))))
 function sandbox() {
     const root = mkdtempSync(path.join(os.tmpdir(), 'workman-setup-url-'))
     const home = path.join(root, 'home'); const cwd = path.join(root, 'cwd')
-    const binSh = path.join(root, 'bin-sh'); const binPs = path.join(root, 'bin-ps')
-    for (const d of [home, cwd, binSh, binPs]) mkdirSync(d)
+    const binSh = path.join(root, 'bin-sh')
+    for (const d of [home, cwd, binSh]) mkdirSync(d)
     const fake = FAKE.replaceAll('\\', '/'); const node = process.execPath.replaceAll('\\', '/')
     for (const tool of ['claude', 'docker']) {
         const sh = path.join(binSh, tool)
         writeFileSync(sh, `#!/bin/sh\nexec "${node}" "${fake}" ${tool} "$@"\n`)
         chmodSync(sh, 0o755)
-        writeFileSync(path.join(binPs, `${tool}.ps1`), `& '${node}' '${fake}' ${tool} @args\nexit $LASTEXITCODE\n`)
     }
-    return { root, home, cwd, binSh, binPs, log: path.join(root, 'calls.jsonl') }
+    return { root, home, cwd, binSh, log: path.join(root, 'calls.jsonl') }
 }
 
-/** --kebab-case to -PascalCase, for the PowerShell twin. @param {string[]} args */
-const psArgs = (args) => args.map((a) => a.startsWith('--')
-    ? '-' + a.slice(2).split('-').map((w) => w[0].toUpperCase() + w.slice(1)).join('')
-    : a)
-
 /**
- * @param {'sh' | 'ps1'} kind @param {string[]} args @param {{ existingUrl?: string }} [opts]
+ * An existing registration is seeded into the sandbox's Claude config, where setup reads it.
+ * @param {'sh'} kind @param {string[]} args @param {{ existingUrl?: string, docker?: boolean }} [opts]
  * @returns {Promise<{ code: number, stdout: string, stderr: string, calls: { tool: string, args: string[] }[], box: ReturnType<typeof sandbox> }>}
  */
 function run(kind, args, opts = {}) {
     const box = sandbox()
+    if (opts.existingUrl) {
+        const entry = { type: 'http', url: opts.existingUrl, headers: { Authorization: 'Bearer SENTINEL-TOKEN-x' } }
+        writeFileSync(path.join(box.home, '.claude.json'), JSON.stringify({ mcpServers: { workman: entry } }))
+    }
     const env = {
         ...process.env,
         HOME: box.home, USERPROFILE: box.home, CLAUDE_CONFIG_DIR: box.home,
-        PATH: (kind === 'sh' ? box.binSh : box.binPs) + path.delimiter + process.env.PATH,
-        FAKE_LOG: box.log, FAKE_EXISTING_URL: opts.existingUrl ?? '',
+        PATH: box.binSh + path.delimiter + process.env.PATH,
+        FAKE_LOG: box.log, FAKE_DOCKER: opts.docker ? 'ok' : '',
     }
-    const [file, argv] = kind === 'sh'
-        ? [/** @type {string} */ (BASH), [path.join(ASSETS, 'setup.sh'), ...args]]
-        : [/** @type {string} */ (PWSH), ['-NoProfile', '-NonInteractive', '-File', path.join(ASSETS, 'setup.ps1'), ...psArgs(args)]]
+    const argv = [path.join(ASSETS, 'setup.sh'), ...args]
     return new Promise((resolve) => {
-        execFile(file, argv, { cwd: box.cwd, env, timeout: 60_000 }, (err, stdout, stderr) => {
+        execFile(/** @type {string} */ (BASH), argv, { cwd: box.cwd, env, timeout: 60_000 }, (err, stdout, stderr) => {
             const calls = existsSync(box.log)
                 ? readFileSync(box.log, 'utf8').split('\n').filter(Boolean).map((l) => JSON.parse(l))
                 : []
@@ -104,9 +102,9 @@ function run(kind, args, opts = {}) {
 /** @param {{ tool: string, args: string[] }[]} calls @param {string} sub */
 const claudeCalls = (calls, sub) => calls.filter((c) => c.tool === 'claude' && c.args[1] === sub)
 
-for (const kind of /** @type {const} */ (['sh', 'ps1'])) {
-    const skip = kind === 'sh' ? (BASH ? false : 'no bash') : (PWSH ? false : 'no pwsh')
-    const flag = (/** @type {string} */ f) => (kind === 'sh' ? f : psArgs([f])[0])
+for (const kind of /** @type {const} */ (['sh'])) {
+    const skip = BASH ? false : 'no bash'
+    const flag = (/** @type {string} */ f) => f
 
     test(`${kind}: --url registers <url>/mcp with OAuth and the session helper, and never calls docker`, { skip }, async () => {
         mode = 'ok'
@@ -192,14 +190,14 @@ for (const kind of /** @type {const} */ (['sh', 'ps1'])) {
     })
 
     for (const extra of [
-        ['--clone', '.'], ['--port', '5291'], ['--project', 'other'], ['--image-version', '2.1.0'], ['--update'],
-        ['--backup', 'x.dump'], ['--restore', 'x.dump'], ['--auth', 'token'], ['--role', 'worker'],
+        ['--clone', '.'], ['--port', '5291'], ['--image-version', '2.1.0'], ['--update'],
+        ['--backup', 'x.dump'], ['--restore', 'x.dump'],
     ]) {
         test(`${kind}: --url refuses ${extra.join(' ')}`, { skip }, async () => {
             const r = await run(kind, ['--url', 'https://work.example', ...extra])
             try {
                 assert.notEqual(r.code, 0)
-                const shown = extra[0] === '--auth' ? `${flag('--auth')} token` : flag(extra[0])
+                const shown = flag(extra[0])
                 assert.ok(r.stderr.includes(`with ${shown}`), r.stderr)
                 assert.match(r.stderr, /for a local Docker install/)
                 assert.deepEqual(r.calls, [], 'neither claude nor docker called')
@@ -217,4 +215,95 @@ for (const kind of /** @type {const} */ (['sh', 'ps1'])) {
             } finally { rmSync(r.box.root, { recursive: true, force: true }) }
         })
     }
+
+    /** @param {ReturnType<typeof sandbox>} box */
+    const serverJson = (box) => path.join(box.home, '.workman', 'server.json')
+    /** The rule C181 format, exactly, and no temp file left beside it. @param {ReturnType<typeof sandbox>} box @param {string} url */
+    const assertServerJson = (box, url) => {
+        assert.ok(existsSync(serverJson(box)), 'server.json written')
+        const written = JSON.parse(readFileSync(serverJson(box), 'utf8'))
+        assert.deepEqual(written, { url, mcpName: 'workman' }, 'exactly url and mcpName')
+        assert.equal(new URL(written.url).origin, written.url, 'an origin, no path')
+        const strays = readdirSync(path.dirname(serverJson(box))).filter((f) => f.includes('server.json') && f !== 'server.json')
+        assert.deepEqual(strays, [], 'no temp file left')
+    }
+    /** @param {{ tool: string, args: string[] }[]} calls */
+    const probes = (calls) => calls.filter((c) => c.tool === 'claude' && ['get', 'list'].includes(c.args[1]))
+    const port = () => new URL(origin).port
+
+    test(`${kind}: --url writes ~/.workman/server.json with the origin, and never runs claude mcp get or list`, { skip }, async () => {
+        mode = 'ok'
+        const r = await run(kind, ['--url', `${origin}/`])
+        try {
+            assert.equal(r.code, 0, r.stderr)
+            assertServerJson(r.box, origin)
+            assert.deepEqual(probes(r.calls), [])
+        } finally { rmSync(r.box.root, { recursive: true, force: true }) }
+    })
+
+    test(`${kind}: the local install writes an .env without tokens, registers 127.0.0.1:<port> and writes server.json`, { skip }, async () => {
+        mode = 'ok'
+        const r = await run(kind, ['--port', port()], { docker: true })
+        try {
+            assert.equal(r.code, 0, r.stderr)
+            const env = readFileSync(path.join(r.box.home, '.workman', '.env'), 'utf8')
+            const keys = env.split(/\r?\n/).filter((l) => /^[A-Z_]+=/.test(l)).map((l) => l.split('=')[0])
+            assert.deepEqual(keys.filter((k) => /TOKEN/.test(k)), [], 'no token in the .env')
+            for (const k of ['WORKMAN_DASHBOARD_PASSWORD', 'POSTGRES_PASSWORD', 'WORKMAN_API_PORT']) assert.ok(keys.includes(k), k)
+            assert.ok(r.calls.some((c) => c.tool === 'docker' && c.args.includes('up')), 'docker compose up ran')
+            const adds = claudeCalls(r.calls, 'add-json')
+            assert.equal(adds.length, 1)
+            const entry = JSON.parse(adds[0].args[5])
+            assert.equal(entry.url, `http://127.0.0.1:${port()}/mcp`)
+            assert.equal(entry.headers, undefined, 'OAuth: no Authorization header stored')
+            assertServerJson(r.box, `http://127.0.0.1:${port()}`)
+            assert.deepEqual(probes(r.calls), [])
+        } finally { rmSync(r.box.root, { recursive: true, force: true }) }
+    })
+
+    test(`${kind}: the local install against a server without OAuth stops, naming --update, and registers nothing`, { skip }, async () => {
+        mode = 'nometa'
+        const r = await run(kind, ['--port', port()], { docker: true })
+        try {
+            assert.notEqual(r.code, 0)
+            assert.match(r.stderr, /run with --update/)
+            assert.deepEqual(claudeCalls(r.calls, 'add-json'), [])
+            assert.ok(!existsSync(serverJson(r.box)), 'no server.json')
+        } finally { rmSync(r.box.root, { recursive: true, force: true }) }
+    })
+
+    for (const local of [false, true]) {
+        test(`${kind}: ${local ? 'the local install' : '--url'} with --dry-run writes no server.json and no file at all`, { skip }, async () => {
+            mode = 'ok'
+            const r = await run(kind, [...(local ? ['--port', port()] : ['--url', origin]), '--dry-run'], { docker: true })
+            try {
+                assert.equal(r.code, 0, r.stderr)
+                assert.ok(!existsSync(path.join(r.box.home, '.workman')), 'no ~/.workman')
+                assert.deepEqual(claudeCalls(r.calls, 'add-json'), [])
+                assert.ok(!r.calls.some((c) => c.tool === 'docker' && c.args.includes('up')), 'nothing started')
+                assert.match(r.stdout, /^server {4}dry run, would write .*server\.json/m)
+            } finally { rmSync(r.box.root, { recursive: true, force: true }) }
+        })
+    }
+
+    test(`${kind}: a registration kept at the same url still writes server.json`, { skip }, async () => {
+        mode = 'ok'
+        const r = await run(kind, ['--url', origin], { existingUrl: `${origin}/mcp` })
+        try {
+            assert.equal(r.code, 0, r.stderr)
+            assert.deepEqual(claudeCalls(r.calls, 'add-json'), [])
+            assert.match(r.stdout, /^register  kept the existing 'workman' registration of /m)
+            assertServerJson(r.box, origin)
+        } finally { rmSync(r.box.root, { recursive: true, force: true }) }
+    })
+
+    test(`${kind}: a registration kept pointing elsewhere writes no server.json and reads no header`, { skip }, async () => {
+        mode = 'ok'
+        const r = await run(kind, ['--url', origin], { existingUrl: 'https://old.example/mcp' })
+        try {
+            assert.equal(r.code, 0, r.stderr)
+            assert.ok(!existsSync(serverJson(r.box)))
+            assert.ok(!r.stdout.includes('SENTINEL') && !r.stderr.includes('SENTINEL'), 'no header in the output')
+        } finally { rmSync(r.box.root, { recursive: true, force: true }) }
+    })
 }

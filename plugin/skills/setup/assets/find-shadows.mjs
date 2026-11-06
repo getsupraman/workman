@@ -4,10 +4,13 @@
 // project-scope entry in <dir>/.mcp.json. Claude Code resolves local > project > user, so a session in
 // such a directory never sees the user registration or its headersHelper.
 //   node find-shadows.mjs [<claude config>] [--name <server>]... [--dir <dir>] [--own <dir>]
+//   node find-shadows.mjs [<claude config>] --registered [--name <server>]
 // Without --name it checks workman. Each --name replaces it; repeat it to check several.
 // <claude config> defaults to $CLAUDE_CONFIG_DIR/.claude.json, else ~/.claude.json. --dir also checks
 // that directory's .mcp.json. --own skips the local entry of that directory (the one -Agent wrote).
 // One line per shadowing entry with the command that removes it; nothing when none shadows; exit 0.
+// --registered instead prints the url of the user-scope entry (top-level mcpServers.<name>), or
+// nothing: setup reads the existing registration here, because `claude mcp get` health-checks it.
 // Header values are never read into the output: only the url (without credentials or query) and
 // whether headersHelper is set. A parse error is not printed either, because it quotes the file.
 // @ts-check
@@ -77,6 +80,15 @@ export function projectShadows(mcpJson, name, dir, file) {
     return entry === undefined ? [] : [{ scope: 'project', dir, file, ...describe(entry) }]
 }
 
+/**
+ * The user-scope registration's url, read from the config and nothing else of the entry.
+ * @param {unknown} config the parsed claude config @param {string} name @returns {string | undefined}
+ */
+export function registeredUrl(config, name) {
+    const entry = entryOf(/** @type {any} */ (config)?.mcpServers, name)
+    return entry === undefined ? undefined : safeUrl(entry?.url)
+}
+
 /** @param {Shadow} s @param {string} name */
 export function formatShadow(s, name) {
     const helper = s.helper ? 'has headersHelper' : 'no headersHelper'
@@ -103,7 +115,7 @@ function readJson(file) {
 
 /** @param {string[]} argv @returns {string[]} the lines to print */
 export function findShadows(argv) {
-    /** @type {{config?: string, names: string[], dir?: string, own?: string}} */
+    /** @type {{config?: string, names: string[], dir?: string, own?: string, registered?: boolean}} */
     const opt = { names: [] }
     for (let i = 0; i < argv.length; i++) {
         const a = argv[i]
@@ -113,6 +125,7 @@ export function findShadows(argv) {
         }
         else if (a === '--dir') opt.dir = argv[++i]
         else if (a === '--own') opt.own = argv[++i]
+        else if (a === '--registered') opt.registered = true
         else if (!opt.config) opt.config = a
     }
     if (opt.names.length === 0) opt.names.push(...DEFAULT_NAMES)
@@ -121,6 +134,10 @@ export function findShadows(argv) {
     /** @type {string[]} */
     const lines = []
     const config = readJson(configFile)
+    if (opt.registered) {
+        const url = config.ok ? registeredUrl(config.value, opt.names[0]) : undefined
+        return url === undefined ? [] : [url]
+    }
     if (config.ok) {
         for (const name of opt.names) {
             for (const s of localShadows(config.value, name, configFile, opt.own)) lines.push(formatShadow(s, name))
