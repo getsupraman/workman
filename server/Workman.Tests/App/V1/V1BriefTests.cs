@@ -128,6 +128,37 @@ public sealed class V1BriefTests(PostgresFixture fixture)
         Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
     }
 
+    [Fact]
+    public async Task The_conventions_endpoint_lists_every_rule_the_brief_clipped()
+    {
+        var run = await ImportAsync();
+        await using var server = await StartAsync(run.WorkspaceSlug);
+        var client = await server.SignInAsync(Ct);
+
+        List<string> refs;
+        await using (var db = run.NewContext())
+        {
+            refs = await db.ConstraintRules
+                .Where(r => r.WorkspaceId == run.WorkspaceId && r.Active
+                            && (r.ScopeItemId == null || r.ScopeItemId == run.RunItemId))
+                .Select(r => r.Ref)
+                .ToListAsync(Ct);
+        }
+
+        var brief = await client.GetStringAsync($"/api/v1/items/{run.RunItemId}/brief", Ct);
+        var response = await client.GetAsync($"/api/v1/items/{run.RunItemId}/conventions", Ct);
+        var text = await response.Content.ReadAsStringAsync(Ct);
+
+        Assert.True(refs.Count > 5, $"the sample run has {refs.Count} rules; the test needs more than the brief prints");
+        Assert.Contains("read work://workspace/conventions", brief, StringComparison.Ordinal);
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.StartsWith($"CONVENTIONS  {refs.Count} active in scope for ", text, StringComparison.Ordinal);
+        Assert.All(refs, r => Assert.Contains($" {r} ", text, StringComparison.Ordinal));
+
+        var unknown = await client.GetAsync($"/api/v1/items/{Guid.CreateVersion7()}/conventions", Ct);
+        Assert.Equal(HttpStatusCode.NotFound, unknown.StatusCode);
+    }
+
     /// <summary>What the store looked like the moment the first of the two calls returned.</summary>
     private sealed record AfterFirst(string? LeaseReleaseReason, int UnconsumedNotes);
 

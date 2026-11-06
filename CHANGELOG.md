@@ -7,6 +7,16 @@ All notable changes to the Workman server and the `workman` plugin are recorded 
 
 ## [Unreleased]
 
+## [2.4.2] — 2026-11-06
+
+Server 2.4.2. The plugin stays at 2.3.3. No migration.
+
+### Added
+
+- The dashboard's Brief tab shows the rules the brief clipped. Its `+n more — read work://workspace/conventions`
+  line is a link that opens every rule active in the item's scope below the brief, from the new
+  `GET /api/v1/items/{id}/conventions` (doc 10), the same text the MCP resource returns for that item.
+
 ## [2.4.1] — 2026-11-05
 
 Server 2.4.1. The plugin stays at 2.3.3. One migration, `ClaimWorkspacePolicy`; back up before upgrading.

@@ -375,6 +375,9 @@ a.item-ref:hover { color: var(--accent); }
 .more a { color: var(--accent); }
 
 .brief-text { margin: 0; font-family: var(--font-mono); font-size: 12.5px; line-height: 1.5; white-space: pre-wrap; overflow-wrap: anywhere; color: var(--ink); }
+.brief-link { font: inherit; background: none; border: 0; cursor: pointer; }
+.brief-rules { margin-top: 20px; padding-top: 16px; border-top: 1px solid var(--line-2); }
+.brief-rules h3 { margin: 0 0 4px; font-size: 14px; }
 
 .summary { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 16px; }
 

@@ -169,6 +169,28 @@ public static partial class ApiV1
         return Results.Text(brief, "text/plain");
     }
 
+    /// <summary>Every rule active in this item's scope, unclipped: what the brief's BINDING overflow points at.</summary>
+    private static async Task<IResult> ConventionsAsync(
+        Guid id,
+        BoardReader reader,
+        BoardQueries board,
+        ApiQueries api,
+        RequestTenant tenant,
+        CancellationToken cancellationToken)
+    {
+        var book = new V1Book(api, board);
+        var snapshot = await SnapshotAsync(api, tenant, cancellationToken);
+        if (!await KnownAsync(book, snapshot, id, cancellationToken))
+        {
+            return NoItem(id);
+        }
+
+        var text = await reader.ConventionsAsync(
+            new ScopeResult.Found(snapshot.WorkspaceId, book.Row(id).Scope), cancellationToken);
+
+        return Results.Text(text, "text/plain");
+    }
+
     private static IReadOnlyList<string> Strings(string? json)
         => V1Book.Json(json) is { ValueKind: JsonValueKind.Array } array
             ? [.. array.EnumerateArray().Where(e => e.ValueKind == JsonValueKind.String).Select(e => e.GetString()!)]

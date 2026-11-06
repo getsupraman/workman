@@ -49,6 +49,7 @@ public static partial class ApiV1
         v1.MapGet("/boards", BoardsAsync);
         v1.MapGet("/items/{id:guid}", ItemAsync);
         v1.MapGet("/items/{id:guid}/brief", BriefAsync);
+        v1.MapGet("/items/{id:guid}/conventions", ConventionsAsync);
         v1.MapGet("/inbox", InboxAsync);
         v1.MapGet("/journal", JournalAsync);
         v1.MapGet("/backlog", BacklogAsync);

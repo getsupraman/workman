@@ -317,6 +317,10 @@ export const item = (item: string) => json<ItemPage>(`/api/v1/items/${id(item)}`
 export const brief = async (item: string): Promise<string> =>
   (await get(`/api/v1/items/${id(item)}/brief?for=resume`)).text()
 
+/** Every rule in the item's scope, unclipped: what the brief's `read work://workspace/conventions` names. */
+export const conventions = async (item: string): Promise<string> =>
+  (await get(`/api/v1/items/${id(item)}/conventions`)).text()
+
 export const inbox = () => json<Inbox>('/api/v1/inbox')
 
 export const journal = (limit: number) => json<JournalPage>(`/api/v1/journal?limit=${limit}`)

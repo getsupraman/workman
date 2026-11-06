@@ -336,6 +336,12 @@ A unit page: what was asked, what the agent **reported**, what was **verified**.
 `gate` renders `work_brief(for:"gate")` — on anything but a phase, its refusal text — and any other
 `for=` is a 400 naming the three.
 
+### `GET /api/v1/items/{id}/conventions`
+`text/plain`: every rule active in the item's scope, unclipped, red lines first: what
+`read work://workspace/conventions` returns for that item. The brief's BINDING block prints at most five; the
+Brief tab turns its `+n more — read work://workspace/conventions` line into a link that loads this. An id
+outside the workspace is a 404.
+
 ### `GET /api/v1/inbox?project={id}` (project optional)
 Everything waiting on a **human**, newest first.
 ```jsonc

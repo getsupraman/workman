@@ -99,7 +99,8 @@ claim holder, tree, priority, severity, resolution, closed/started), then tabs:
 - **Evidence** — two columns: *What the agent reported* (`work_report`, a claim) and *What was
   verified* (`work_verify`, run by someone other than the author).
 - **Notes**, **Activity** — the item's own.
-- **Brief** — the verbatim `work_brief`, as text. Never the main pane.
+- **Brief** — the verbatim `work_brief`, as text. Never the main pane; its `read work://workspace/conventions` line is a link that
+  opens every rule in scope below it (`GET /api/v1/items/{id}/conventions`).
 
 A claim holder is shown as the session name with the role beside it — `aw-m4-2b · controller` — when
 the claim has a session (v1 `Claim.heldBySession`), else by the role alone. The same text in the

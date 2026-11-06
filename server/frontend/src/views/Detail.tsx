@@ -1,4 +1,4 @@
-import { For, Match, Show, Switch, type JSX } from 'solid-js'
+import { For, Index, Match, Show, Switch, createSignal, type JSX } from 'solid-js'
 import { A } from '@solidjs/router'
 import * as api from '../api.ts'
 import type { BoardRow, ItemPage, ItemRef } from '../api.ts'
@@ -392,8 +392,16 @@ function EvidenceTab(props: { page: ItemPage }) {
   )
 }
 
+const CONVENTIONS = 'read work://workspace/conventions'
+
 function BriefTab(props: { id: string }) {
   const text = load(() => props.id, api.brief, { live: false })
+  const [rules, setRules] = createSignal(false)
+  let below: HTMLDivElement | undefined
+  const open = () => {
+    setRules(true)
+    below?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  }
 
   return (
     <>
@@ -402,8 +410,43 @@ function BriefTab(props: { id: string }) {
       </p>
       <Show when={text.error()}>{(e) => <div class="failure">{e()}</div>}</Show>
       <Show when={text.data() !== undefined} fallback={<div class="empty bare">Loading…</div>}>
+        <pre class="brief-text">
+          <Index each={(text.data() ?? '').split(CONVENTIONS)}>
+            {(part, i) => (
+              <>
+                <Show when={i > 0}>
+                  <button type="button" class="linkish brief-link" onClick={open} title="Show every rule in scope">
+                    {CONVENTIONS}
+                  </button>
+                </Show>
+                {part()}
+              </>
+            )}
+          </Index>
+        </pre>
+      </Show>
+      <div ref={below}>
+        <Show when={rules()}>
+          <RulesInScope id={props.id} />
+        </Show>
+      </div>
+    </>
+  )
+}
+
+function RulesInScope(props: { id: string }) {
+  const text = load(() => props.id, api.conventions, { live: false })
+
+  return (
+    <section class="brief-rules">
+      <h3>Rules in scope</h3>
+      <p class="hint" style={{ margin: '0 0 12px', color: 'var(--ink-3)', 'font-size': '12.5px' }}>
+        Every active rule that binds this item, unclipped: work://workspace/conventions as read from here.
+      </p>
+      <Show when={text.error()}>{(e) => <div class="failure">{e()}</div>}</Show>
+      <Show when={text.data() !== undefined} fallback={<div class="empty bare">Loading…</div>}>
         <pre class="brief-text">{text.data()}</pre>
       </Show>
-    </>
+    </section>
   )
 }
