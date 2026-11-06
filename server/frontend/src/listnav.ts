@@ -2,6 +2,32 @@
  * Keyboard walking of a list (doc 13, Keyboard): which keys move, when a key is not ours to take,
  * and where a move lands. Pure — no DOM, no solid — so `verify/state-cases.mjs` runs it in node.
  */
+import type { ProjectOverview, RunOverview } from './api.ts'
+import { byActivity, matchesQuery, projectGroup, runIsOpen, type ProjectGroup } from './projects.ts'
+
+/** The sidebar's projects: filtered by its search box, by last activity, in their groups. */
+export function sideProjects(projects: readonly ProjectOverview[], asOf: string, query: string): Record<ProjectGroup, ProjectOverview[]> {
+  const shown = projects.filter((p) => matchesQuery(p, query)).sort(byActivity)
+  const of = (g: ProjectGroup) => shown.filter((p) => projectGroup(p, asOf) === g)
+  return { active: of('active'), quiet: of('quiet'), archived: of('archived') }
+}
+
+/** The runs a sidebar project lists: its open ones, in the overview's order. */
+export const openRuns = (project: ProjectOverview): RunOverview[] => project.runs.filter(runIsOpen)
+
+/**
+ * Every run the sidebar shows, top to bottom — the order Alt+ArrowUp/ArrowDown walks. Archived
+ * projects count only while their group is expanded (or the search box holds text).
+ */
+export function sideRuns(groups: Record<ProjectGroup, ProjectOverview[]>, archivedShown: boolean): RunOverview[] {
+  return [...groups.active, ...groups.quiet, ...(archivedShown ? groups.archived : [])].flatMap(openRuns)
+}
+
+/** The run a path is on: `/runs/{run}` or `/runs/{run}/{item}`. */
+export function runOnPath(path: string): string | undefined {
+  const [, first, run] = path.split('/')
+  return first === 'runs' && run ? run : undefined
+}
 
 export type Key = { key: string; ctrlKey: boolean; metaKey: boolean; altKey: boolean; shiftKey: boolean }
 

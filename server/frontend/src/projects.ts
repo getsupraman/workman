@@ -1,4 +1,3 @@
-import { createSignal } from 'solid-js'
 import type { ProjectOverview, RunOverview } from './api.ts'
 import { projectName } from './format.ts'
 import { CLOSED } from './state.ts'
@@ -36,27 +35,4 @@ export function matchesQuery(p: ProjectOverview, query: string): boolean {
   const q = query.trim().toLowerCase()
   if (q === '') return true
   return [projectName(p.item), p.item.title, p.item.ref].some((s) => s.toLowerCase().includes(q))
-}
-
-const KEY = 'workman.archived-open'
-
-/** Storage can throw outright (a private window, blocked site data); the toggle then lasts the page. */
-function storedOpen(): boolean {
-  try {
-    return localStorage.getItem(KEY) === '1'
-  } catch {
-    return false
-  }
-}
-
-const [archivedOpen, setArchivedOpenSignal] = createSignal(storedOpen())
-export { archivedOpen }
-
-export function setArchivedOpen(open: boolean): void {
-  setArchivedOpenSignal(open)
-  try {
-    localStorage.setItem(KEY, open ? '1' : '0')
-  } catch {
-    // remembered for this page only
-  }
 }

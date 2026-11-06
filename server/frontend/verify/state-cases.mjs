@@ -7,7 +7,7 @@
  */
 import { CLOSED, LEAF, answer, countTitle, counted, findingsOpen, independent, progress, state, tally } from '../src/state.ts'
 import { DEFAULT_FILTER, FILTERS, asFilter, cancelledLines, plan, planOrder, planQuery, withoutCancelled } from '../src/plan.ts'
-import { listMove, runMove, step, typingIn } from '../src/listnav.ts'
+import { listMove, openRuns, runMove, runOnPath, sideProjects, sideRuns, step, typingIn } from '../src/listnav.ts'
 import { boardHref, copyValue, itemHref, pathCrumbs, routeReads } from '../src/nav.ts'
 import { appIconHref, consentForm, consentStep, consentView, hiddenFields, iconStep, initials, isConnectPath, returnTarget, scopeLines, signInHref, signInStart, signInStep } from '../src/connect.ts'
 import { formerName, isReleased, releasable, tokenLabel } from '../src/sessions.ts'
@@ -433,6 +433,34 @@ check('the run page walks heads and rows as drawn (All)', planOrder(plan(board, 
   'loose', 'P1', 'task', 'task', 'task', 'P2', 'task', 'subtask', 'task',
 ])
 check('the run page walks the Open filter only', planOrder(plan(board, 'open')).map((r) => r.item.id), ['id-2', 'id-7', 'id-8', 'id-9', 'id-10'])
+console.log('\n── Alt+Up/Down: run to run in the sidebar order ────────────────────────────')
+check('Alt+ArrowDown is next, Alt+ArrowUp prev', [runMove(k({ altKey: true }), false, false), runMove(k({ key: 'ArrowUp', altKey: true }), false, false)], ['next', 'prev'])
+check('Alt+ArrowLeft/Right stay the browser\'s', [runMove(k({ key: 'ArrowLeft', altKey: true }), false, false), runMove(k({ key: 'ArrowRight', altKey: true }), false, false)], [null, null])
+check('plain arrows are the list\'s, not the runs\'', runMove(k({}), false, false), null)
+check('Alt with another modifier is left alone', ['ctrlKey', 'metaKey', 'shiftKey'].map((m) => runMove(k({ altKey: true, [m]: true }), false, false)), [null, null, null])
+check('Alt+Down in a field (a select opens) or a modal: not ours', [runMove(k({ altKey: true }), true, false), runMove(k({ altKey: true }), false, true)], [null, null])
+const runRollup = (open) => ({ total: 2, open, inProgress: 0, review: 0, blocked: 0 })
+const sideRun = (id, status = 'in_progress', open = 1) => ({ item: { id, status }, rollup: runRollup(open) })
+const sideProject = (id, at, runs, archivedAt = null) => ({ item: { id, ref: id, title: id, kind: 'project' }, lastActivityAt: at, archivedAt, runs })
+const sideAsOf = '2026-11-06T00:00:00Z'
+const side = [
+  sideProject('older', '2026-11-01T00:00:00Z', [sideRun('o1'), sideRun('o2', 'done'), sideRun('o3', 'in_progress', 0)]),
+  sideProject('newer', '2026-11-05T00:00:00Z', [sideRun('n1'), sideRun('n2')]),
+  sideProject('quiet', '2026-01-01T00:00:00Z', []),
+  sideProject('old', '2026-01-01T00:00:00Z', [sideRun('a1')], '2026-02-01T00:00:00Z'),
+]
+const sideGroups = sideProjects(side, sideAsOf, '')
+check('groups as the sidebar draws them', Object.values(sideGroups).map((g) => g.map((p) => p.item.id)), [['newer', 'older'], ['quiet'], ['old']])
+check('a project lists its open runs only (done and finished out)', openRuns(side[0]).map((r) => r.item.id), ['o1'])
+check('order across projects, archived collapsed', sideRuns(sideGroups, false).map((r) => r.item.id), ['n1', 'n2', 'o1'])
+check('archived runs count once their group is shown', sideRuns(sideGroups, true).map((r) => r.item.id), ['n1', 'n2', 'o1', 'a1'])
+check('the search box narrows the order', sideRuns(sideProjects(side, sideAsOf, 'older'), false).map((r) => r.item.id), ['o1'])
+const order = sideRuns(sideGroups, false)
+const id = (r) => r?.item.id
+check('from a run: the next and the previous', [id(step(order, order[1], 'next')), id(step(order, order[1], 'prev'))], ['o1', 'n1'])
+check('the ends hold: no wrap past the last or the first', [id(step(order, order[2], 'next')), id(step(order, order[0], 'prev'))], ['o1', 'n1'])
+check('off a run page: Down the first run, Up the last', [id(step(order, undefined, 'next')), id(step(order, undefined, 'prev'))], ['n1', 'o1'])
+check('the run a path is on', [runOnPath('/runs/r1'), runOnPath('/runs/r1/i2'), runOnPath('/projects/p'), runOnPath('/')], ['r1', 'r1', undefined, undefined])
 console.log('\n── the command palette: what opens it, what matches, what Enter opens ───────')
 const key = (over) => ({ key: 'p', ctrlKey: false, metaKey: false, altKey: false, shiftKey: false, ...over })
 check('Ctrl+P opens', isPaletteChord(key({ ctrlKey: true })), true)

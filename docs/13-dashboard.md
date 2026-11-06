@@ -52,8 +52,10 @@ above; Alt+←/→ stay the browser's back and forward; the split handle keeps �
 |---|---|---|
 | ↓ / ↑ | run page | selects the next / previous row of the plan as drawn (phase heads and rows, under the current filter and cancelled toggle) and shows it in the detail panel; the URL keeps filter, tab and cancelled. No selection: ↓ takes the first row, ↑ the last. The ends hold, no wrap. The row scrolls into view (`block: nearest`) |
 | Home / End | run page | the first / last row |
+| Alt+↓ / Alt+↑ (⌥ on macOS) | any page | opens the next / previous run in the sidebar's order (`sideRuns`: Active, Quiet, then Archived while expanded or searched; each project's open runs; the search box applies). From a run page it starts at that run; elsewhere, or on a run the sidebar does not list, Alt+↓ takes the first run and Alt+↑ the last. The ends hold. The run opens with no item selected, so ↓ then takes its first row |
 
-No modifier may be held for these.
+No modifier may be held for the plain keys; Alt+↑/↓ is the one modifier binding. Ctrl+↑/↓ are left
+alone (macOS takes them; in a field on Windows they move by paragraph).
 
 **The project list** (`src/Shell.tsx`, rules in `src/projects.ts`):
 

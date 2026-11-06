@@ -1,5 +1,5 @@
-import { For, Show, createEffect, createSignal, on as onChange, onCleanup, onMount, type ParentProps } from 'solid-js'
-import { A, useLocation } from '@solidjs/router'
+import { For, Show, createEffect, createMemo, createSignal, on as onChange, onCleanup, onMount, type ParentProps } from 'solid-js'
+import { A, useLocation, useNavigate } from '@solidjs/router'
 import { account, boards, failure, inbox, overview } from './store.ts'
 import { needsYouCount } from './inbox.ts'
 import { link } from './live.ts'
@@ -15,21 +15,34 @@ import { showSwitcher } from './admin.ts'
 import { switchFailure, switchWorkspace } from './tenant.ts'
 import Palette, { openPalette } from './Palette.tsx'
 import { chordLabel } from './palette.ts'
-import {
-  archivedOpen,
-  byActivity,
-  matchesQuery,
-  projectGroup,
-  runIsOpen,
-  setArchivedOpen,
-  type ProjectGroup,
-} from './projects.ts'
+import { archivedOpen, setArchivedOpen } from './archived.ts'
+import { openRuns, runMove, runOnPath, sideProjects, sideRuns, step } from './listnav.ts'
+import { useDocumentKeys } from './listkeys.ts'
 import { signOut, type ProjectOverview, type RunOverview } from './api.ts'
 
 export default function Shell(props: ParentProps) {
   const location = useLocation()
   const on = (path: string) => location.pathname === path
   const [query, setQuery] = createSignal('')
+  const searching = () => query().trim() !== ''
+  const archivedShown = () => archivedOpen() || searching()
+  const groups = createMemo(() => {
+    const o = overview()
+    return o ? sideProjects(o.projects, o.asOf, query()) : null
+  })
+
+  // Alt+ArrowDown / Alt+ArrowUp: the next / previous run as the sidebar lists them.
+  const navigate = useNavigate()
+  useDocumentKeys((e, typing, modal) => {
+    const m = runMove(e, typing, modal)
+    const g = groups()
+    if (m === null || g === null) return false
+    const runs = sideRuns(g, archivedShown())
+    const here = runOnPath(location.pathname)
+    const to = step(runs, runs.find((r) => r.item.id === here), m)
+    if (to && to.item.id !== here) navigate(runHref(to.item.id))
+    return true
+  })
 
   // The page scrolls inside <main>, which the router's own scroll-to-top never touches. Moving
   // between items of one run keeps the plan where it is; any other move starts at the top.
@@ -179,30 +192,27 @@ export default function Shell(props: ParentProps) {
           value={query()}
           onInput={(e) => setQuery(e.currentTarget.value)}
         />
-        <Show when={overview()}>
-          {(o) => {
-            const shown = () => [...o().projects].filter((p) => matchesQuery(p, query())).sort(byActivity)
-            const group = (g: ProjectGroup) => shown().filter((p) => projectGroup(p, o().asOf) === g)
-            const searching = () => query().trim() !== ''
+        <Show when={groups()}>
+          {(g) => {
             return (
               <>
-                <SideGroup label="Active" projects={group('active')} path={location.pathname} />
-                <SideGroup label="Quiet" projects={group('quiet')} path={location.pathname} />
-                <Show when={group('archived').length > 0}>
+                <SideGroup label="Active" projects={g().active} path={location.pathname} />
+                <SideGroup label="Quiet" projects={g().quiet} path={location.pathname} />
+                <Show when={g().archived.length > 0}>
                   <button
                     type="button"
                     class="side-toggle"
-                    aria-expanded={archivedOpen() || searching()}
+                    aria-expanded={archivedShown()}
                     onClick={() => setArchivedOpen(!archivedOpen())}
                   >
-                    <span class="caret">{archivedOpen() || searching() ? '▾' : '▸'}</span>
-                    Archived ({group('archived').length})
+                    <span class="caret">{archivedShown() ? '▾' : '▸'}</span>
+                    Archived ({g().archived.length})
                   </button>
-                  <Show when={archivedOpen() || searching()}>
-                    <SideGroup projects={group('archived')} path={location.pathname} />
+                  <Show when={archivedShown()}>
+                    <SideGroup projects={g().archived} path={location.pathname} />
                   </Show>
                 </Show>
-                <Show when={searching() && shown().length === 0}>
+                <Show when={searching() && g().active.length + g().quiet.length + g().archived.length === 0}>
                   <div class="side-none">No project matches “{query().trim()}”.</div>
                 </Show>
               </>
@@ -306,7 +316,7 @@ function SideGroup(props: { label?: string; projects: ProjectOverview[]; path: s
       </Show>
       <For each={props.projects}>
         {(project) => {
-          const open = () => project.runs.filter(runIsOpen)
+          const open = () => openRuns(project)
           const closed = () => project.runs.length - open().length
           const href = () => projectHref(project.item.id)
           return (
