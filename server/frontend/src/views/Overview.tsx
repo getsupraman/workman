@@ -4,7 +4,7 @@ import { setArchived, type Claim, type ProjectOverview, type RunOverview } from 
 import { account, boards, inbox, overview, refreshOverview } from '../store.ts'
 import { CLOSED, countTitle, counted, refState, tally } from '../state.ts'
 import { backlogHref, itemHref, projectHref, runHref } from '../nav.ts'
-import { honestyCells, openTasks } from '../inbox.ts'
+import { forController, honestyCells, needsYou, needsYouCount, openTasks } from '../inbox.ts'
 import { byActivity, runIsOpen } from '../projects.ts'
 import { UNKNOWN, ago, claimHolder, clock, day, plural, projectName, projectTagline, short } from '../format.ts'
 import { membersHref, shareMarker } from '../sharing.ts'
@@ -23,13 +23,13 @@ export default function Overview() {
     const o = overview()
     if (o === undefined) return 'Loading…'
     const open = openTasks(o.projects)
-    const n = o.inboxCount
+    const n = needsYouCount(inbox())
     const projects = `${o.projects.length} ${plural(o.projects.length, 'project')}${
       archived().length > 0 ? ` (${archived().length} archived)` : ''
     }`
-    return `${open} ${plural(open, 'task')} open across ${projects}. ${
-      n > 0 ? `${n} ${plural(n, 'thing')} ${n === 1 ? 'needs' : 'need'} you.` : 'Nothing needs you.'
-    }`
+    const you =
+      n === undefined ? '' : n > 0 ? ` ${n} ${plural(n, 'thing')} ${n === 1 ? 'needs' : 'need'} you.` : ' Nothing needs you.'
+    return `${open} ${plural(open, 'task')} open across ${projects}.${you}`
   }
 
   return (
@@ -47,24 +47,33 @@ export default function Overview() {
           <div class="panel">
             <div class="panel-h">
               <h2>Needs you</h2>
-              <span class="n">{inbox()?.rows.length ?? UNKNOWN}</span>
+              <span class="n">{needsYouCount(inbox()) ?? UNKNOWN}</span>
               <A class="r" href="/inbox">
                 Open inbox
               </A>
             </div>
             <Known value={inbox()}>
-              {(box) => (
-                <>
-                  <Index each={box().rows.slice(0, INBOX_SHOWN)} fallback={<div class="empty">Nothing is waiting on you.</div>}>
-                    {(row) => <InboxRowView row={row()} asOf={box().asOf} />}
-                  </Index>
-                  <Show when={box().rows.length > INBOX_SHOWN}>
-                    <A class="row-more" href="/inbox">
-                      +{box().rows.length - INBOX_SHOWN} more in the inbox
-                    </A>
-                  </Show>
-                </>
-              )}
+              {(box) => {
+                const human = () => needsYou(box().rows)
+                const chores = () => forController(box().rows).length
+                return (
+                  <>
+                    <Index each={human().slice(0, INBOX_SHOWN)} fallback={<div class="empty">Nothing needs you.</div>}>
+                      {(row) => <InboxRowView row={row()} asOf={box().asOf} />}
+                    </Index>
+                    <Show when={human().length > INBOX_SHOWN}>
+                      <A class="row-more" href="/inbox">
+                        +{human().length - INBOX_SHOWN} more in the inbox
+                      </A>
+                    </Show>
+                    <Show when={chores() > 0}>
+                      <A class="row-more" href="/inbox">
+                        {chores()} housekeeping {plural(chores(), 'item')} for the controller
+                      </A>
+                    </Show>
+                  </>
+                )
+              }}
             </Known>
           </div>
 

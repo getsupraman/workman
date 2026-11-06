@@ -188,4 +188,10 @@ public sealed record EventDetail(
 /// <summary>An inbox candidate the attention queries do not already produce.</summary>
 public sealed record WaitingRow(Guid Id, DateTimeOffset Since);
 
+/// <summary>The item columns an inbox row's structured fields read: a finding's source and target, a closer.</summary>
+public sealed record InboxFactRow(Guid Id, string? Source, Guid? ParentId, string? ClosedBy);
+
+/// <summary>The reason on the latest transition of an item into <c>blocked</c>.</summary>
+public sealed record BlockedReasonRow(Guid ItemId, string? Reason);
+
 public sealed record BacklogRow(Guid Id, Guid? OriginId);

@@ -219,6 +219,10 @@ public sealed record ImportedView(
     SessionView? Session,
     DateTimeOffset At);
 
+/// <summary>
+/// <c>what</c> and <c>call</c> are for agents; the rest is what a person is shown. <c>audience</c>:
+/// <c>human</c> or <c>controller</c>. <c>detail</c> is one plain line of at most about 200 chars.
+/// </summary>
 public sealed record InboxRowView(
     string Key,
     string Kind,
@@ -226,7 +230,14 @@ public sealed record InboxRowView(
     ItemRefView? Run,
     string What,
     DateTimeOffset Since,
-    string Call);
+    string Call,
+    string Audience,
+    string? Detail,
+    string? Actor,
+    string? Tree,
+    ItemRefView? Target,
+    int Count,
+    string? Url);
 
 public sealed record InboxView(DateTimeOffset AsOf, long Seq, IReadOnlyList<InboxRowView> Rows);
 

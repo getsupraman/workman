@@ -233,6 +233,15 @@ export type InboxRow = {
   what: string
   since: string
   call: string
+  /** `human`: question, blocked. Every other kind is housekeeping for the controller. */
+  audience: 'human' | 'controller'
+  /** The one fact a person needs, one plain line. */
+  detail: string | null
+  actor: string | null
+  tree: string | null
+  target: ItemRef | null
+  count: number
+  url: string | null
 }
 
 export type Inbox = { asOf: string; seq: number; rows: InboxRow[] }

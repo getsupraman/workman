@@ -163,7 +163,7 @@ h1 { font-family: var(--font-serif); font-size: 28px; line-height: 1.2; margin: 
 a.row:hover { background: var(--bg); }
 .row-t { font-weight: 500; overflow-wrap: anywhere; }
 .row-m { color: var(--ink-3); font-size: 12.5px; margin-top: 2px; overflow-wrap: anywhere; }
-.row-call { margin-top: 6px; color: var(--ink-2); background: var(--line-2); border-radius: 6px; padding: 3px 8px; display: inline-block; max-width: 100%; white-space: pre-wrap; overflow-wrap: anywhere; vertical-align: top; }
+.row-d { margin-top: 4px; color: var(--ink-2); font-size: 13px; overflow-wrap: anywhere; }
 .row-more { display: block; padding: 10px 18px; color: var(--accent); font-size: 13px; font-weight: 500; }
 .row-more:hover { background: var(--bg); }
 .empty { padding: 26px 18px; color: var(--ink-3); }

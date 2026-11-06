@@ -60,7 +60,7 @@ returns focus where it was. One input filters two groups:
 |---|---|---|
 | `/` | **Overview** — Needs you (top 5, then a link to the rest), Working now, four honesty counts, then one panel per project not archived, by last activity: a serif header band (the name links to the project page; its prompt actions below it), open runs, then *Show n closed runs* (collapsed by default; closed by `runIsOpen`), each run a segmented bar with **one segment per leaf**, coloured by state; below them *n archived projects*, which shows the archived panels; the legend once below | `overview`, `inbox`, the board of every run of a project not archived |
 | `/projects/{id}` | **Project** — that project's overview panel, archived or not, with its Archive / Unarchive button | `overview` |
-| `/inbox` | **Needs you** — everything waiting on a person, newest first, each row with the MCP call that resolves it | `inbox` |
+| `/inbox` | **Needs you** — the `audience: human` rows (questions, blocked work), newest first, each a card: title · kind · ref with copy · actor or tree · age, the `detail` line below; empty: *Nothing needs you.* Then *Housekeeping for the controller* (hidden when empty, collapsed by default): the other rows grouped by kind and run (*5 not verified in Run A*), each group expandable to its cards. No card prints the MCP `call` | `inbox` |
 | `/activity` | **Activity** — the last 300 journal events across the workspace, grouped by day | `journal?limit=300` |
 | `/runs/{run}` | **Run** — plan list (filters All / Open / Needs attention; phases as group headers; full titles; ref; claim holder; criteria x/y) beside the detail panel for the run | `runs/{run}/board`, `items/{run}` |
 | `/runs/{run}/{item}` | the same, with `{item}` selected | `runs/{run}/board`, `items/{item}` |
@@ -197,9 +197,9 @@ type. One helper holds the rule: `src/format.ts` `projectName` / `projectRefIfDi
 Text may be shortened only in a one-line row of a list that links to a view showing it whole, and
 that row carries the full text in a `title` attribute (the sidebar run links, the overview run
 strips). A capped list says how much it left out and links to the whole list (the overview's
-*Needs you* shows five, then *+N more in the inbox*). Nothing else is cut: detail views, headings,
-crumbs, chips and project names wrap, and anything meant to be copied or run — the inbox's MCP
-call, a commit, a ref, a tree — is always shown whole. A copy button copies its value whole, even
+*Needs you* shows five human rows, then *+N more in the inbox*). Nothing else is cut: detail views, headings,
+crumbs, chips and project names wrap, and anything meant to be copied or run — a commit, a ref,
+a tree — is always shown whole. A copy button copies its value whole, even
 in a row whose text is cut.
 
 ## The state vocabulary

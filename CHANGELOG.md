@@ -17,6 +17,8 @@ Server 3.0.1 and plugin 3.0.1. No migration.
   refreshes late or twice no longer has every token of its authorization revoked.
 - **A refresh token reused past that window is logged** at Warning under `Workman.Auth.OAuth.RefreshReuse`,
   with the client id and the authorization id, never the token.
+- **`GET /api/v1/inbox` rows carry structured fields** beside `what` and `call`: `audience`, `detail`,
+  `actor`, `tree`, `target`, `count` and `url` (doc 10); the dashboard's Needs you page reads them.
 
 ### Plugin
 

@@ -613,6 +613,43 @@ public sealed class ApiQueries(NpgsqlDataSource dataSource)
         return await ListAsync<WaitingRow>(sql, new { scope = scopeId }, cancellationToken);
     }
 
+    public async Task<IReadOnlyList<InboxFactRow>> InboxFactsAsync(
+        IReadOnlyCollection<Guid> ids,
+        CancellationToken cancellationToken = default)
+    {
+        const string sql =
+            """
+            SELECT i.id        AS "Id",
+                   i.source    AS "Source",
+                   i.parent_id AS "ParentId",
+                   i.closed_by AS "ClosedBy"
+            FROM   item i
+            WHERE  i.id = ANY(@ids);
+            """;
+
+        return ids.Count == 0 ? [] : await ListAsync<InboxFactRow>(sql, new { ids = ids.ToArray() }, cancellationToken);
+    }
+
+    /// <summary>The payload <c>reason</c> of each item's latest <c>status</c> or <c>forced_transition</c> to <c>blocked</c>.</summary>
+    public async Task<IReadOnlyList<BlockedReasonRow>> BlockedReasonsAsync(
+        IReadOnlyCollection<Guid> ids,
+        CancellationToken cancellationToken = default)
+    {
+        const string sql =
+            """
+            SELECT DISTINCT ON (e.item_id)
+                   e.item_id                         AS "ItemId",
+                   nullif(e.payload->>'reason', '')  AS "Reason"
+            FROM   event e
+            WHERE  e.item_id = ANY(@ids)
+              AND  e.kind IN ('status','forced_transition')
+              AND  e.payload->>'to' = 'blocked'
+            ORDER  BY e.item_id, e.seq DESC;
+            """;
+
+        return ids.Count == 0 ? [] : await ListAsync<BlockedReasonRow>(sql, new { ids = ids.ToArray() }, cancellationToken);
+    }
+
     public async Task<IReadOnlyList<WaitingRow>> OpenQuestionsAsync(
         Guid scopeId,
         CancellationToken cancellationToken = default)

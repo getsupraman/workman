@@ -28,7 +28,7 @@ public static partial class ApiV1
         await book.ItemsAsync(scopes.Concat(allRuns), cancellationToken);
 
         var rollups = (await api.RollupsAsync([.. scopes, .. allRuns], cancellationToken)).ToDictionary(r => r.Id);
-        var inbox = await InboxRowsAsync(snapshot, scopes, book, board, api, cancellationToken);
+        var inbox = await InboxRowsAsync(snapshot, scopes, book, board, api, webBase: null, cancellationToken);
         var inboxByRun = inbox.Where(r => r.Run is not null).GroupBy(r => r.Run!.Id).ToDictionary(g => g.Key, g => g.Count());
 
         // The honesty strip, summed over projects exactly as work_audit counts it.

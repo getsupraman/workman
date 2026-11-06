@@ -1,6 +1,8 @@
 using System.Net;
 using System.Text.Json;
 using Workman.Core.Domain;
+using Workman.Core.Rendering;
+using Workman.Core.Writing;
 using Workman.Tests.Store;
 using Workman.Tests.Write;
 using Xunit;
@@ -292,6 +294,110 @@ public sealed class V1ReadTests(PostgresFixture fixture)
 
         var all = await GetAsync(await ReaderAsync(server), "/api/v1/inbox");
         Assert.Equal(rows.Count, Array(all, "rows").Count);
+    }
+
+    [Fact]
+    public async Task Each_inbox_row_carries_the_structured_facts_a_person_is_shown()
+    {
+        var v1 = await V1World.CreateAsync(fixture);
+        var world = v1.World;
+        var longLine = new string('x', 260);
+
+        // blocked, through the real writer so the reason lands in the event payload.
+        var blocked = await WriteSeed.ChildAsync(world, world.PhaseId, "1.8");
+        var refused = await world.Writer.StatusAsync(
+            world.WorkspaceId, "1.8", "blocked", WriteSeed.Orchestrator,
+            new StatusArgs(Reason: "waits on the export credentials from ops"), Ct);
+        Assert.False(refused.Refused, refused.Text);
+
+        var question = await WriteSeed.ChildAsync(world, world.PhaseId, "Q-1", kind: "question");
+        var bare = await WriteSeed.ChildAsync(world, world.PhaseId, "Q-2", kind: "question");
+        var stale = await WriteSeed.ChildAsync(world, world.PhaseId, "1.9", status: ItemStatus.InProgress);
+        await WriteSeed.ExpireClaimAsync(world, world.TaskId);
+
+        string taskTitle;
+        await using (var db = fixture.NewContext())
+        {
+            (await db.Items.FindAsync([question], Ct))!.Intent = $"\n  \n{longLine}\nsecond line";
+            (await db.Items.FindAsync([stale], Ct))!.StartedAt = DateTimeOffset.UtcNow.AddHours(-30);
+            (await db.Items.FindAsync([v1.Blocker], Ct))!.Source = "review";
+            (await db.Items.FindAsync([v1.Unverified], Ct))!.ClosedBy = "worker-u1";
+            taskTitle = (await db.Items.FindAsync([world.TaskId], Ct))!.Title;
+
+            foreach (var (reference, statement) in new[] { ("A1", "the export endpoint is reachable"), ("A2", "the cache survives a restart") })
+            {
+                db.Assumptions.Add(new Assumption
+                {
+                    Id = Guid.CreateVersion7(),
+                    WorkspaceId = world.WorkspaceId,
+                    ScopeItemId = world.RunId,
+                    Ref = reference,
+                    Statement = statement,
+                    Evidence = EvidenceLevel.Reasoned,
+                    Reversal = ReversalCost.Medium,
+                    RevisitItemId = v1.Unverified,
+                    State = AssumptionState.Open,
+                });
+            }
+
+            db.Notes.Add(new Note
+            {
+                Id = Guid.CreateVersion7(),
+                WorkspaceId = world.WorkspaceId,
+                FromItemId = world.RunId,
+                ToItemId = world.TaskId,
+                Kind = NoteKind.CarryForward,
+                Body = "a later note",
+                CreatedAt = DateTimeOffset.UtcNow.AddMinutes(5),
+                CreatedBy = "test",
+            });
+
+            await db.SaveChangesAsync(Ct);
+        }
+
+        await using var server = await v1.StartAsync(fixture);
+        var rows = Array(await GetAsync(await ReaderAsync(server), $"/api/v1/inbox?project={world.ProjectId}"), "rows");
+
+        JsonElement Row(string kind, Guid id)
+            => Assert.Single(rows, r => r.GetProperty("kind").GetString() == kind
+                                        && r.GetProperty("item").GetProperty("id").GetGuid() == id);
+
+        static string? Text(JsonElement row, string name) => row.GetProperty(name).GetString();
+
+        void Facts(JsonElement row, string audience, string? detail, string? actor, string? tree, int count)
+        {
+            Assert.Equal(audience, Text(row, "audience"));
+            Assert.Equal(detail, Text(row, "detail"));
+            Assert.Equal(actor, Text(row, "actor"));
+            Assert.Equal(tree, Text(row, "tree"));
+            Assert.Equal(count, row.GetProperty("count").GetInt32());
+            Assert.Equal(
+                WebLinks.Link(server.BaseAddress, row.GetProperty("item").GetProperty("fullRef").GetString()!),
+                Text(row, "url"));
+
+            if (row.GetProperty("kind").GetString() != "blocker_finding")
+            {
+                Assert.Equal(JsonValueKind.Null, row.GetProperty("target").ValueKind);
+            }
+        }
+
+        Facts(Row("blocked", blocked), "human", "waits on the export credentials from ops", null, null, 1);
+        Facts(Row("blocked", v1.BlockedOnPerson), "human", null, null, null, 1);
+
+        var asked = Row("question", question);
+        Facts(asked, "human", new string('x', 199) + "…", null, null, 1);
+        Assert.Equal(200, Text(asked, "detail")!.Length);
+        Facts(Row("question", bare), "human", null, null, null, 1);
+
+        var finding = Row("blocker_finding", v1.Blocker);
+        Facts(finding, "controller", $"review · against: {taskTitle}", null, null, 1);
+        Assert.Equal(world.TaskId, finding.GetProperty("target").GetProperty("id").GetGuid());
+
+        Facts(Row("assumption_due", world.RunId), "controller", "the export endpoint is reachable (+1 more)", null, null, 2);
+        Facts(Row("unconsumed_note", world.TaskId), "controller", "address by id", null, null, 2);
+        Facts(Row("done_unverified", v1.Unverified), "controller", null, "worker-u1", null, 1);
+        Facts(Row("stale_in_progress", stale), "controller", null, null, null, 1);
+        Facts(Row("expired_claim", world.TaskId), "controller", null, V1World.SessionName, v1.Tree, 1);
     }
 
     [Fact]

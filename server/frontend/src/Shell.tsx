@@ -1,6 +1,7 @@
 import { For, Show, createEffect, createSignal, on as onChange, onCleanup, onMount, type ParentProps } from 'solid-js'
 import { A, useLocation } from '@solidjs/router'
-import { account, boards, failure, overview } from './store.ts'
+import { account, boards, failure, inbox, overview } from './store.ts'
+import { needsYouCount } from './inbox.ts'
 import { link } from './live.ts'
 import { toggleTheme } from './theme.ts'
 import { countTitle, counted, tally } from './state.ts'
@@ -151,9 +152,7 @@ export default function Shell(props: ParentProps) {
           <A href="/inbox" class={on('/inbox') ? 'on' : ''}>
             <InboxIcon />
             Needs you
-            <Show when={(overview()?.inboxCount ?? 0) > 0}>
-              <span class="badge">{overview()!.inboxCount}</span>
-            </Show>
+            <Show when={needsYouCount(inbox())}>{(n) => <span class="badge">{n()}</span>}</Show>
           </A>
           <A href="/activity" class={on('/activity') ? 'on' : ''}>
             <ActivityIcon />

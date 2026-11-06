@@ -16,6 +16,7 @@ import { MEMBERS_ANCHOR, memberLine, membersHref, projectOnPath, shareMarker } f
 import { PHONE_QUERY, closesOnMove, pageName } from '../src/menu.ts'
 import { appLine, revokeWarning, sessionsLabel } from '../src/apps.ts'
 import { BOARDS_MAX, boardsRead } from '../src/boards.ts'
+import { cardFacts, forController, groupHousekeeping, needsYou, needsYouCount } from '../src/inbox.ts'
 import { expiresIn, isLastAdmin, isLinkPath, joinStep, joinToken, nameProblem, passwordMessage, passwordProblem, resetStep, resetToken, roleLabel, showSwitcher, slugFrom, slugProblem } from '../src/admin.ts'
 
 let failures = 0
@@ -590,6 +591,41 @@ check('a run with no board yet is read with them', boardsRead(withRuns(3), ['r1'
 check('a run of an archived project is not read', boardsRead(withRuns(2, true), [], { r0: {}, r1: {} }), null)
 check('nothing named, everything held: no read', boardsRead(withRuns(3), [], heldAll(3)), null)
 check('past the cap: one read of every run', boardsRead(withRuns(BOARDS_MAX + 1, true), [], {}), 'all')
+
+console.log('── inbox: what the person sees, and the controller housekeeping ────────────')
+const runA = { id: 'ra', ref: 'run-a', title: 'Run A' }
+const runB = { id: 'rb', ref: 'run-b', title: 'Run B' }
+const inboxRow = (kind, audience, over = {}) => ({
+  key: `${kind}:${over.id ?? kind}`, kind, audience, run: runA, item: { id: over.id ?? kind, title: 't' },
+  what: 'w', since: '2026-11-06T10:00:00Z', call: 'c', detail: null, actor: null, tree: null, target: null, count: 1, url: null,
+  ...over,
+})
+const mixed = [
+  inboxRow('question', 'human'),
+  inboxRow('blocked', 'human'),
+  inboxRow('done_unverified', 'controller', { id: 'u1' }),
+  inboxRow('done_unverified', 'controller', { id: 'u2' }),
+  inboxRow('done_unverified', 'controller', { id: 'u3', run: runB }),
+  inboxRow('expired_claim', 'controller', { id: 'c1' }),
+]
+check('needs you: question and blocked only', needsYou(mixed).map((r) => r.kind), ['question', 'blocked'])
+check('an unknown audience is shown to the person', needsYou([inboxRow('question', 'someone')]).length, 1)
+check('housekeeping: every controller row', forController(mixed).length, 4)
+check('badge count: human rows only', needsYouCount({ rows: mixed }), 2)
+check('badge count before the inbox loads: unknown', needsYouCount(undefined), undefined)
+check('groups: by kind and run, kinds in order', groupHousekeeping(mixed).map((g) => g.label), [
+  '1 claim expired in Run A',
+  '2 not verified in Run A',
+  '1 not verified in Run B',
+])
+check('a group keeps its rows', groupHousekeeping(mixed)[1].rows.map((r) => r.item.id), ['u1', 'u2'])
+check('a group key is stable across reads', groupHousekeeping(mixed)[1].key, 'done_unverified:ra')
+check('a row with no run groups without "in"', groupHousekeeping([inboxRow('stale_in_progress', 'controller', { run: null })])[0].label, '1 stalled')
+check('no controller rows: no groups', groupHousekeeping(needsYou(mixed)), [])
+check('card: closed by, for not verified', cardFacts(inboxRow('done_unverified', 'controller', { actor: 'worker-u1' })), ['closed by worker-u1'])
+check('card: agent and tree, for an expired claim', cardFacts(inboxRow('expired_claim', 'controller', { actor: 'aw-1', tree: 'p:/trees/a' })), ['by aw-1', 'on p:/trees/a'])
+check('card: note count only when several', cardFacts(inboxRow('unconsumed_note', 'controller', { count: 3 })), ['3 notes'])
+check('card: a question has no extra facts', cardFacts(inboxRow('question', 'human')), [])
 
 console.log(failures === 0 ? '\nAll checks passed.' : `\n${failures} check(s) failed.`)
 if (failures > 0) process.exitCode = 1
