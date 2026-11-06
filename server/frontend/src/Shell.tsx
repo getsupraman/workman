@@ -163,7 +163,7 @@ export default function Shell(props: ParentProps) {
             <OverviewIcon />
             Overview
           </A>
-          <A href="/inbox" class={on('/inbox') ? 'on' : ''}>
+          <A href="/inbox" class={on('/inbox') || location.pathname.startsWith('/inbox/') ? 'on' : ''}>
             <InboxIcon />
             Needs you
             <Show when={needsYouCount(inbox())}>{(n) => <span class="badge">{n()}</span>}</Show>

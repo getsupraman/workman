@@ -11,7 +11,7 @@ import { readFileSync } from 'node:fs'
 import { KEYS, KEYS_COMMAND, isHelpKey, keysTable } from '../src/keys.ts'
 import { activityDays, activityOrder, backlogOrder, projectOrder, projectRuns } from '../src/lists.ts'
 import { listMove, openRuns, runMove, runOnPath, sideProjects, sideRuns, step, typingIn } from '../src/listnav.ts'
-import { boardHref, copyValue, itemHref, pathCrumbs, routeReads } from '../src/nav.ts'
+import { boardHref, copyValue, inboxHref, itemHref, pathCrumbs, routeReads } from '../src/nav.ts'
 import { appIconHref, consentForm, consentStep, consentView, hiddenFields, iconStep, initials, isConnectPath, returnTarget, scopeLines, signInHref, signInStart, signInStep } from '../src/connect.ts'
 import { formerName, isReleased, releasable, tokenLabel } from '../src/sessions.ts'
 import { arrange, chordLabel, commands, entryHref, isPaletteChord, isSlash, matchCommands } from '../src/palette.ts'
@@ -20,7 +20,7 @@ import { MEMBERS_ANCHOR, memberLine, membersHref, projectOnPath, shareMarker } f
 import { PHONE_QUERY, closesOnMove, pageName } from '../src/menu.ts'
 import { appLine, revokeWarning, sessionsLabel } from '../src/apps.ts'
 import { BOARDS_MAX, boardsRead } from '../src/boards.ts'
-import { cardFacts, choreRow, decisionRow, forController, groupHousekeeping, needsYou, needsYouCount, rowProject } from '../src/inbox.ts'
+import { cardFacts, choreRow, decisionRow, forController, groupHousekeeping, inboxOrder, keepSelected, needsYou, needsYouCount, rowProject } from '../src/inbox.ts'
 import { expiresIn, isLastAdmin, isLinkPath, joinStep, joinToken, nameProblem, passwordMessage, passwordProblem, resetStep, resetToken, roleLabel, showSwitcher, slugFrom, slugProblem } from '../src/admin.ts'
 
 let failures = 0
@@ -760,6 +760,38 @@ console.log('── inbox: housekeeping, one line per kind and run; unread notes
     choreRow(inboxRow('done_unverified', 'controller', { item: { id: 'u9', qualifiedRef: 'run-a/3.1', title: 'Ship it' }, actor: 'wm-2' })),
     { ref: 'run-a/3.1', title: 'Ship it', actor: 'wm-2', since: '2026-11-06T10:00:00Z' },
   )
+}
+
+console.log('── inbox: the item beside the list, and the keys that walk it ──')
+{
+  const q = inboxRow('question', 'human', { id: 'q1' })
+  const b = inboxRow('blocked', 'human', { id: 'b1' })
+  const b2 = inboxRow('question', 'human', { id: 'b1', key: 'question:b1' })
+  const groups = groupHousekeeping(mixed)
+  const open = new Set([groups[1].key])
+  check('order: the person rows only, housekeeping hidden', inboxOrder([q, b], groups, false, open), ['q1', 'b1'])
+  check('order: then the rows of each open group', inboxOrder([q, b], groups, true, open), ['q1', 'b1', 'u1', 'u2'])
+  check('order: a closed group adds nothing', inboxOrder([q, b], groups, true, new Set()), ['q1', 'b1'])
+  check('order: an item on two rows counts once', inboxOrder([q, b, b2], [], false, new Set()), ['q1', 'b1'])
+  check('Down from nothing opens the first row', step(inboxOrder([q, b], groups, true, open), undefined, 'next'), 'q1')
+  check('Down from the last person row enters an open group', step(inboxOrder([q, b], groups, true, open), 'b1', 'next'), 'u1')
+
+  const ids = (k) => k.rows.map((r) => r.item.id)
+  check('still in the inbox: the rows as read', [ids(keepSelected([q, b], [q, b], 'q1')), keepSelected([q, b], [q, b], 'q1').resolved], [['q1', 'b1'], null])
+  const gone = keepSelected([q, b], [b], 'q1')
+  check('selected and answered: kept in its place, resolved', [ids(gone), gone.resolved], [['q1', 'b1'], 'q1'])
+  const later = keepSelected(gone.rows, [b], 'q1')
+  check('… and still kept on the next read', [ids(later), later.resolved], [['q1', 'b1'], 'q1'])
+  const moved = keepSelected(later.rows, [b], 'b1')
+  check('the selection moves on: the resolved row goes', [ids(moved), moved.resolved], [['b1'], null])
+  check('nothing selected: no row kept', ids(keepSelected([q, b], [b], undefined)), ['b1'])
+  check('kept at the end when the list shrank under it', ids(keepSelected([q, b], [q], 'b1')), ['q1', 'b1'])
+
+  check('href: the list, and an item beside it', [inboxHref(), inboxHref('q1')], ['/inbox', '/inbox/q1'])
+  check('reads for /inbox', routeReads('/inbox'), ['/api/v1/inbox'])
+  check('reads for /inbox/I', routeReads('/inbox/I?tab=notes'), ['/api/v1/inbox', '/api/v1/items/I'])
+  check('the top bar names /inbox/I Needs you', pageName('/inbox/I', sidebar), 'Needs you')
+  check('the keys table names Needs you for ↓ / ↑', KEYS.some((k) => k.keys === '↓ / ↑' && k.where.includes('Needs you')), true)
 }
 
 console.log(failures === 0 ? '\nAll checks passed.' : `\n${failures} check(s) failed.`)

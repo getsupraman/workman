@@ -116,6 +116,39 @@ export function groupHousekeeping(rows: InboxRow[]): HousekeepingGroup[] {
     .sort((a, b) => kindRank(a.kind) - kindRank(b.kind) || (a.run?.title ?? '').localeCompare(b.run?.title ?? ''))
 }
 
+/**
+ * The item ids ArrowUp/ArrowDown walk on Needs you, top to bottom as drawn: the person's rows, then
+ * the rows of each housekeeping group that is open while Housekeeping itself is shown. An item on
+ * two rows counts once, where it first appears.
+ */
+export function inboxOrder(
+  human: readonly InboxRow[],
+  groups: readonly HousekeepingGroup[],
+  housekeepingShown: boolean,
+  open: ReadonlySet<string>,
+): string[] {
+  const rows = [...human, ...(housekeepingShown ? groups.filter((g) => open.has(g.key)).flatMap((g) => g.rows) : [])]
+  return [...new Set(rows.map((r) => r.item.id))]
+}
+
+/**
+ * The person's rows after a read, keeping the selected one: an item that left the inbox while it is
+ * open beside the list (answered, unblocked) stays where it was, marked `resolved`, until the
+ * selection moves. `before` is what was drawn last time.
+ */
+export function keepSelected(
+  before: readonly InboxRow[],
+  now: readonly InboxRow[],
+  selected: string | undefined,
+): { rows: InboxRow[]; resolved: string | null } {
+  if (selected === undefined || now.some((r) => r.item.id === selected)) return { rows: [...now], resolved: null }
+  const at = before.findIndex((r) => r.item.id === selected)
+  if (at < 0) return { rows: [...now], resolved: null }
+  const rows = [...now]
+  rows.splice(Math.min(at, rows.length), 0, before[at]!)
+  return { rows, resolved: selected }
+}
+
 type InboxGroup = { kind: string; label: string; rows: InboxRow[] }
 
 /** The summary line over the inbox: one count per kind, in the order of `INBOX_KINDS`. */

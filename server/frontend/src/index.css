@@ -328,6 +328,7 @@ a.group-h:hover { color: var(--accent); }
 .inbox-ref { font-family: var(--font-mono); font-size: 11.5px; margin-left: 2px; }
 .inbox-d { margin-top: 3px; color: var(--ink-2); font-size: 13px; overflow-wrap: anywhere; }
 .inbox-row .item-side { white-space: nowrap; }
+.inbox-row.resolved .inbox-t { color: var(--ink-3); text-decoration: line-through; text-decoration-color: var(--idle); }
 .chore-group { width: 100%; text-align: left; border-top: 1px solid var(--line-2); }
 .chore-group:hover { background: var(--bg); }
 .chore-row { padding-top: 6px; padding-bottom: 6px; }

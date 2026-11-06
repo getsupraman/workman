@@ -51,9 +51,9 @@ the two differ):
 | Key | Where | What it does |
 |---|---|---|
 | Ctrl+P (⌘P on macOS), / | any page | opens the command palette; / only outside a text field |
-| ↓ / ↑ | run page | selects the next / previous row of the plan as drawn and shows it in the detail panel |
+| ↓ / ↑ | run page, Needs you | selects the next / previous row as drawn and shows it in the detail panel |
 | ↓ / ↑ | Backlog, Project, Activity | moves focus to the next / previous row |
-| Home / End | run page, Backlog, Project, Activity | the first / last row |
+| Home / End | run page, Needs you, Backlog, Project, Activity | the first / last row |
 | Enter | a focused row | opens it |
 | Alt+↓ / Alt+↑ (⌥ on macOS) | any page | opens the next / previous run in the sidebar |
 | Esc | palette, dialog, phone menu, detail sheet | closes it |
@@ -70,6 +70,9 @@ binding. Ctrl+↑/↓ are left alone (macOS takes them; in a field on Windows th
   cancelled toggle (`planOrder`). The URL keeps filter, tab and cancelled. With no selection, ↓ takes
   the first row and ↑ the last. The ends hold, with no wrap. The row scrolls into view
   (`block: nearest`).
+- **Needs you.** The same, over the rows as drawn (`inboxOrder`): the person's rows, then the rows of
+  each housekeeping group that is open while Housekeeping is shown. The URL is `/inbox/{item}`, and
+  keeps tab and cancelled.
 - **Backlog, Project, Activity.** These keys move focus along the page's row links, which carry
   `data-row`, and the focus ring shows. The order is the one the page draws:
   - Backlog: the origin links and their items, with cancelled items last when shown.

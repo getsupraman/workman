@@ -29,6 +29,7 @@ export function pageName(pathname: string, projects: ProjectOverview[] | undefin
     return rest === 'backlog' ? `${title} · Backlog` : title
   }
 
+  if (section === 'inbox' && id) return 'Needs you'
   if (section === 'items' && id) return 'Item'
   return 'Workman'
 }

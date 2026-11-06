@@ -13,6 +13,9 @@ export function itemHref(item: Pick<ItemRef, 'id' | 'kind'>, run: Pick<ItemRef, 
 
 export const runHref = (run: string) => `/runs/${run}`
 
+/** Needs you, with an item open beside the list or none. */
+export const inboxHref = (item?: string) => (item ? `/inbox/${item}` : '/inbox')
+
 /** What a copy button puts on the clipboard: the server's full path, never a ref composed here. */
 export const copyValue = (item: Pick<ItemRef, 'fullRef'>): string => item.fullRef
 
@@ -73,6 +76,7 @@ export function routeReads(href: string): string[] {
 
   if (parts.length === 0) return ['/api/v1/overview']
   if (parts[0] === 'inbox' && parts.length === 1) return ['/api/v1/inbox']
+  if (parts[0] === 'inbox' && parts.length === 2) return ['/api/v1/inbox', `/api/v1/items/${parts[1]}`]
   if (parts[0] === 'activity' && parts.length === 1) return ['/api/v1/journal?limit=1']
   if (parts[0] === 'sessions' && parts.length === 1) return ['/api/v1/sessions']
   if (parts[0] === 'runs' && parts.length === 2) return [`/api/v1/runs/${parts[1]}/board`, `/api/v1/items/${parts[1]}`]

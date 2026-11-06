@@ -39,7 +39,7 @@ export default function App() {
     <Show when={signedIn()} fallback={<Gate />}>
       <Router root={Shell}>
         <Route path="/" component={Overview} />
-        <Route path="/inbox" component={Inbox} />
+        <Route path="/inbox/:item?" component={Inbox} />
         <Route path="/activity" component={Activity} />
         <Route path="/sessions" component={Sessions} />
         <Route path="/runs/:run/:item?" component={Run} />
