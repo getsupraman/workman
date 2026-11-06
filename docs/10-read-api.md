@@ -433,7 +433,7 @@ itself, a project's `project` is itself), so a client links and labels a hit wit
 `snippet` is plain text — the matching fragment of the intent, else the title — on a `text` hit only.
 
 ### `GET /api/v1/prompts?scope={id}`
-The prompt actions that apply to one project, run or item (doc 13 "The prompt catalogue"), in the
+Since server 2.0.0. The prompt actions that apply to one project, run or item (doc 13 "The prompt catalogue"), in the
 catalogue's fixed order; an action that does not apply is absent. Each `text` is the whole prompt a
 fresh session is started with — never shortened. `count` is `null` for an action without one.
 Read-only like every v1 route: it neither sweeps lapsed claims nor consumes notes (unlike `/brief`).

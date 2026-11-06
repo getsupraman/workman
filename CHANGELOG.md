@@ -7,6 +7,10 @@ All notable changes to the Workman server and the `workman` plugin are recorded 
 
 ## [Unreleased]
 
+## [3.0.3] — 2026-11-07
+
+Server 3.0.3 (dashboard only). No migration; the plugin stays 3.0.1.
+
 ### Dashboard
 
 - **Needs you has a filter bar** like a run page's: *All*, *Questions*, *Blocked*, each with its count
