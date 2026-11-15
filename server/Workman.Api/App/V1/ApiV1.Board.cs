@@ -49,12 +49,37 @@ public static partial class ApiV1
         RequestTenant tenant,
         CancellationToken cancellationToken)
     {
+        var (refused, snapshot, book, known) = await RunsAskedAsync(runs, board, api, tenant, cancellationToken);
+        if (refused is not null)
+        {
+            return refused;
+        }
+
+        return Results.Ok(new BoardsView(
+            snapshot.AsOf,
+            snapshot.Seq,
+            await BoardViewsAsync(known, book, snapshot, board, api, cancellationToken)));
+    }
+
+    /// <summary>
+    /// The runs a many-runs read covers, from one snapshot, placed in the returned book: without <c>runs</c>, every run
+    /// of every unarchived project the caller sees, in the overview's order; with it, those runs, leaving out an id that
+    /// is no run the caller sees. A malformed id or more than <see cref="BoardsMaxRuns"/> is a 400.
+    /// </summary>
+    private static async Task<(IResult? Refused, Snapshot Snapshot, V1Book Book, List<Guid> Runs)> RunsAskedAsync(
+        string? runs,
+        BoardQueries board,
+        ApiQueries api,
+        RequestTenant tenant,
+        CancellationToken cancellationToken)
+    {
+        var book = new V1Book(api, board);
         var asked = new List<Guid>();
         foreach (var part in (runs ?? "").Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
         {
             if (!Guid.TryParse(part, out var parsed))
             {
-                return Results.BadRequest(new { error = $"runs: '{part}' is not an id" });
+                return (Results.BadRequest(new { error = $"runs: '{part}' is not an id" }), null!, book, []);
             }
 
             asked.Add(parsed);
@@ -63,11 +88,10 @@ public static partial class ApiV1
         asked = [.. asked.Distinct()];
         if (asked.Count > BoardsMaxRuns)
         {
-            return Results.BadRequest(new { error = $"runs: at most {BoardsMaxRuns} ids, got {asked.Count}" });
+            return (Results.BadRequest(new { error = $"runs: at most {BoardsMaxRuns} ids, got {asked.Count}" }), null!, book, []);
         }
 
         var snapshot = await SnapshotAsync(api, tenant, cancellationToken);
-        var book = new V1Book(api, board);
 
         if (runs is null)
         {
@@ -87,15 +111,13 @@ public static partial class ApiV1
             .Where(id => book.Has(id) && book.Row(id).WorkspaceId == snapshot.WorkspaceId && book.RunId(id) == id)
             .ToList();
 
-        return Results.Ok(new BoardsView(
-            snapshot.AsOf,
-            snapshot.Seq,
-            await BoardViewsAsync(known, book, snapshot, board, api, cancellationToken)));
+        return (null, snapshot, book, known);
     }
 
     /// <summary>
-    /// The boards under <paramref name="roots"/>, each placed in <paramref name="book"/> already. One query per
-    /// root reads its rows; everything else is read once for all of them.
+    /// The boards under <paramref name="roots"/>, each placed in <paramref name="book"/> already. One query reads
+    /// every root's rows, and everything else is read once for all of them: the command count does not grow with
+    /// the roots.
     /// </summary>
     private static async Task<IReadOnlyList<BoardView>> BoardViewsAsync(
         IReadOnlyList<Guid> roots,
@@ -105,11 +127,10 @@ public static partial class ApiV1
         ApiQueries api,
         CancellationToken cancellationToken)
     {
-        var trees = new List<(Guid Root, Guid RunId, IReadOnlyList<BoardRow> Rows)>();
-        foreach (var root in roots)
-        {
-            trees.Add((root, book.RunId(root)!.Value, await api.BoardAsync(root, cancellationToken)));
-        }
+        var rooted = (await api.BoardsAsync(roots, cancellationToken)).ToLookup(r => r.Root, r => r.Row);
+        var trees = roots
+            .Select(root => (Root: root, RunId: book.RunId(root)!.Value, Rows: (IReadOnlyList<BoardRow>)[.. rooted[root]]))
+            .ToList();
 
         var ids = trees.SelectMany(t => t.Rows).Select(r => r.Id).Distinct().ToList();
         await book.ItemsAsync(ids, cancellationToken);

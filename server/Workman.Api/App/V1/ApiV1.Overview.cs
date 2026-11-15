@@ -19,13 +19,9 @@ public static partial class ApiV1
         var projects = await board.ProjectsAsync(snapshot.WorkspaceId, cancellationToken);
         var scopes = projects.Select(p => p.Id).ToList();
 
-        var runs = new Dictionary<Guid, IReadOnlyList<RunRow>>();
-        foreach (var project in projects)
-        {
-            runs[project.Id] = await api.RunsAsync(project.Id, cancellationToken);
-        }
+        var runs = (await api.RunsAsync(scopes, cancellationToken)).ToLookup(r => r.ProjectId);
 
-        var allRuns = runs.Values.SelectMany(r => r).Select(r => r.Id).ToList();
+        var allRuns = scopes.SelectMany(p => runs[p]).Select(r => r.Id).ToList();
         await book.ItemsAsync(scopes.Concat(allRuns), cancellationToken);
 
         var rollups = (await api.RollupsAsync([.. scopes, .. allRuns], cancellationToken)).ToDictionary(r => r.Id);
@@ -42,6 +38,7 @@ public static partial class ApiV1
             followupsOpen += await board.OpenFollowupsAsync(scope, cancellationToken);
         }
 
+        var verified = (await api.LastVerificationsAsync(allRuns, cancellationToken)).ToDictionary(v => v.ScopeId);
         var repos = (await board.ProjectReposAsync(scopes, cancellationToken)).ToLookup(r => r.ProjectId);
         var sharing = (await board.ProjectSharingAsync(scopes, cancellationToken)).ToDictionary(s => s.ProjectId);
         var projectViews = new List<ProjectOverviewView>();
@@ -50,7 +47,7 @@ public static partial class ApiV1
             var runViews = new List<RunOverviewView>();
             foreach (var run in runs[project.Id])
             {
-                var last = await board.LastVerificationAsync(run.Id, cancellationToken);
+                var last = verified.GetValueOrDefault(run.Id);
                 runViews.Add(new RunOverviewView(
                     book.Item(run.Id),
                     Rollup(rollups.GetValueOrDefault(run.Id)),

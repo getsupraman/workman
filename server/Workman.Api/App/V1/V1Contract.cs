@@ -138,6 +138,31 @@ public sealed record BoardView(
 
 public sealed record BoardsView(DateTimeOffset AsOf, long Seq, IReadOnlyList<BoardView> Boards);
 
+/// <summary>
+/// <c>/bars</c>: per run, what its bar draws. <see cref="RunBarsView.Leaves"/> are the counted items in pre-order, gone
+/// ones included, each with the inputs of the dashboard's <c>state()</c>; <see cref="RunBarsView.Holder"/> is the first
+/// row in pre-order that holds a claim.
+/// </summary>
+public sealed record BarsView(DateTimeOffset AsOf, long Seq, IReadOnlyList<RunBarsView> Runs);
+
+public sealed record RunBarsView(Guid Run, DateTimeOffset? ClosedAt, BarHolderView? Holder, IReadOnlyList<BarLeafView> Leaves);
+
+/// <summary>The claimed item, the holding session's name (null without one) and the claim's role.</summary>
+public sealed record BarHolderView(ItemRefView Item, string? Session, string Role);
+
+/// <summary><see cref="Proof"/>: the latest verification passed and was not the worker's own; <see cref="WaitingOn"/>: the
+/// qualified refs of the unclosed items that block it.</summary>
+public sealed record BarLeafView(
+    Guid Id,
+    string QualifiedRef,
+    string Title,
+    string Kind,
+    string Status,
+    string? Resolution,
+    bool ClaimExpired,
+    bool Proof,
+    IReadOnlyList<string> WaitingOn);
+
 public sealed record CriterionView(string Id, string Text, bool Checked, string? Evidence, DateTimeOffset? CheckedAt);
 
 public sealed record ReportView(

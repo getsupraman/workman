@@ -270,12 +270,18 @@ public sealed partial class ApiQueries(NpgsqlDataSource dataSource)
             cancellationToken);
     }
 
-    /// <summary>The runs under a project, with what the overview prints beside each.</summary>
-    public async Task<IReadOnlyList<RunRow>> RunsAsync(Guid projectId, CancellationToken cancellationToken = default)
+    /// <summary>
+    /// The runs under each project, with what the overview prints beside each, in one command: each project's runs
+    /// in seq and ref order.
+    /// </summary>
+    public async Task<IReadOnlyList<RunRow>> RunsAsync(
+        IReadOnlyCollection<Guid> projectIds,
+        CancellationToken cancellationToken = default)
     {
         const string sql =
             $"""
-             SELECT r.id             AS "Id",
+             SELECT pr.id            AS "ProjectId",
+                    r.id             AS "Id",
                     rc.branch        AS "Branch",
                     rc.worktree_path AS "Worktree",
                     (SELECT count(*)::int
@@ -285,13 +291,40 @@ public sealed partial class ApiQueries(NpgsqlDataSource dataSource)
                     (SELECT max(e.at)
                      FROM   event e JOIN item i ON i.id = e.item_id
                      WHERE  i.id = r.id OR i.ancestors @> ARRAY[r.id]::uuid[])  AS "LastEventAt"
-             FROM   item r
+             FROM   unnest(@projects) AS pr(id)
+             JOIN   item r ON r.kind = 'run' AND r.ancestors @> ARRAY[pr.id]::uuid[]
              LEFT   JOIN run_config rc ON rc.item_id = r.id
-             WHERE  r.kind = 'run' AND r.ancestors @> ARRAY[@project]::uuid[]
-             ORDER  BY r.seq, r.ref;
+             ORDER  BY pr.id, r.seq, r.ref;
              """;
 
-        return await ListAsync<RunRow>(sql, new { project = projectId }, cancellationToken);
+        return projectIds.Count == 0
+            ? []
+            : await ListAsync<RunRow>(sql, new { projects = projectIds.ToArray() }, cancellationToken);
+    }
+
+    /// <summary>
+    /// The latest verification anywhere at or under each scope, as <see cref="BoardQueries.LastVerificationAsync"/>
+    /// reads it for one, in one command.
+    /// </summary>
+    public async Task<IReadOnlyList<ScopeVerificationRow>> LastVerificationsAsync(
+        IReadOnlyCollection<Guid> scopeIds,
+        CancellationToken cancellationToken = default)
+    {
+        const string sql =
+            """
+            SELECT DISTINCT ON (sc.id)
+                   sc.id    AS "ScopeId",
+                   v.passed AS "Passed",
+                   v.at     AS "At"
+            FROM   unnest(@scopes) AS sc(id)
+            JOIN   item i ON i.id = sc.id OR i.ancestors @> ARRAY[sc.id]::uuid[]
+            JOIN   verification v ON v.item_id = i.id
+            ORDER  BY sc.id, v.at DESC;
+            """;
+
+        return scopeIds.Count == 0
+            ? []
+            : await ListAsync<ScopeVerificationRow>(sql, new { scopes = scopeIds.ToArray() }, cancellationToken);
     }
 
     /// <summary>The runs under the projects, each project's in <see cref="RunsAsync"/>'s order.</summary>
@@ -336,55 +369,67 @@ public sealed partial class ApiQueries(NpgsqlDataSource dataSource)
     {
         const string sql =
             $"""
-             SELECT i.id           AS "Id",
-                    i.parent_id    AS "ParentId",
-                    i.depth        AS "Depth",
-                    i.seq          AS "Seq",
-                    i.kind         AS "Kind",
-                    i.status       AS "Status",
-                    i.resolution   AS "Resolution",
-                    i.priority     AS "Priority",
-                    i.severity     AS "Severity",
-                    i.opened_at    AS "OpenedAt",
-                    i.started_at   AS "StartedAt",
-                    i.closed_at    AS "ClosedAt",
-                    EXISTS (SELECT 1 FROM item ch WHERE ch.parent_id = i.id) AS "HasChildren",
-                    coalesce(cr.total, 0)::int AS "CriteriaTotal",
-                    coalesce(cr.ok, 0)::int    AS "CriteriaChecked",
-                    a.value        AS "Commit",
-                    v.passed       AS "VerificationPassed",
-                    v.run_by       AS "VerificationRunBy",
-                    v.at           AS "VerificationAt",
-                    k.requires_verify AS "RequiresVerify",
-                    EXISTS (SELECT 1 FROM verification ov
-                            WHERE ov.item_id = i.id AND ov.passed AND ov.run_by = 'orchestrator') AS "OrchestratorVerified",
-                    EXISTS (SELECT 1 FROM event fe
-                            WHERE fe.item_id = i.id AND fe.kind = 'forced_transition')            AS "Forced",
-                    EXISTS (SELECT 1 FROM note n
-                            WHERE n.to_item_id = i.id AND n.consumed_at IS NULL)                  AS "UnconsumedNotes",
-                    (r.open_count + r.doing_count + r.blocked_count + r.review_count + r.done_count)::int AS "RollupTotal",
-                    r.done_count::int AS "RollupDone"
+             SELECT {BoardColumns}
              FROM   item i
-             JOIN   item_kind k ON k.key = i.kind
-             {WorkmanQueries.Rollup}
-             {WorkmanQueries.DocumentPath}
-             LEFT   JOIN LATERAL (
-                      SELECT count(*) AS total, count(*) FILTER (WHERE ic.checked) AS ok
-                      FROM   item_criterion ic WHERE ic.item_id = i.id) cr ON true
-             LEFT   JOIN LATERAL (
-                      SELECT aa.value FROM artifact aa
-                      WHERE  aa.item_id = i.id AND aa.kind = 'commit'
-                      ORDER  BY aa.at DESC LIMIT 1) a ON true
-             LEFT   JOIN LATERAL (
-                      SELECT vv.passed, vv.run_by, vv.at FROM verification vv
-                      WHERE  vv.item_id = i.id
-                      ORDER  BY vv.at DESC, vv.id DESC LIMIT 1) v ON true
+             {BoardJoins}
              WHERE  {InScope}
              ORDER  BY p.path || i.seq, i.id;
              """;
 
         return await ListAsync<BoardRow>(sql, new { scope = scopeId }, cancellationToken);
     }
+
+    /// <summary>What a board row carries, over <c>i</c> and <see cref="BoardJoins"/>.</summary>
+    private const string BoardColumns =
+        """
+        i.id           AS "Id",
+        i.parent_id    AS "ParentId",
+        i.depth        AS "Depth",
+        i.seq          AS "Seq",
+        i.kind         AS "Kind",
+        i.status       AS "Status",
+        i.resolution   AS "Resolution",
+        i.priority     AS "Priority",
+        i.severity     AS "Severity",
+        i.opened_at    AS "OpenedAt",
+        i.started_at   AS "StartedAt",
+        i.closed_at    AS "ClosedAt",
+        EXISTS (SELECT 1 FROM item ch WHERE ch.parent_id = i.id) AS "HasChildren",
+        coalesce(cr.total, 0)::int AS "CriteriaTotal",
+        coalesce(cr.ok, 0)::int    AS "CriteriaChecked",
+        a.value        AS "Commit",
+        v.passed       AS "VerificationPassed",
+        v.run_by       AS "VerificationRunBy",
+        v.at           AS "VerificationAt",
+        k.requires_verify AS "RequiresVerify",
+        EXISTS (SELECT 1 FROM verification ov
+                WHERE ov.item_id = i.id AND ov.passed AND ov.run_by = 'orchestrator') AS "OrchestratorVerified",
+        EXISTS (SELECT 1 FROM event fe
+                WHERE fe.item_id = i.id AND fe.kind = 'forced_transition')            AS "Forced",
+        EXISTS (SELECT 1 FROM note n
+                WHERE n.to_item_id = i.id AND n.consumed_at IS NULL)                  AS "UnconsumedNotes",
+        (r.open_count + r.doing_count + r.blocked_count + r.review_count + r.done_count)::int AS "RollupTotal",
+        r.done_count::int AS "RollupDone"
+        """;
+
+    /// <summary>The joins <see cref="BoardColumns"/> reads, <c>p.path</c> the document path among them.</summary>
+    private const string BoardJoins =
+        $"""
+         JOIN   item_kind k ON k.key = i.kind
+         {WorkmanQueries.Rollup}
+         {WorkmanQueries.DocumentPath}
+         LEFT   JOIN LATERAL (
+                  SELECT count(*) AS total, count(*) FILTER (WHERE ic.checked) AS ok
+                  FROM   item_criterion ic WHERE ic.item_id = i.id) cr ON true
+         LEFT   JOIN LATERAL (
+                  SELECT aa.value FROM artifact aa
+                  WHERE  aa.item_id = i.id AND aa.kind = 'commit'
+                  ORDER  BY aa.at DESC LIMIT 1) a ON true
+         LEFT   JOIN LATERAL (
+                  SELECT vv.passed, vv.run_by, vv.at FROM verification vv
+                  WHERE  vv.item_id = i.id
+                  ORDER  BY vv.at DESC, vv.id DESC LIMIT 1) v ON true
+         """;
 
     public async Task<ItemDetailRow?> ItemAsync(Guid itemId, CancellationToken cancellationToken = default)
     {

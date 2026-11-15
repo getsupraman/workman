@@ -7,7 +7,8 @@ namespace Workman.Api.App.V1;
 /// One request's lookups: every <see cref="ItemRefView"/>, <see cref="SessionView"/> and run
 /// placement a response needs, loaded in batches and built in one place. doc 10 rule 2 lives here —
 /// <see cref="ItemRefView.QualifiedRef"/> is <see cref="BoardQueries.CallableRefAsync"/>, the form
-/// <c>work_get</c> prints, and no endpoint computes a ref of its own.
+/// <c>work_get</c> prints, read for a whole batch by <see cref="BoardQueries.CallableRefsAsync"/>; no endpoint
+/// computes a ref of its own.
 /// </summary>
 internal sealed class V1Book(ApiQueries api, BoardQueries board)
 {
@@ -24,13 +25,15 @@ internal sealed class V1Book(ApiQueries api, BoardQueries board)
             return;
         }
 
-        foreach (var row in await api.RefsAsync(missing, cancellationToken))
+        var rows = await api.RefsAsync(missing, cancellationToken);
+        var callable = await board.CallableRefsAsync([.. rows.Select(r => (r.Scope, r.RefShared))], cancellationToken);
+        foreach (var row in rows)
         {
             _rows[row.Id] = row;
             _refs[row.Id] = new ItemRefView(
                 row.Id,
                 row.Ref,
-                await board.CallableRefAsync(row.Scope, row.RefShared, cancellationToken),
+                callable[row.Id],
                 row.Kind,
                 row.Title,
                 V1Text.Status(row.Status),

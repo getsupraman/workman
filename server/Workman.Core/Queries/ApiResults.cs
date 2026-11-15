@@ -75,6 +75,7 @@ public sealed record SessionRow(
 public sealed record SessionTokenRow(Guid Id, string Token);
 
 public sealed record RunRow(
+    Guid ProjectId,
     Guid Id,
     string? Branch,
     string? Worktree,
@@ -82,6 +83,8 @@ public sealed record RunRow(
     DateTimeOffset? LastEventAt);
 
 public sealed record RunOfProjectRow(Guid ProjectId, Guid RunId);
+
+public sealed record ScopeVerificationRow(Guid ScopeId, bool Passed, DateTimeOffset At);
 
 public sealed record RunConfigRow(Guid RunId, string? Branch, string? Worktree);
 

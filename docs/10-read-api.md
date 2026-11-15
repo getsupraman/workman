@@ -361,6 +361,29 @@ than 200 ids, or one that is not a uuid, is a 400.
 ```jsonc
 { "asOf": "…", "seq": 1234, "boards": [Board] }
 ```
+All the boards are read in one query, so the number of SQL commands does not grow with the runs.
+
+### `GET /api/v1/bars?runs={id},{id},…` (runs optional; added for the dashboard, additive)
+What the sidebar's and the overview's run bars draw, without the boards behind them: the runs `/boards`
+would return for the same `runs` (same order, same visibility, same 400s), each with its counted leaves, the
+first row holding a claim, and its close. A fixed number of SQL commands for any number of runs, so a live
+frame for one run re-reads only that run. The server sends each leaf's state *inputs*, never a colour: the
+dashboard's `state()` stays the one place a colour comes from.
+```jsonc
+{ "asOf": "…", "seq": 1234,
+  "runs": [{
+    "run": "uuid",
+    "closedAt": "…" | null,                     // the run's own; the board's rows[0].closedAt
+    "holder": { "item": ItemRef, "session": "aw-12" | null, "role": "worker" } | null,
+                                                // first row in pre-order with a claim (a lapsed one included)
+    "leaves": [{                                // counted items in pre-order, gone ones included
+      "id": "uuid", "qualifiedRef": "m5/1.2", "title": "…", "kind": "task",
+      "status": "done", "resolution": "accepted" | null,
+      "claimExpired": false,                    // the held claim has lapsed
+      "proof": true,                            // latest verification passed, not run by the worker
+      "waitingOn": ["m5/1.4"] }] }] }           // qualified refs of the open items blocking it
+```
+A leaf is what the Rollup counts: a leaf kind, or a phase or feature with nothing below it.
 
 ### `GET /api/v1/items/{id}`
 A unit page: what was asked, what the agent **reported**, what was **verified**.
