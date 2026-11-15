@@ -5,6 +5,24 @@ All notable changes to the Workman server and the `workman` plugin are recorded 
 [Semantic Versioning](https://semver.org/). The server's version is `serverInfo.version`; the plugin's is
 `plugin/.claude-plugin/plugin.json`.
 
+## [3.2.1] — 2026-11-15
+
+Server only (dashboard). No migration; the plugin stays 3.1.0.
+
+### Fixed
+
+- **The sidebar account header covered the top of the Workman logo:** it is now its own row, and only the part
+  below it scrolls.
+- **"Account" in the account menu read like a title:** Theme comes first; Account, Keyboard shortcuts and Sign
+  out follow, each with an icon.
+- **The avatar circle vanished in the dark theme** when the account button was highlighted: it now has its own
+  tint and ring in both themes.
+
+### Changed
+
+- **Scrollbars are thin, with no track:** the sidebar, the page, the side panel, the palette and the shortcuts
+  sheet keep a stable gutter, so content does not shift when a scrollbar appears.
+
 ## [3.2.0] — 2026-11-15
 
 Server only (dashboard and one read endpoint). No migration; the plugin stays 3.1.0.

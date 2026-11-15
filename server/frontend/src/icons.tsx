@@ -95,3 +95,24 @@ export const CheckIcon =(props: { size?: number; weight?: number }) => (
     <path d={props.size && props.size > 12 ? 'M4 12.5l5 5L20 6.5' : 'M5 12.5l4.5 4.5L19 7.5'} />
   </svg>
 )
+
+export const UserIcon = () => (
+  <svg viewBox="0 0 24 24" {...stroke} aria-hidden="true">
+    <circle cx="12" cy="8" r="4" />
+    <path d="M4 20.5c0-4 3.6-6.5 8-6.5s8 2.5 8 6.5" />
+  </svg>
+)
+
+export const KeyboardIcon = () => (
+  <svg viewBox="0 0 24 24" {...stroke} aria-hidden="true">
+    <rect x="2.5" y="6" width="19" height="12" rx="2" />
+    <path d="M6.5 10h.01M10 10h.01M13.5 10h.01M17 10h.01M8 14h8" />
+  </svg>
+)
+
+export const SignOutIcon = () => (
+  <svg viewBox="0 0 24 24" {...stroke} aria-hidden="true">
+    <path d="M14 4h4a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-4" />
+    <path d="M10 8l-4 4 4 4M6 12h10" />
+  </svg>
+)

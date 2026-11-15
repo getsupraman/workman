@@ -9,7 +9,19 @@ import { countTitle, counted, tally } from './state.ts'
 import { ACCOUNT, ADMIN, projectHref, runHref } from './nav.ts'
 import { clock, short } from './format.ts'
 import { ProjectName, TipLayer, tipFor } from './ui.tsx'
-import { ActivityIcon, AdminIcon, AgendaIcon, InboxIcon, MenuIcon, OverviewIcon, SearchIcon, SessionsIcon } from './icons.tsx'
+import {
+  ActivityIcon,
+  AdminIcon,
+  AgendaIcon,
+  InboxIcon,
+  KeyboardIcon,
+  MenuIcon,
+  OverviewIcon,
+  SearchIcon,
+  SessionsIcon,
+  SignOutIcon,
+  UserIcon,
+} from './icons.tsx'
 import { Brand, BrandIcon } from './brand.tsx'
 import { PHONE_QUERY, closesOnMove, pageName } from './menu.ts'
 import { showSwitcher } from './admin.ts'
@@ -363,9 +375,6 @@ function AccountHeader(props: {
             all[to]?.focus()
           }}
         >
-          <A href={ACCOUNT} role="menuitem" tabIndex={-1} onClick={() => props.close(false)}>
-            Account
-          </A>
           <div class="acct-g" role="group" aria-label="Theme">
             <span class="acct-l" aria-hidden="true">
               Theme
@@ -409,8 +418,13 @@ function AccountHeader(props: {
               </For>
             </div>
           </Show>
+          <A href={ACCOUNT} class="acct-act" role="menuitem" tabIndex={-1} onClick={() => props.close(false)}>
+            <UserIcon />
+            Account
+          </A>
           <button
             type="button"
+            class="acct-act"
             role="menuitem"
             tabIndex={-1}
             onClick={() => {
@@ -418,9 +432,11 @@ function AccountHeader(props: {
               openKeyHelp()
             }}
           >
+            <KeyboardIcon />
             Keyboard shortcuts
           </button>
-          <button type="button" role="menuitem" tabIndex={-1} onClick={() => void signOut()}>
+          <button type="button" class="acct-act" role="menuitem" tabIndex={-1} onClick={() => void signOut()}>
+            <SignOutIcon />
             Sign out
           </button>
         </div>
