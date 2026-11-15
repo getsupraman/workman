@@ -126,13 +126,35 @@ a.proj.on { background: var(--side-2); color: var(--gold); }
 .side-closed:hover { color: var(--side-ink); background: var(--side-2); }
 .proj-h h2 a { color: inherit; }
 .proj-h h2 a:hover { text-decoration: underline; }
-.side-foot { margin-top: auto; padding: 18px 10px 0; color: var(--side-mute); font-size: 12px; display: flex; justify-content: space-between; align-items: center; gap: 10px; }
-.side-foot button { color: var(--side-mute); border: 1px solid var(--side-rule); border-radius: 8px; padding: 3px 9px; font-size: 12px; }
-.side-foot button:hover { color: var(--side-ink); }
-.link-state { display: inline-flex; align-items: center; gap: 6px; }
-.link-state i { width: 7px; height: 7px; border-radius: 50%; background: var(--side-mute); }
-.link-state.live i { background: var(--proven); }
-.link-state.down i { background: var(--stop); }
+/* The account header (doc 13): first in the sidebar and sticky, so the project list scrolls under it. */
+.side-acct { position: sticky; top: 0; z-index: 6; margin: -22px -14px 12px; padding: 14px 14px 10px; background: var(--side); border-bottom: 1px solid var(--side-rule); }
+.acct-row { display: flex; align-items: center; gap: 8px; }
+.acct { flex: 1; min-width: 0; display: flex; align-items: center; gap: 10px; padding: 6px 8px; border-radius: 10px; text-align: left; color: var(--side-ink); }
+.acct:hover, .acct[aria-expanded='true'] { background: var(--side-2); }
+.acct-av { width: 32px; height: 32px; flex: none; border-radius: 50%; display: grid; place-items: center; background: var(--side-2); border: 1px solid var(--side-rule); color: var(--gold); font-size: 12px; font-weight: 700; user-select: none; }
+.acct-who { flex: 1; min-width: 0; display: grid; }
+.acct-n { font-weight: 600; font-size: 13.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.acct-ws { color: var(--side-mute); font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.live-dot { flex: none; display: inline-flex; align-items: center; gap: 6px; padding-right: 6px; color: var(--side-mute); font-size: 11.5px; white-space: nowrap; }
+.live-dot i { width: 8px; height: 8px; border-radius: 50%; background: var(--side-mute); }
+.live-dot.live i { background: var(--proven); }
+.live-dot.connecting i { background: var(--claimed); }
+.live-dot.connecting { color: var(--claimed); }
+.live-dot.down i { background: var(--stop); }
+.live-dot.down { color: var(--stop); }
+.acct-menu { position: absolute; left: 10px; right: 10px; top: calc(100% - 4px); display: grid; gap: 2px; padding: 6px; border-radius: 12px; background: var(--side-2); border: 1px solid var(--side-rule); box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35); }
+.acct-menu > a, .acct-menu > button, .acct-tenant { text-align: left; padding: 7px 10px; border-radius: 8px; font-size: 13px; color: var(--side-ink); }
+.acct-menu > a:hover, .acct-menu > button:hover, .acct-tenant:hover, .acct-menu [role^='menuitem']:focus-visible { background: var(--side-rule); outline: none; }
+.acct-g { display: grid; gap: 2px; padding: 4px 0; border-top: 1px solid var(--side-rule); border-bottom: 1px solid var(--side-rule); }
+.acct-g + .acct-g { border-top: 0; }
+.acct-l { color: var(--side-mute); font-size: 11px; letter-spacing: 0.3px; text-transform: uppercase; padding: 4px 10px 2px; }
+.acct-segs { display: grid; grid-template-columns: repeat(3, 1fr); gap: 2px; margin: 2px 6px 4px; padding: 2px; border-radius: 8px; background: var(--side); }
+.acct-segs button { padding: 4px 0; border-radius: 6px; font-size: 12.5px; color: var(--side-mute); }
+.acct-segs button:hover { color: var(--side-ink); }
+.acct-segs button[aria-checked='true'] { background: var(--side-2); color: var(--gold); }
+.acct-segs button:focus-visible { outline: 2px solid var(--accent); outline-offset: 0; }
+.acct-tenant[aria-checked='true'] { color: var(--gold); }
+.acct-tenant[aria-checked='true']::after { content: ' ✓'; }
 
 /* ── page ────────────────────────────────────────────────────────────────────────────────────── */
 
@@ -487,8 +509,6 @@ a.item-ref:hover { color: var(--accent); }
 
 /* ── admin ───────────────────────────────────────────────────────────────────────────────────── */
 
-.side-tenant { display: grid; gap: 4px; margin: -8px 0 14px; padding: 0 2px; color: var(--side-mute); font-size: 11.5px; letter-spacing: 0.3px; text-transform: uppercase; }
-.side-tenant select { font: inherit; font-size: 13px; letter-spacing: 0; text-transform: none; background: var(--side-2); border: 1px solid var(--side-rule); border-radius: 8px; color: var(--side-ink); padding: 6px 8px; min-width: 0; }
 .row-go { align-self: center; color: var(--accent); font-size: 13px; font-weight: 500; white-space: nowrap; }
 .admin-form { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; padding: 14px 18px; border-bottom: 1px solid var(--line-2); }
 .admin-form input, .admin-form select, .admin-acts select { font: inherit; font-size: 13px; background: var(--bg); border: 1px solid var(--line); border-radius: 8px; color: var(--ink); padding: 4px 9px; min-width: 0; }
@@ -525,12 +545,6 @@ a.chip:hover { color: var(--ink); background: var(--line); }
 .account-form button[type='submit'] { justify-self: start; margin-top: 12px; padding: 5px 14px; }
 .account-form .confirm-err { margin-top: 10px; }
 .done-note { margin-top: 10px; padding: 10px 14px; border-radius: 10px; background: var(--proven-soft); color: var(--proven); font-size: 13px; }
-.side-account { padding-top: 10px; }
-.side-account .side-toggle { padding: 6px 10px; text-transform: none; letter-spacing: 0; font-size: 13px; color: var(--side-ink); }
-.side-account-n { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.side-account-m { display: grid; gap: 2px; padding: 2px 0 0 20px; }
-.side-account-m a, .side-account-m button { text-align: left; padding: 5px 10px; border-radius: 8px; font-size: 13px; color: var(--side-ink); }
-.side-account-m a:hover, .side-account-m button:hover { background: var(--side-2); }
 
 @media (max-width: 1100px) {
   .grid-2 { grid-template-columns: minmax(0, 1fr); }
@@ -548,6 +562,7 @@ a.chip:hover { color: var(--ink); background: var(--line); }
   .topbar .brand-mark { flex: none; }
   .topbar-page { flex: 1; min-width: 0; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .side { position: fixed; top: 0; bottom: 0; left: 0; z-index: 40; width: min(300px, 86vw); padding: 14px 16px; box-shadow: var(--shadow); visibility: hidden; transform: translateX(-100%); }
+  .side-acct { margin: -14px -16px 12px; padding: 12px 16px 10px; }
   .menu-open .side { visibility: visible; transform: none; }
   .scrim { position: fixed; inset: 0; z-index: 35; background: rgba(20, 18, 16, 0.42); }
   .page { padding: 22px 16px 40px; }

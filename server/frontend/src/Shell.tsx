@@ -3,7 +3,8 @@ import { A, useLocation, useNavigate } from '@solidjs/router'
 import { account, boards, failure, inbox, overview } from './store.ts'
 import { needsYouCount } from './inbox.ts'
 import { link } from './live.ts'
-import { toggleTheme } from './theme.ts'
+import { setTheme, themeChoice } from './theme.ts'
+import { THEME_CHOICES, headerFacts, liveLabel, menuStep } from './account.ts'
 import { countTitle, counted, tally } from './state.ts'
 import { ACCOUNT, ADMIN, projectHref, runHref } from './nav.ts'
 import { clock, short } from './format.ts'
@@ -14,7 +15,7 @@ import { PHONE_QUERY, closesOnMove, pageName } from './menu.ts'
 import { showSwitcher } from './admin.ts'
 import { switchFailure, switchWorkspace } from './tenant.ts'
 import Palette, { openPalette } from './Palette.tsx'
-import KeyHelp from './KeyHelp.tsx'
+import KeyHelp, { openKeyHelp } from './KeyHelp.tsx'
 import { chordLabel } from './palette.ts'
 import { archivedOpen, setArchivedOpen } from './archived.ts'
 import { openRuns, runMove, runOnPath, sideProjects, sideRuns, step } from './listnav.ts'
@@ -60,6 +61,14 @@ export default function Shell(props: ParentProps) {
 
   // Below 760px the sidebar is an overlay behind the top bar's Menu button.
   const [menu, setMenu] = createSignal(false)
+  // The account header's menu; one Escape closes it before the phone menu around it.
+  const [acct, setAcct] = createSignal(false)
+  let acctButton: HTMLButtonElement | undefined
+  const closeAcct = (refocus = true) => {
+    if (!acct()) return
+    setAcct(false)
+    if (refocus) acctButton?.focus()
+  }
   let menuButton: HTMLButtonElement | undefined
   let side: HTMLElement | undefined
 
@@ -78,7 +87,10 @@ export default function Shell(props: ParentProps) {
     onChange(
       () => location.pathname + location.search,
       (to, from) => {
-        if (from !== undefined && closesOnMove(from, to)) closeMenu()
+        if (from !== undefined && closesOnMove(from, to)) {
+          closeAcct(false)
+          closeMenu()
+        }
       },
     ),
   )
@@ -87,6 +99,11 @@ export default function Shell(props: ParentProps) {
     // Captured on the document: under the palette's window capture, which stops an Escape meant for
     // it, and ahead of a run sheet's own Escape, so one press closes one thing.
     const key = (e: KeyboardEvent) => {
+      if (acct() && e.key === 'Escape') {
+        e.stopPropagation()
+        closeAcct()
+        return
+      }
       if (menu() && e.key === 'Escape') {
         e.stopPropagation()
         closeMenu()
@@ -140,11 +157,11 @@ export default function Shell(props: ParentProps) {
       </Show>
 
       <aside class="side" id="side" ref={side}>
+        <AccountHeader open={acct()} setOpen={setAcct} close={closeAcct} button={(el) => (acctButton = el)} />
+
         <A href="/" class="brand">
           <Brand ground="dark" />
         </A>
-
-        <TenantSwitcher />
 
         <button
           type="button"
@@ -224,19 +241,6 @@ export default function Shell(props: ParentProps) {
             )
           }}
         </Show>
-
-        <div class="side-foot">
-          <span class={`link-state ${link()}`} title={`Live updates: ${link()}`}>
-            <i />
-            <Show when={overview()} fallback="Loading…">
-              {(o) => `As of ${clock(o().asOf)}`}
-            </Show>
-          </span>
-          <button type="button" onClick={toggleTheme}>
-            Theme
-          </button>
-        </div>
-        <AccountMenu />
       </aside>
 
       <main class="main" ref={main} inert={menu() || undefined}>
@@ -257,60 +261,172 @@ export default function Shell(props: ParentProps) {
   )
 }
 
-/** The signed-in user's name, opening Change password and Sign out. */
-function AccountMenu() {
-  const [open, setOpen] = createSignal(false)
-  return (
-    <Show when={account()}>
-      {(a) => (
-        <div class="side-account">
-          <button type="button" class="side-toggle" aria-expanded={open()} onClick={() => setOpen(!open())}>
-            <span class="caret">{open() ? '▾' : '▸'}</span>
-            <span class="side-account-n">{a().user.name}</span>
-          </button>
-          <Show when={open()}>
-            <div class="side-account-m">
-              <A href={ACCOUNT} onClick={() => setOpen(false)}>
-                Change password
-              </A>
-              <button type="button" onClick={() => void signOut()}>
-                Sign out
-              </button>
-            </div>
-          </Show>
-        </div>
-      )}
-    </Show>
-  )
-}
-
 /**
- * The workspace the session acts in, as a choice among the ones the user may enter — shown only when there is
- * more than one. Switching re-issues the cookie (`POST /api/session/tenant`) and reloads at the overview.
+ * The top of the sidebar: who is signed in (initials, name, the workspace and their role in it) and the live dot.
+ * The button opens the menu — Account, Theme System / Light / Dark, the workspaces when there is more than one,
+ * Keyboard shortcuts, Sign out. ↓/↑ (and Home/End) move through it; the shell's Escape closes it and focus
+ * returns to the button; so do Tab out of it and a click outside.
  */
-function TenantSwitcher() {
+function AccountHeader(props: {
+  open: boolean
+  setOpen: (open: boolean) => void
+  close: (refocus?: boolean) => void
+  button: (el: HTMLButtonElement) => void
+}) {
+  let box: HTMLDivElement | undefined
+  let list: HTMLDivElement | undefined
   const tenants = () => account()?.tenants ?? []
-  const current = () => tenants().find((t) => t.current)
+  const facts = () => {
+    const a = account()
+    return a ? headerFacts(a.user.name, a.tenants) : null
+  }
+  const live = () => {
+    const o = overview()
+    return liveLabel(link(), o ? clock(o.asOf) : null)
+  }
+  const items = () => [...(list?.querySelectorAll<HTMLElement>('[role^="menuitem"]') ?? [])]
+
+  createEffect(
+    onChange(
+      () => props.open,
+      (open) => {
+        if (!open) return
+        queueMicrotask(() => items()[0]?.focus())
+        const away = (e: PointerEvent) => {
+          if (box && !box.contains(e.target as Node)) props.close(false)
+        }
+        document.addEventListener('pointerdown', away)
+        onCleanup(() => document.removeEventListener('pointerdown', away))
+      },
+    ),
+  )
+
   return (
-    <Show when={showSwitcher(tenants())}>
-      <label class="side-tenant">
-        <span>Workspace</span>
-        <select
-          value={current()?.id ?? ''}
-          aria-label="Switch workspace"
-          onChange={(e) => {
-            const to = e.currentTarget.value
-            if (to !== current()?.id) void switchWorkspace(to)
+    <div
+      class="side-acct"
+      ref={box}
+      onFocusOut={(e) => {
+        // Tab out of it; a click outside is the pointerdown above (Safari moves no focus to a clicked button).
+        const to = e.relatedTarget
+        if (props.open && to instanceof Node && !box?.contains(to)) props.close(false)
+      }}
+    >
+      <div class="acct-row">
+        <Show when={facts()} fallback={<span class="acct-who" />}>
+          {(f) => (
+            <button
+              type="button"
+              class="acct"
+              aria-haspopup="menu"
+              aria-expanded={props.open}
+              aria-controls="acct-menu"
+              ref={props.button}
+              onClick={() => (props.open ? props.close() : props.setOpen(true))}
+            >
+              <span class="acct-av" aria-hidden="true">
+                {f().initials}
+              </span>
+              <span class="acct-who">
+                <span class="acct-n">{f().name}</span>
+                <Show when={f().workspace}>
+                  <span class="acct-ws">
+                    {f().workspace} · {f().role}
+                  </span>
+                </Show>
+              </span>
+            </button>
+          )}
+        </Show>
+        <span class={`live-dot ${live().dot}`} title={live().tip} aria-live="polite">
+          <i aria-hidden="true" />
+          <Show when={live().text} fallback={<span class="sr-only">Live</span>}>
+            {(text) => <span>{text()}</span>}
+          </Show>
+        </span>
+      </div>
+
+      <Show when={props.open && facts()}>
+        <div
+          class="acct-menu"
+          id="acct-menu"
+          role="menu"
+          aria-label="Account"
+          ref={list}
+          onKeyDown={(e) => {
+            const all = items()
+            const to = menuStep(e.key, all.indexOf(document.activeElement as HTMLElement), all.length)
+            if (to === null) return
+            e.preventDefault()
+            e.stopPropagation()
+            all[to]?.focus()
           }}
         >
-          <For each={tenants()}>{(t) => <option value={t.id}>{t.slug}</option>}</For>
-        </select>
-      </label>
+          <A href={ACCOUNT} role="menuitem" tabIndex={-1} onClick={() => props.close(false)}>
+            Account
+          </A>
+          <div class="acct-g" role="group" aria-label="Theme">
+            <span class="acct-l" aria-hidden="true">
+              Theme
+            </span>
+            <div class="acct-segs">
+              <For each={THEME_CHOICES}>
+                {([choice, label]) => (
+                  <button
+                    type="button"
+                    role="menuitemradio"
+                    aria-checked={themeChoice() === choice}
+                    tabIndex={-1}
+                    onClick={() => setTheme(choice)}
+                  >
+                    {label}
+                  </button>
+                )}
+              </For>
+            </div>
+          </div>
+          <Show when={showSwitcher(tenants())}>
+            <div class="acct-g" role="group" aria-label="Workspace">
+              <span class="acct-l" aria-hidden="true">
+                Workspace
+              </span>
+              <For each={tenants()}>
+                {(t) => (
+                  <button
+                    type="button"
+                    class="acct-tenant"
+                    role="menuitemradio"
+                    aria-checked={t.current}
+                    tabIndex={-1}
+                    onClick={() => {
+                      if (!t.current) void switchWorkspace(t.id)
+                    }}
+                  >
+                    {t.slug}
+                  </button>
+                )}
+              </For>
+            </div>
+          </Show>
+          <button
+            type="button"
+            role="menuitem"
+            tabIndex={-1}
+            onClick={() => {
+              props.close()
+              openKeyHelp()
+            }}
+          >
+            Keyboard shortcuts
+          </button>
+          <button type="button" role="menuitem" tabIndex={-1} onClick={() => void signOut()}>
+            Sign out
+          </button>
+        </div>
+      </Show>
       <Show when={switchFailure()}>{(message) => <div class="side-none">{message()}</div>}</Show>
-    </Show>
+    </div>
   )
 }
-
 /**
  * One group of the sidebar. A project lists its open runs only; the rest are one "n closed" row
  * that opens the project page, where they sit behind "Show n closed runs".

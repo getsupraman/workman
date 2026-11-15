@@ -25,6 +25,7 @@ import { expiresIn, isLastAdmin, isLinkPath, joinStep, joinToken, nameProblem, p
 import { addDays, agendaGroups, agendaOrder, agendaRowFacts, agendaUntil, dateChips, dayHeading, dueEnd, zonedDay } from '../src/dates.ts'
 import { INBOX_FILTERS, inboxKind } from '../src/inbox.ts'
 import { agendaHref } from '../src/nav.ts'
+import { THEME_CHOICES, headerFacts, liveLabel, menuStep, shownTheme, storedForTheme, themeFromStored, toggledTheme } from '../src/account.ts'
 
 let failures = 0
 
@@ -924,6 +925,39 @@ console.log('\n── dates: chip text, the Due filter, the Agenda across the zo
   check('filter: ?kind=overdue is the Overdue filter', [asInboxFilter('overdue'), INBOX_FILTERS.at(-1)], ['overdue', ['overdue', 'Overdue']])
   check('an overdue decision row: the due as written on line 3', [decisionRow(od).kind, decisionRow(od).dot, decisionRow(od).detail], ['Overdue', 'stop', 'due 2026-11-19'])
 }
+
+console.log('\n── the account header: who, where, the live dot, the theme choice, the menu keys ──')
+{
+  const ts = [{ slug: 'default', role: 'member', current: false }, { slug: 'team-two', role: 'admin', current: true }]
+  check('header: initials, name, the current workspace and role', headerFacts('Ada Lovelace', ts), { initials: 'AL', name: 'Ada Lovelace', workspace: 'team-two', role: 'Admin' })
+  check('header: a one-word name gives two letters', headerFacts('ada', ts).initials, 'AD')
+  check('header: a member reads Member', headerFacts('Ada', [{ slug: 'default', role: 'member', current: true }]).role, 'Member')
+  check('header: no tenants yet, no workspace line', [headerFacts('Ada', []).workspace, headerFacts('Ada', []).role], [null, null])
+
+  check('live: green, no words, the as-of time in the tip', liveLabel('live', '10:42'), { dot: 'live', text: null, tip: 'Live updates · data as of 10:42' })
+  check('live: reconnecting after a read says so, never Live', liveLabel('connecting', '10:42'), { dot: 'connecting', text: 'Reconnecting…', tip: 'Live updates paused · data as of 10:42' })
+  check('live: the first connect, before any read', liveLabel('connecting', null), { dot: 'connecting', text: 'Connecting…', tip: 'Live updates paused · loading' })
+  check('live: closed and waiting to reopen is red, Reconnecting…', [liveLabel('down', '10:42').dot, liveLabel('down', '10:42').text], ['down', 'Reconnecting…'])
+  check('live: words only when not live', ['live', 'connecting', 'down'].map((st) => liveLabel(st, '09:00').text !== null), [false, true, true])
+
+  check('theme: the three choices, System first', THEME_CHOICES.map(([, label]) => label), ['System', 'Light', 'Dark'])
+  check('theme: a stored value reads back', ['light', 'dark'].map(themeFromStored), ['light', 'dark'])
+  check('theme: nothing or junk stored is System', [themeFromStored(null), themeFromStored('blue')], ['system', 'system'])
+  check('theme: System stores nothing (removes the key)', storedForTheme('system'), null)
+  check('theme: Light and Dark store themselves', [storedForTheme('light'), storedForTheme('dark')], ['light', 'dark'])
+  check('theme: every choice round-trips through storage', ['system', 'light', 'dark'].map((c) => themeFromStored(storedForTheme(c))), ['system', 'light', 'dark'])
+  check('theme: System follows the OS', [shownTheme('system', true), shownTheme('system', false)], ['dark', 'light'])
+  check('theme: an explicit choice ignores the OS', [shownTheme('light', true), shownTheme('dark', false)], ['light', 'dark'])
+  check('theme: the palette toggle flips what shows', [toggledTheme('system', true), toggledTheme('system', false), toggledTheme('dark', false), toggledTheme('light', true)], ['light', 'dark', 'light', 'dark'])
+
+  check('menu: ↓ moves on and wraps', [menuStep('ArrowDown', 0, 4), menuStep('ArrowDown', 3, 4)], [1, 0])
+  check('menu: ↑ moves back and wraps', [menuStep('ArrowUp', 2, 4), menuStep('ArrowUp', 0, 4)], [1, 3])
+  check('menu: from nowhere, ↓ is the first and ↑ the last', [menuStep('ArrowDown', -1, 4), menuStep('ArrowUp', -1, 4)], [0, 3])
+  check('menu: Home / End', [menuStep('Home', 2, 4), menuStep('End', 0, 4)], [0, 3])
+  check('menu: other keys are not the menu\'s', [menuStep('Enter', 0, 4), menuStep('a', 0, 4), menuStep('ArrowDown', 0, 0)], [null, null, null])
+  check('the keys table says Esc closes the account menu', KEYS.some((k) => k.keys === 'Esc' && k.where.includes('account menu')), true)
+}
+
 
 console.log(failures === 0 ? '\nAll checks passed.' : `\n${failures} check(s) failed.`)
 if (failures > 0) process.exitCode = 1

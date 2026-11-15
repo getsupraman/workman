@@ -11,18 +11,34 @@ The dashboard does not call the pre-v1 routes (`/api/projects`, `/api/watch`,
 
 ## Information architecture
 
-A sidebar (the workspace switcher, for a user who may enter more than one; the search field that
-opens the command palette; Overview, Needs you with its count, Agenda, Activity, Sessions, and Admin for a
-user who administers a workspace; then the projects; at the foot the live state, the theme, and the
-account menu — the user's name, opening *Change password* and *Sign out*) and one page beside it.
-Every page is a URL.
+A sidebar (the account header; the brand; the search field that opens the command palette; Overview,
+Needs you with its count, Agenda, Activity, Sessions, and Admin for a user who administers a workspace;
+then the projects; no footer) and one page beside it. Every page is a URL.
 
-**The workspace switcher** (`src/Shell.tsx` `TenantSwitcher`, from `GET /api/session/tenants`): a
-select under the brand, its options the workspaces the user may enter, the session's selected. Shown
-only when there is more than one (`showSwitcher`, `src/admin.ts`). Choosing one re-issues the cookie
-(`POST /api/session/tenant`) and reloads at `/`: every read, the stream and every board belong to one
-tenant, and a page of the old one would 404 in the new. A refusal is shown under it in the server's
-words. The palette offers the same switch.
+**The account header** (`src/Shell.tsx` `AccountHeader`, rules in `src/account.ts`): the first thing in
+the sidebar, sticky, so the project list scrolls under it. An avatar of the user's initials (never a
+remote image), the name, and muted under it the current workspace and the user's role in it
+(`Admin` / `Member`). At its right the live dot: green while the
+stream is live; amber with *Connecting…* (no read yet) or *Reconnecting…*, red with *Reconnecting…* when
+the stream closed and waits to reopen. Its tooltip is *Live updates · data as of HH:MM* (the
+overview's `asOf`), *Live updates paused · …* when not live. The header is a menu button: a click, or
+Enter / Space on it, opens the menu —
+
+- **Account**, the `/account` page;
+- **Theme**, a three-way control *System / Light / Dark* (`setTheme` in `src/theme.ts`; see Theme
+  tokens); choosing keeps the menu open;
+- **Workspace**, only when the user may enter more than one (`showSwitcher`, `src/admin.ts`): the
+  workspaces from `GET /api/session/tenants`, the session's checked. Choosing another re-issues the
+  cookie (`POST /api/session/tenant`) and reloads at `/`: every read, the stream and every board belong
+  to one tenant, and a page of the old one would 404 in the new. A refusal is shown under the header
+  in the server's words. The palette offers the same switch;
+- **Keyboard shortcuts**, the **?** dialog;
+- **Sign out**.
+
+Focus moves to the first entry; ↓/↑ (and ←/→ in the theme control, Home/End) walk the entries,
+wrapping. Esc closes the menu and returns focus to the header (the palette and the key help close
+first: one press closes one thing; inside the phone menu, the account menu closes before it). Tab out
+of the menu, a click outside it and any move to another page close it too.
 
 **The command palette** (`src/Palette.tsx`, rules in `src/palette.ts`). **Ctrl+P** (**⌘P** on
 macOS) opens it from any page, taking the key from the browser's print dialog; so does **/** when
@@ -56,7 +72,7 @@ the two differ):
 | Home / End | run page, Needs you, Agenda, Backlog, Project, Activity | the first / last row |
 | Enter | a focused row | opens it |
 | Alt+↓ / Alt+↑ (⌥ on macOS) | any page | opens the next / previous run in the sidebar |
-| Esc | palette, dialog, phone menu, detail sheet | closes it |
+| Esc | palette, dialog, account menu, phone menu, detail sheet | closes it |
 | Esc | run page, Needs you, Agenda, with the panel docked | clears the selection; the run page shows the run again |
 | ? | any page | shows these keys |
 
@@ -125,7 +141,7 @@ binding. Ctrl+↑/↓ are left alone (macOS takes them; in a field on Windows th
 | `/admin` | **Admin** — the workspaces the user administers (every one for a system administrator), each with its member, admin and pending-invite counts, linking to its page; for a system administrator a *New workspace* form (slug, judged as the server does) and a link to Users | `/api/admin/tenants` |
 | `/admin/tenants/{id}` | **Workspace** — its members, each with a role select, Remove (asks first; both locked on the last admin) and *Create reset link* (the link shown once under the row; a refusal in the server's words), and its invite links: a role and *Create invite link*, the new link shown **once** in a field with Copy, then the pending ones, each with Revoke; then **Time zone** (deadlines/8): the workspace's IANA zone in a text field offering every name the browser knows, and Save (`PATCH …/{id}/settings {timezone}`); a name the server does not know is its 400, shown under the field in its words; saving the current workspace's zone re-reads the dashboard's dates in it at once | `/api/admin/tenants`, `…/{id}/members`, `…/{id}/invites`, `…/{id}/settings` |
 | `/admin/users` | **Users** — system administrator only: every user, their memberships as chips linking to each workspace's page, *Create reset link* and Disable (asks first; not oneself) / Enable | `/api/admin/users` |
-| `/account` | **Account** — who is signed in; then **Connected apps** (m65): the user's own OAuth approvals in this workspace, most recently used first, each with the client's icon (or its initials), name, scopes, when it was connected and last used (relative; *last used* is when its newest token was issued, a sign-in or a refresh) and its live agent sessions; *No apps hold access to this workspace.* when there are none. *Revoke* asks first, saying the app will need to sign in again and its sessions stop, and ends the approval, every token under it, and every `wss_` session minted with one of them, releasing their claims; the list then reloads. Only the user's own apps are listed, an admin's included. Then **Calendar feed** (deadlines/8): whether the user has a feed URL in this workspace and since when (`GET /api/session/calendar`, which never returns the URL). Without one, *Create calendar URL*; with one, *Replace* and *Revoke*, each asking first (Replace: the old URL stops working at once; Revoke: the calendar app stops getting the dates). A new URL (`POST`, the only answer that carries it) is shown **once** in a field with Copy, saying that it is shown once, that the server keeps only its hash, and that it is a secret: anyone with it reads the due dates the user can see until it is replaced or revoked. Revoke is `DELETE`; both writes carry `X-Workman-Write`, and a refusal (a visiting system administrator who is not a member) shows in the server's words. Then *Change password*: the current one, the new one twice (12 characters at least). It says that the other sessions end and this one and the OAuth connections stay; a wrong current password says nothing changed | `/api/session/me`, `/api/session/apps`, `/api/session/calendar` |
+| `/account` | **Account** (the header menu's first entry) — who is signed in; then **Connected apps** (m65): the user's own OAuth approvals in this workspace, most recently used first, each with the client's icon (or its initials), name, scopes, when it was connected and last used (relative; *last used* is when its newest token was issued, a sign-in or a refresh) and its live agent sessions; *No apps hold access to this workspace.* when there are none. *Revoke* asks first, saying the app will need to sign in again and its sessions stop, and ends the approval, every token under it, and every `wss_` session minted with one of them, releasing their claims; the list then reloads. Only the user's own apps are listed, an admin's included. Then **Calendar feed** (deadlines/8): whether the user has a feed URL in this workspace and since when (`GET /api/session/calendar`, which never returns the URL). Without one, *Create calendar URL*; with one, *Replace* and *Revoke*, each asking first (Replace: the old URL stops working at once; Revoke: the calendar app stops getting the dates). A new URL (`POST`, the only answer that carries it) is shown **once** in a field with Copy, saying that it is shown once, that the server keeps only its hash, and that it is a secret: anyone with it reads the due dates the user can see until it is replaced or revoked. Revoke is `DELETE`; both writes carry `X-Workman-Write`, and a refusal (a visiting system administrator who is not a member) shows in the server's words. Then *Change password*: the current one, the new one twice (12 characters at least). It says that the other sessions end and this one and the OAuth connections stay; a wrong current password says nothing changed | `/api/session/me`, `/api/session/apps`, `/api/session/calendar` |
 | `/reset/{token}` | **Reset** — outside the dashboard, like the invite page. Names whose password it sets and until when the link works; the new password twice; once set, says every session of that user was signed out and offers the sign-in | `/api/reset/{token}` |
 | `/join/{token}` | **Invite** — outside the dashboard, like the OAuth pages: no router, store, stream or sign-in gate. Names the workspace and role and until when the link works; with a session, *Join as &lt;name&gt;* and *Not you? Sign out*; without, a name and a password twice (12 characters at least) and *Create account and join*, or *Sign in first*, which shows the sign-in form and comes back. Accepting opens `/` in that workspace; a used, revoked or expired link says so and offers nothing | `/api/invite/{token}` |
 
@@ -313,9 +329,10 @@ Leaves are the doc 10 rollup kinds: task, followup, subtask, spike, question, in
 
 ## Theme tokens
 
-`data-theme` on `<html>` (`light` / `dark`), unset = follow `prefers-color-scheme`. The toggle in
-the sidebar footer stores the choice in `localStorage` (`workman.theme`), guarded for storage
-that throws.
+`data-theme` on `<html>` (`light` / `dark`), unset = follow `prefers-color-scheme`. The account
+menu's *System / Light / Dark* stores Light or Dark in `localStorage` (`workman.theme`) and System
+removes the key, guarded for storage that throws (`src/theme.ts`; the choice rules in
+`src/account.ts`). The palette's *Toggle theme* flips what shows now and stores it as Light or Dark.
 
 | token | light | dark (VS Code Dark Modern, softened) |
 |---|---|---|
