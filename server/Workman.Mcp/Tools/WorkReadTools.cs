@@ -206,8 +206,53 @@ public sealed class WorkReadTools(
         return Text(Attention.Append(body, await reader.AttentionAsync(found, cancellationToken)));
     }
 
+    [Authorize(Policy = WorkmanPolicies.Worker)]
+    [McpServerTool(Name = "work_agenda", Title = "Plan the day: dated work", ReadOnly = true)]
+    [Description("""
+        Dated work in three lists: overdue, due by until, and became actionable since your last
+        look (not_before passed, last blocker closed); each line with status, holder and blockers.
+        Reach for it at the start of a scheduled check.
+        Next: work_get(refs:["<ref>"]) on a line, or work_brief to resume.
+        """)]
+    public async Task<CallToolResult> AgendaAsync(
+        [Description("Due window end: YYYY-MM-DD (that whole day, workspace zone) or an ISO date-time with offset.")]
+        string until,
+        [Description("Actionable window start, same forms. Omit for the start of today.")]
+        string? since = null,
+        [Description("A run or item ref. Omit for your project.")]
+        string? scope = null,
+        CancellationToken cancellationToken = default)
+    {
+        var (untilValue, untilProblem) = string.IsNullOrWhiteSpace(until)
+            ? (null, "until is empty")
+            : DateValue.Parse(until);
+        var (sinceValue, sinceProblem) = string.IsNullOrWhiteSpace(since) ? (null, null) : DateValue.Parse(since);
+        if (untilValue is not { } window || sinceProblem is not null)
+        {
+            return Text(Refusal.Blocked(
+                "work_agenda — a date it cannot read.",
+                untilProblem ?? sinceProblem!,
+                "work_agenda(until:\"2026-11-20\") for that whole day, or until:\"2026-11-20T17:00:00+01:00\"",
+                "work_brief() to orient"));
+        }
+
+        var asked = $"until:\"{window.Text}\"" + (sinceValue is { } s ? $", since:\"{s.Text}\"" : string.Empty);
+        var resolved = !string.IsNullOrWhiteSpace(scope)
+            ? await reader.ResolveForCallerAsync(tenant.Id, scope, caller.Actor.SessionId, cancellationToken)
+            : await reader.ResolveRepoAsync(tenant.Id, [], caller.Actor.SessionId, cancellationToken) is ScopeResult.Found project
+                ? project
+                : await reader.ResolveUnscopedBriefAsync(tenant.Id, cancellationToken);
+        if (resolved is not ScopeResult.Found found)
+        {
+            return Text(ScopeExplain.Text(resolved, "work_agenda", scope, asked));
+        }
+
+        var body = await reader.AgendaAsync(found, window, sinceValue, cancellationToken);
+        return Text(Attention.Append(body, await reader.AttentionAsync(found, cancellationToken)));
+    }
+
     [Authorize(Policy = WorkmanPolicies.Orchestrator)]
-    [McpServerTool(Name = "work_threads", Title = "Close out: everything unclosed that is not a task", ReadOnly = true)]
+    [McpServerTool(Name = "work_threads",Title = "Close out: everything unclosed that is not a task", ReadOnly = true)]
     [Description("""
         Everything unclosed that is not a task: open assumptions, findings, follow-ups, unconsumed
         notes, items in_progress with no live claim, and dependencies waiting on work that will

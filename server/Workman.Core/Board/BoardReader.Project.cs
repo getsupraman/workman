@@ -109,7 +109,7 @@ public sealed partial class BoardReader
     /// </summary>
     private async Task<string> RunNextAsync(ProjectRunRow run, CancellationToken cancellationToken)
     {
-        var frontier = await queries.ReadyFrontierAsync(run.Id, cancellationToken);
+        var frontier = await queries.ReadyFrontierAsync(run.Id, _clock.GetUtcNow(), cancellationToken);
         if (frontier.Count > 0)
         {
             var first = frontier[0];

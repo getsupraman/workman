@@ -87,10 +87,21 @@ public sealed class WorkmanQueries(NpgsqlDataSource dataSource)
 
     /// <summary>
     /// Remaining work under <paramref name="scopeItemId"/> that nothing unfinished blocks and that
-    /// has no open children of its own. doc 02 §4 — the single hottest query.
+    /// has no open children of its own. doc 02 §4 — the single hottest query. "Now" is the database's.
+    /// </summary>
+    public Task<IReadOnlyList<ReadyItem>> ReadyFrontierAsync(
+        Guid scopeItemId,
+        CancellationToken cancellationToken = default)
+        => ReadyFrontierAsync(scopeItemId, null, cancellationToken);
+
+    /// <summary>
+    /// The ready frontier as of <paramref name="now"/> (the caller's injected clock, C242; null for the
+    /// database's): an item whose not_before has not started is left out, and an overdue item, then one due
+    /// today in the workspace's zone, ranks ahead of priority. Undated items keep their order among themselves.
     /// </summary>
     public async Task<IReadOnlyList<ReadyItem>> ReadyFrontierAsync(
         Guid scopeItemId,
+        DateTimeOffset? now,
         CancellationToken cancellationToken = default)
     {
         const string sql =
@@ -117,10 +128,18 @@ public sealed class WorkmanQueries(NpgsqlDataSource dataSource)
                AND  NOT EXISTS (
                      SELECT 1 FROM item c WHERE c.parent_id = i.id
                        AND c.status NOT IN ('done','cancelled','superseded'))
-             ORDER BY i.priority DESC, p.path || i.seq;
+               AND  (i.not_before_on IS NULL AND i.not_before_at IS NULL
+                     OR item_not_before_start(i) <= coalesce(@now, now()))
+             ORDER BY CASE WHEN i.due_on IS NULL AND i.due_at IS NULL THEN 2
+                           WHEN item_due_end(i) <= coalesce(@now, now()) THEN 0
+                           WHEN item_due_end(i) <= date_value_start(
+                                  (coalesce(@now, now()) AT TIME ZONE timezone_of(i.workspace_id))::date + 1,
+                                  NULL, timezone_of(i.workspace_id)) THEN 1
+                           ELSE 2 END,
+                      i.priority DESC, p.path || i.seq;
              """;
 
-        return await QueryAsync<ReadyItem>(sql, new { scope = scopeItemId }, cancellationToken);
+        return await QueryAsync<ReadyItem>(sql, new { scope = scopeItemId, now }, cancellationToken);
     }
 
     /// <summary>doc 02 §4. The scope filter is additive; everything else is the document's query.</summary>

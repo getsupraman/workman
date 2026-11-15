@@ -257,7 +257,7 @@ public sealed partial class BoardReader(WorkmanQueries queries, BoardQueries boa
 
         var header = await board.HeaderAsync(item.Id, cancellationToken);
         var subtree = await queries.SubtreeAsync(item.Id, cancellationToken);
-        var frontier = await queries.ReadyFrontierAsync(item.Id, cancellationToken);
+        var frontier = await queries.ReadyFrontierAsync(item.Id, _clock.GetUtcNow(), cancellationToken);
         var constraints = await board.ConstraintsAsync(scope.WorkspaceId, item.Id, cancellationToken);
         var assumptions = await board.AssumptionsAsync(scope.WorkspaceId, item.Id, true, cancellationToken);
         var notes = await board.UnconsumedNotesAsync(scope.WorkspaceId, item.Id, cancellationToken);

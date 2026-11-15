@@ -38,11 +38,12 @@ public sealed class ImportVisibilityTests(PostgresFixture fixture)
     /// when work_create's ref named the project/backlog rule (readable-refs); the orchestrator list re-pinned when
     /// work_update gained unbind and take (repo-move); the orchestrator list re-pinned when work_constrain's scope said an
     /// unscoped rule binds every project (rule-scope); the orchestrator list re-pinned when work_create/work_update gained
-    /// due and not_before (deadlines/2), +69 tokens on the granted list.
+    /// due and not_before (deadlines/2), +69 tokens on the granted list; both re-pinned when work_agenda joined every
+    /// profile (deadlines/4), +256 tokens on the granted list.
     /// Both are hashed sorted by name with LF line endings, so every host and checkout pins the same bytes.
     /// </summary>
-    private const string WorkerList = "f85b6bceea63adfedb64ccb10138c7731bbd6086c6c7ab30348dad44eca55e23";
-    private const string OrchestratorList = "7504a6d9507cf59ec586bee6fc8e089ed9d13f7c96710b44e2e59eebf1d3e1d7";
+    private const string WorkerList = "edca5676e8c59aebeb06c2d4624bbf08827ec7db24f5e323cc6a2a54a8986b17";
+    private const string OrchestratorList = "13306f5754696ef38b952bec156c1f91219b369733fa0b859dcb5f67bf98bfd5";
     private const string ControllerList = OrchestratorList;
 
     [Fact]
@@ -92,10 +93,10 @@ public sealed class ImportVisibilityTests(PostgresFixture fixture)
         var tools = await client.ListToolsAsync(cancellationToken: Ct);
         var import = Assert.Single(tools, t => t.Name == "work_import");
 
-        // A ratchet, by the budget test's measure (chars / 4): 538 for the tool, 6918 for the granted list (6849 before deadlines/2).
+        // A ratchet, by the budget test's measure (chars / 4): 538 for the tool, 7174 for the granted list (6918 before deadlines/4, 6849 before deadlines/2).
         var cost = (JsonSerializer.Serialize(import.ProtocolTool).Length + 3) / 4;
         var total = (JsonSerializer.Serialize(tools.Where(t => t.Name.StartsWith("work_", StringComparison.Ordinal)).Select(t => t.ProtocolTool)).Length + 3) / 4;
-        Assert.True(cost <= 540 && total <= 6918, $"work_import costs {cost} tokens in tools/list; the granted session's work_* list {total}");
+        Assert.True(cost <= 540 && total <= 7174, $"work_import costs {cost} tokens in tools/list; the granted session's work_* list {total}");
 
         var text = await ReadServer.CallAsync(client, "work_import", new Dictionary<string, object?>
         {

@@ -17,7 +17,7 @@ public sealed partial class BoardReader
         string? kind,
         CancellationToken cancellationToken = default)
     {
-        var frontier = await queries.ReadyFrontierAsync(scope.Item.Id, cancellationToken);
+        var frontier = await queries.ReadyFrontierAsync(scope.Item.Id, _clock.GetUtcNow(), cancellationToken);
         var filtered = kind is { Length: > 0 }
             ? frontier.Where(f => f.Kind.Equals(kind, StringComparison.OrdinalIgnoreCase)).ToList()
             : [.. frontier];

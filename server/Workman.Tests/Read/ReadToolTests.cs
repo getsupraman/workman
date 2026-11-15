@@ -28,7 +28,7 @@ public sealed class ReadToolTests(PostgresFixture fixture)
     /// in it. A worker reports and verifies; an orchestrator judges and closes.
     /// </summary>
     private static readonly string[] WorkerTools =
-        ["work_brief", "work_get", "work_search", "work_report", "work_verify", "work_note"];
+        ["work_brief", "work_get", "work_search", "work_agenda", "work_report", "work_verify", "work_note"];
 
     private static readonly string[] OrchestratorOnlyTools =
     [

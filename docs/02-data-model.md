@@ -501,8 +501,17 @@ WHERE  i.status IN ('open','ready')
   AND  NOT EXISTS (                          -- and it has no open children of its own
         SELECT 1 FROM item c WHERE c.parent_id = i.id
           AND c.status NOT IN ('done','cancelled','superseded'))
-ORDER BY i.priority DESC, sort_path(i);   -- NOT i.seq. See the note below.
+  AND  (i.not_before_on IS NULL AND i.not_before_at IS NULL   -- not_before reached (deadlines/4)
+        OR item_not_before_start(i) <= $now)
+ORDER BY CASE WHEN i.due_on IS NULL AND i.due_at IS NULL THEN 2
+              WHEN item_due_end(i) <= $now THEN 0              -- overdue
+              WHEN item_due_end(i) <= <start of tomorrow in the zone> THEN 1   -- due today
+              ELSE 2 END,
+         i.priority DESC, sort_path(i);   -- NOT i.seq. See the note below.
 ```
+
+`$now` is the reader's injected clock (C242). Every undated item sorts in bucket 2, so undated work keeps
+exactly the order it had before dates existed.
 
 > **Corrected 2026-09-20, by finding #4 of the corpus import.** `seq` orders *siblings*, so every
 > phase's first task has `seq = 1` and ordering a whole subtree by it is arbitrary between phases.
