@@ -42,7 +42,7 @@ public static class Glyph
     public const string Ellipsis = "…";
 
     /// <summary>
-    /// The 11 seeded item kinds plus <c>assumption</c>, which is rendered on a board although it is
+    /// The 12 seeded item kinds plus <c>assumption</c>, which is rendered on a board although it is
     /// its own table. Six characters, because column 2 is six wide.
     /// </summary>
     private static readonly Dictionary<string, string> Kinds = new(StringComparer.OrdinalIgnoreCase)
@@ -58,6 +58,7 @@ public static class Glyph
         ["question"] = "quest",
         ["incident"] = "incid",
         ["spike"] = "spike",
+        ["wait"] = "wait",
         ["assumption"] = "assum",
         ["note"] = "note",
     };

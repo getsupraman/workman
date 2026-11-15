@@ -134,7 +134,7 @@ public sealed class WorkWriteTools(
     [McpServerTool(Name = "work_create", Title = "Plan: items, in a batch")]
     [Description("""
         Creates items in one call, because a decomposition is one decision. Kinds: project, feature,
-        run, phase, task, subtask, finding, followup, question, incident, spike.
+        run, phase, task, subtask, finding, followup, question, incident, spike, wait.
         It refuses a task with no verify_cmd or no done-criterion: it could not be closed honestly.
         Next: work_link if any depends on another, then work_next.
         """)]

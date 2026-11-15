@@ -39,11 +39,12 @@ public sealed class ImportVisibilityTests(PostgresFixture fixture)
     /// work_update gained unbind and take (repo-move); the orchestrator list re-pinned when work_constrain's scope said an
     /// unscoped rule binds every project (rule-scope); the orchestrator list re-pinned when work_create/work_update gained
     /// due and not_before (deadlines/2), +69 tokens on the granted list; both re-pinned when work_agenda joined every
-    /// profile (deadlines/4), +256 tokens on the granted list.
+    /// profile (deadlines/4), +256 tokens on the granted list; the orchestrator list re-pinned when work_create named the
+    /// wait kind (deadlines/3); the worker list did not move.
     /// Both are hashed sorted by name with LF line endings, so every host and checkout pins the same bytes.
     /// </summary>
     private const string WorkerList = "edca5676e8c59aebeb06c2d4624bbf08827ec7db24f5e323cc6a2a54a8986b17";
-    private const string OrchestratorList = "13306f5754696ef38b952bec156c1f91219b369733fa0b859dcb5f67bf98bfd5";
+    private const string OrchestratorList = "8869ef36e8aaff4f6d68b5bb894c0bb8441928268001da1f5b33d28a51e35f44";
     private const string ControllerList = OrchestratorList;
 
     [Fact]

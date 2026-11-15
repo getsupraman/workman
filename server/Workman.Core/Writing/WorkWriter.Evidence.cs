@@ -176,6 +176,12 @@ public sealed partial class WorkWriter
 
         var item = await LoadAsync(connection, transaction, scope.Id, cancellationToken);
 
+        var closesWait = item.Kind == WaitKind && string.Equals(args.Status.Trim(), "done", StringComparison.OrdinalIgnoreCase);
+        if (closesWait && await WaitReportRefusalAsync(connection, transaction, item, args.Verify, cancellationToken) is { } refused)
+        {
+            return WriteResult.No(refused);
+        }
+
         const string attemptSql =
             """
             INSERT INTO attempt (id, item_id, n, agent_name, agent_kind, outcome, ended_at)
@@ -259,6 +265,11 @@ public sealed partial class WorkWriter
             new { attempt = n, status = args.Status.Trim(), assumptions = opened },
             cancellationToken);
 
+        if (closesWait)
+        {
+            await CloseWaitAsync(connection, transaction, item, actor, args.Verify!, cancellationToken);
+        }
+
         await transaction.CommitAsync(cancellationToken);
 
         var lines = new List<string>
@@ -274,11 +285,83 @@ public sealed partial class WorkWriter
                     + "evidence:\"…\") when one settles");
         }
 
+        if (closesWait)
+        {
+            lines.Add($"    closed  {Transitions.Name(item.Status)} → done — the wait is over");
+            lines.Add($"    arrived {Glyph.Flat(args.Verify)}");
+            lines.Add("            recorded as an observation note on the wait");
+            lines.Add(string.Empty);
+            lines.Add("Next: work_next() — the frontier has just moved.");
+            return WriteResult.Ok(string.Join("\n", lines));
+        }
+
         lines.Add(string.Empty);
         lines.Add($"Next: work_verify(ref:\"{item.Ref}\", command:\"…\", result_line:\"…\") — "
                 + "a report is a claim, not evidence.");
 
         return WriteResult.Ok(string.Join("\n", lines));
+    }
+
+    /// <summary>
+    /// deadlines/3 — every role may close a wait (question 10), and a worker's tool for it is the report it already has:
+    /// status done with what arrived in <c>verify</c>. The close is held to what <c>work_status</c> holds a wait to, so the
+    /// worker route is not a way around an open child or a blocker finding.
+    /// </summary>
+    private async Task<string?> WaitReportRefusalAsync(
+        NpgsqlConnection connection,
+        NpgsqlTransaction transaction,
+        ItemRow item,
+        string? arrived,
+        CancellationToken cancellationToken)
+    {
+        var started = item.StartedAt is not null;
+        if (!Transitions.Legal(item.Status, Move.Done, item.Kind, started))
+        {
+            return Transitions.Refuse(item.Ref, item.Status, Move.Done, item.Kind, started);
+        }
+
+        if (Blank(arrived))
+        {
+            return Refusal.Blocked(
+                $"work_report({item.Ref}, status:\"done\") on a wait without verify.",
+                "a wait closes with what arrived — verify: says it, and becomes the wait's observation note",
+                $"work_report(ref:\"{item.Ref}\", status:\"done\", verify:\"<what arrived>\")");
+        }
+
+        var unmet = DoneGuard.Evaluate(await DoneFactsAsync(connection, transaction, item, null, cancellationToken));
+        return unmet.Count == 0 ? null : Refusal.Transition(item.Ref, "done", unmet);
+    }
+
+    /// <summary>The worker's close of a wait: the status write, claim release and journal line <c>work_status</c> makes.</summary>
+    private static async Task CloseWaitAsync(
+        NpgsqlConnection connection,
+        NpgsqlTransaction transaction,
+        ItemRow item,
+        Actor actor,
+        string arrived,
+        CancellationToken cancellationToken)
+    {
+        await ApplyAsync(connection, transaction, item.Id, ItemStatus.Done, ItemResolution.Accepted, actor, cancellationToken);
+        await InsertNoteAsync(
+            connection, transaction, item.WorkspaceId, actor, NoteKind.Observation, arrived, item.Id, null, cancellationToken);
+        await ReleaseAsync(connection, transaction, item, ItemStatus.Done, cancellationToken);
+
+        await EventAsync(
+            connection,
+            transaction,
+            item.WorkspaceId,
+            item.Id,
+            actor,
+            "status",
+            $"{item.Ref} {Transitions.Name(item.Status)} → done: {Glyph.Flat(arrived)}",
+            new
+            {
+                from = Transitions.Name(item.Status),
+                to = "done",
+                reason = arrived,
+                forced = (string[]?)null,
+            },
+            cancellationToken);
     }
 
     /// <summary>The form of an assumption <paramref name="item"/> just opened that <c>work_assume</c> takes as printed.</summary>

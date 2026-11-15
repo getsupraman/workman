@@ -198,6 +198,13 @@ public sealed partial class WorkWriter(NpgsqlDataSource dataSource, BoardQueries
             await AnswerAsync(connection, transaction, item, actor, args.Reason!.Trim(), cancellationToken);
         }
 
+        if (Arrived(item, status, args.Reason))
+        {
+            await InsertNoteAsync(
+                connection, transaction, item.WorkspaceId, actor, NoteKind.Observation, args.Reason!, item.Id, null,
+                cancellationToken);
+        }
+
         var findings = status == ItemStatus.Done
             ? await OpenFindingsAsync(connection, transaction, item, cancellationToken)
             : [];
@@ -252,6 +259,11 @@ public sealed partial class WorkWriter(NpgsqlDataSource dataSource, BoardQueries
         {
             lines.Add($"    answer  {Glyph.Row(args.Reason, 86)}");
             lines.Add("            recorded as a human verification and a decision note");
+        }
+        else if (Arrived(item, status, args.Reason))
+        {
+            lines.Add($"    arrived {Glyph.Row(args.Reason, 86)}");
+            lines.Add("            recorded as an observation note on the wait");
         }
         else if (args.Reason is { Length: > 0 })
         {
@@ -358,6 +370,11 @@ public sealed partial class WorkWriter(NpgsqlDataSource dataSource, BoardQueries
             ];
         }
 
+        if (item.Kind == WaitKind && string.IsNullOrWhiteSpace(args.Reason))
+        {
+            unmet = [.. unmet, WaitUnmet(item.Ref)];
+        }
+
         if (unmet.Count == 0)
         {
             return null;
@@ -376,6 +393,19 @@ public sealed partial class WorkWriter(NpgsqlDataSource dataSource, BoardQueries
                 $"work_status(ref:\"{item.Ref}\", to:\"done\", force:true, reason:\"…\")")
             : null;
     }
+
+    /// <summary>deadlines/3: the kind that waits on something outside and closes on a note of what arrived.</summary>
+    internal const string WaitKind = "wait";
+
+    /// <summary>A wait's <c>done</c> carries what arrived; with nothing said, there is no evidence it did.</summary>
+    private static Unmet WaitUnmet(string reference)
+        => new(
+            "a wait closes with what arrived, and no reason was given",
+            $"work_status(ref:\"{reference}\", to:\"done\", reason:\"<what arrived>\")");
+
+    /// <summary>A wait closed with what arrived, which is journalled as an <c>observation</c> note on it.</summary>
+    private static bool Arrived(ItemRow item, ItemStatus status, string? text)
+        => item.Kind == WaitKind && status == ItemStatus.Done && !string.IsNullOrWhiteSpace(text);
 
     /// <summary>The unmet conditions a <c>force</c> went over, so the event records what was skipped.</summary>
     /// <summary>A question's <c>done</c> carries its answer in <c>reason</c> (doc 01 §4, condition 6).</summary>

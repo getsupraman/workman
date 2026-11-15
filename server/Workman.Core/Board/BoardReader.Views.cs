@@ -98,6 +98,7 @@ public sealed partial class BoardReader
         var root = subtree.First(n => n.Id == scope.Item.Id);
         var facts = await FactsAsync(subtree.Select(n => n.Id), cancellationToken);
         var blocked = await BlockedByAsync(scope.WorkspaceId, [scope.Item.Id], cancellationToken);
+        var waiting = await WaitingOnAsync(scope.WorkspaceId, [scope.Item.Id], cancellationToken);
 
         var nodes = subtree
             .Where(n => n.Depth - root.Depth <= depth)
@@ -126,6 +127,9 @@ public sealed partial class BoardReader
                     Flags: FlagsFor(node.Id, node.Status, fact, blocked)),
                 node.Depth - root.Depth,
                 rollup)));
+
+            var indent = new string(' ', (Math.Min(Math.Max(node.Depth - root.Depth, 0), 8) * 2) + 2);
+            lines.AddRange(waiting[node.Id].Select(w => indent + w));
         }
 
         lines.Add(string.Empty);
@@ -820,6 +824,29 @@ public sealed partial class BoardReader
         }
 
         return printed.ToLookup(p => p.ItemId, p => p.Ref);
+    }
+
+    /// <summary>
+    /// deadlines/3 — per item, "waiting on &lt;ref&gt; &lt;title&gt;" for each open wait that blocks it, with the wait's due
+    /// as its chase date. The ref prints as <see cref="BlockedByAsync"/> prints a blocker; the title is printed whole.
+    /// </summary>
+    private async Task<ILookup<Guid, string>> WaitingOnAsync(
+        Guid workspaceId,
+        IReadOnlyCollection<Guid> ids,
+        CancellationToken cancellationToken)
+    {
+        var printed = new List<(Guid ItemId, string Text)>();
+        foreach (var row in await board.WaitingOnAsync(ids, cancellationToken))
+        {
+            var reference = row.WaitScopeId == row.RefScopeId
+                ? row.WaitRef
+                : await board.PrintableRefAsync(workspaceId, row.WaitId, row.WaitRef, cancellationToken);
+
+            printed.Add((row.ItemId, $"waiting on {reference} {Glyph.Flat(row.Title)}"
+                                     + (row.Due is { } due ? $", due {due}" : string.Empty)));
+        }
+
+        return printed.ToLookup(p => p.ItemId, p => p.Text);
     }
 
     /// <summary>

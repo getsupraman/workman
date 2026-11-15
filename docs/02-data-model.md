@@ -266,6 +266,15 @@ attach-anywhere kinds `finding`, `followup`, `question`, `incident`, `spike`. A 
 a `task` (`{phase,run,task}`, migration TaskUnderTask, m63): tasks nest in practice, and each keeps its
 own criteria and verify guard.
 
+**`wait`** (`{run,phase,task}`, migration WaitKind, deadlines/3) is waiting on something outside the
+system — *"Client confirms the budget email"*. It `blocks` the real work, its `due` is the chase date,
+and every `requires_*` is false: it closes on a note of what arrived, not on criteria, a verification or
+a commit. `done` is reachable from any open status, as for a `finding`, and any role may close it — an
+orchestrator with `work_status(…, "done", reason:)`, a worker with `work_report(…, status:"done",
+verify:)` (doc 01 §4). What arrived is journalled as an `observation` note on the wait. While a wait is
+open, `work_tree` and the worker brief print `waiting on <ref> <title>` (and its due) under each item it
+blocks. A wait is not a leaf of the rollup: it counts in no "X of Y".
+
 **Root = project.** The kind with an empty `allowed_parent_kinds` is a root, and only `project` has one;
 every other kind needs a parent of a kind its list names. A root that is no project would sit outside
 every project and so outside project access: no members, visible to the whole workspace. `work_create`,

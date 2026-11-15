@@ -43,9 +43,10 @@ public static class Transitions
     /// print <c>work_status(ref:"F-07", to:"done")</c> against a finding that is still
     /// <c>open</c>, and doc 04 §3 makes a printed route that refuses a defect. So <c>done</c> is
     /// reachable from any non-terminal status for this kind alone — the five conditions still
-    /// apply, so nothing is weakened by skipping a claim nobody takes on a finding.
+    /// apply, so nothing is weakened by skipping a claim nobody takes on a finding. A <c>wait</c>
+    /// (deadlines/3) is the same: nobody works on a client's email, it simply arrives.
     /// </summary>
-    private const string ClosesDirectly = "finding";
+    private static readonly string[] ClosesDirectly = ["finding", "wait"];
 
     /// <summary>
     /// A lapsed lease is a timer, not a return to the queue: the sweep moves an expired claim's item
@@ -116,7 +117,7 @@ public static class Transitions
             }
         }
 
-        if ((string.Equals(kind, ClosesDirectly, StringComparison.OrdinalIgnoreCase) || ClosesAfterLapse(status, started))
+        if (((kind is not null && ClosesDirectly.Contains(kind, StringComparer.OrdinalIgnoreCase)) || ClosesAfterLapse(status, started))
             && !moves.Contains(Move.Done))
         {
             moves.Add(Move.Done);

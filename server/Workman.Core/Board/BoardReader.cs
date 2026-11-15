@@ -587,6 +587,16 @@ public sealed partial class BoardReader(WorkmanQueries queries, BoardQueries boa
             lines.Add($"  held by   {Glyph.Flat(holder)}");
         }
 
+        foreach (var wait in (await WaitingOnAsync(item.WorkspaceId, [item.Id], cancellationToken))[item.Id])
+        {
+            lines.AddRange(BriefRenderer.Wrap("  ", wait, 13));
+        }
+
+        if (item.Kind == "wait")
+        {
+            return string.Join("\n", [.. lines, .. WaitWorkerLines(callable)]);
+        }
+
         lines.Add(criteria.Count == 0
             ? "  criteria  none recorded — work_update(ref:\"" + callable + "\", criteria:[…]) before starting"
             : "  criteria");
@@ -610,6 +620,17 @@ public sealed partial class BoardReader(WorkmanQueries queries, BoardQueries boa
         lines.Add($"        work_verify(ref:\"{callable}\", …, run_by:\"worker\") records a claim, not evidence.");
 
         return string.Join("\n", lines);
+    }
+
+    /// <summary>
+    /// deadlines/3 — a wait has nothing to build and nothing to verify: it closes when what it waits on arrives, by any
+    /// role, and a worker closes it with the report it already has.
+    /// </summary>
+    private static IEnumerable<string> WaitWorkerLines(string callable)
+    {
+        yield return "  closes    when it arrives; what arrived is its evidence, recorded as an observation note";
+        yield return $"  brief     {WorkUris.ItemBrief(callable)}";
+        yield return $"  Next: work_report(ref:\"{callable}\", status:\"done\", verify:\"<what arrived>\") closes it.";
     }
 
     /// <summary>

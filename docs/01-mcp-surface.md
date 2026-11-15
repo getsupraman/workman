@@ -163,7 +163,7 @@ Names are `work_*`-prefixed so they survive aggregation across servers.
 
 | Tool | Notes |
 |---|---|
-| **`work_report`** | Submits the worker report *as its existing schema*: `status`, `files[]`, `verify`, `red_check`, `deviations`, `assumptions[]`, `risks[]`, `not_done`. Creates the attempt + report, and **auto-creates `assumption` rows from `assumptions[]`** — so the field the skill calls *"the highest-value line in the format"* stops being prose. |
+| **`work_report`** | Submits the worker report *as its existing schema*: `status`, `files[]`, `verify`, `red_check`, `deviations`, `assumptions[]`, `risks[]`, `not_done`. Creates the attempt + report, and **auto-creates `assumption` rows from `assumptions[]`** — so the field the skill calls *"the highest-value line in the format"* stops being prose. On a `wait`, `status:"done"` with `verify:` closes it (§4, condition 7). |
 | **`work_verify`** | Records `command`, **`result_line`** (the actual `12 passed` line, not an exit code), `passed`, `counts`, `run_by` (`worker\|orchestrator`), optional `red_check {reverted_what, failed_count}`, `samples[]` for measurements (the skill requires ≥3 with median and range). |
 | **`work_note`** | `kind` = `carry_forward \| do_not_rederive \| correction \| incident \| environment \| decision`; optional **`to`** = a future item ref (a selector such as `phase:3` is refused — nothing delivers one). Unconsumed notes addressed to an item are injected into its brief and marked consumed. |
 | **`work_assume`** | Create or resolve. Required on create: `statement`, `evidence_level`, `reversal_cost`, `revisit_when`. Resolve: `confirmed \| disproven \| obsolete` + evidence. Past `revisit_when` → it appears in `attention` until resolved. An assumption ref is numbered within its run, so it is addressed like an item ref: `entity-store/A1` resolves inside that run only; a bare `A1` open in two runs is refused naming both qualified forms, never resolves both. |
@@ -267,6 +267,13 @@ never a phase inside the item's own run (doc 07 §4).
 4. no open `finding` with `severity = blocker` targets it;
 5. for a task: ≥1 artifact of kind `commit` — *"every accepted task ends in a commit"*.
 6. for a question: `reason:` carries its answer — `work_status(ref:"Q1", to:"done", reason:"<the answer>")`.
+7. for a wait: `reason:` carries what arrived — `work_status(ref:"W1", to:"done", reason:"<what arrived>")`.
+
+A wait (deadlines/3) has no criteria, verification or commit to give: what arrived is its evidence,
+journalled as an `observation` note on it, and it may close from `open`. Every role may close one
+(question deadlines/10): a worker, which has no `work_status`, calls
+`work_report(ref:"W1", status:"done", verify:"<what arrived>")`, held to the same guard and recorded as the
+same note. On every other kind `work_report` is the hand-back it always was.
 
 A question needs no verification of its own: its answer is the human's decision. Closed with one,
 `work_status` records the answer, in the same call, as a passed `run_by = human` verification and a

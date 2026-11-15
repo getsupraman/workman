@@ -63,3 +63,47 @@ public sealed partial class BoardQueries
         return await ListAsync<ItemDatesRow>(sql, new { ids = itemIds.ToArray() }, cancellationToken);
     }
 }
+
+/// <summary>
+/// deadlines/3: an open <c>wait</c> that blocks <see cref="ItemId"/>, with the title and the chase date (its due, as
+/// written) that "waiting on" prints.
+/// </summary>
+public sealed record WaitBlockRow(
+    Guid ItemId,
+    Guid? RefScopeId,
+    Guid WaitId,
+    string WaitRef,
+    Guid? WaitScopeId,
+    string Title,
+    string? Due);
+
+public sealed partial class BoardQueries
+{
+    /// <summary>The open waits blocking any item in, or under, <paramref name="scopeItemIds"/>.</summary>
+    public async Task<IReadOnlyList<WaitBlockRow>> WaitingOnAsync(
+        IReadOnlyCollection<Guid> scopeItemIds,
+        CancellationToken cancellationToken = default)
+    {
+        const string sql =
+            """
+            SELECT i.id           AS "ItemId",
+                   i.ref_scope_id AS "RefScopeId",
+                   w.id           AS "WaitId",
+                   w.ref          AS "WaitRef",
+                   w.ref_scope_id AS "WaitScopeId",
+                   w.title        AS "Title",
+                   coalesce(to_char(w.due_on, 'YYYY-MM-DD'),
+                            to_char(w.due_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"')) AS "Due"
+            FROM   item_link l
+            JOIN   item i ON i.id = l.to_item_id
+            JOIN   item w ON w.id = l.from_item_id
+            WHERE  l.type = 'blocks'
+              AND  w.kind = 'wait'
+              AND  w.status NOT IN ('done','cancelled','superseded')
+              AND  (i.id = ANY(@scopes) OR i.ancestors && @scopes)
+            ORDER  BY i.ref, w.ref;
+            """;
+
+        return await ListAsync<WaitBlockRow>(sql, new { scopes = scopeItemIds.ToArray() }, cancellationToken);
+    }
+}
