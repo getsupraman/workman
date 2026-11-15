@@ -137,6 +137,13 @@ export type BoardRow = {
   openedAt: string
   startedAt: string | null
   closedAt: string | null
+  /** deadlines/6: as written, a day `YYYY-MM-DD` or an instant in UTC; null without one. */
+  due?: string | null
+  notBefore?: string | null
+  /** Closed as done after its due. */
+  late?: boolean
+  /** Times the due moved later. */
+  slips?: number
 }
 
 export type Board = {
@@ -223,6 +230,10 @@ export type ItemPage = {
   events: JournalEvent[]
   eventsHasMore: boolean
   imported?: { path: string; anchor: string | null; why: string; importedBy: string; session: Session | null; at: string } | null
+  due?: string | null
+  notBefore?: string | null
+  late?: boolean
+  slips?: number
 }
 
 export type InboxRow = {

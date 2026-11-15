@@ -292,6 +292,16 @@ JournalEvent = { "seq": 1, "at": "…", "item": ItemRef | null, "run": ItemRef |
                  "actor": "controller", "role": "controller", "kind": "…", "summary": "…", "payload": { } }
 ```
 
+**Dates** (deadlines/6, additive) — every board row and the item page carry an item's dates (doc 02 §3 "Dates"):
+```jsonc
+"due": "2026-11-20" | "2026-11-20T16:00:00Z" | null,       // as written: a day (that whole day in the workspace's
+"notBefore": "2026-11-18" | "2026-11-18T08:00:00Z" | null, //   zone) or an instant, always in UTC; never converted
+"late": false,                                             // closed as done after its due had passed
+"slips": 0                                                 // times the due was moved later (dates_changed events)
+```
+An item that never carried a date reads `null`, `null`, `false`, `0`, and every other field keeps its meaning. `late` and
+`slips` are work_get's (`BoardQueries.DatesAsync`), read at request time in the workspace's current zone.
+
 ## Endpoints
 
 ### `GET /api/v1/overview`
@@ -338,7 +348,8 @@ seq order). The client rebuilds the tree from `parentId`/`depth`/`hasChildren`.
     "verification": { "passed": true, "runBy": "orchestrator", "at": "…" } | null,   // latest
     "blockedBy": [ItemRef],                   // open blockers only
     "flags": ["disagrees","done_unverified","forced","stale_claim","unconsumed_notes"],
-    "openedAt": "…", "startedAt": "…" | null, "closedAt": "…" | null }] }
+    "openedAt": "…", "startedAt": "…" | null, "closedAt": "…" | null,
+    "due": "…" | null, "notBefore": "…" | null, "late": false, "slips": 0 }] }   // Dates, additive
 ```
 
 ### `GET /api/v1/boards?runs={id},{id},…` (runs optional; added for the dashboard, additive)
@@ -375,7 +386,8 @@ A unit page: what was asked, what the agent **reported**, what was **verified**.
   "links": { "out": [{ "type": "blocks", "item": ItemRef }], "in": [{ "type": "blocks", "item": ItemRef }] },
   "assumptions": [{ "ref": "A1", "text": "…", "status": "open", "revisitWhen": ItemRef | null }],
   "events": [JournalEvent],                    // newest 50 for this item, ascending
-  "eventsHasMore": true }
+  "eventsHasMore": true,
+  "due": "…" | null, "notBefore": "…" | null, "late": false, "slips": 0 }   // Dates, additive
 ```
 
 ### `GET /api/v1/items/{id}/brief?for=resume|worker|gate`
@@ -498,6 +510,37 @@ Read-only like every v1 route: it neither sweeps lapsed claims nor consumes note
   "prompts": [{ "key": "cleanup", "label": "Clean up", "count": 7,
                 "text": "Clean up and reorganize Workman project `…` …" }] }
 ```
+
+### `GET /api/v1/agenda?until=&since=&scope={id}` (deadlines/6, additive)
+`work_agenda` as JSON: the same query (`BoardQueries.AgendaAsync`) and the same three lists, judged as of the server's
+clock (`asOf`). Read-only like every v1 route.
+
+- `until` (required): a day `YYYY-MM-DD`, read as the end of that day in the workspace's zone, or an ISO date-time with
+  an offset, an instant. `since` (optional, same forms): a day reads as its start; none means the start of today in
+  the workspace's zone. A missing or unreadable date, or a date-time without an offset, is a `400 {error}` naming both
+  forms.
+- `scope` (optional): an item **id** (rule 1) — a project, run, phase or any item; the lists cover its subtree, itself
+  included. An id that is unknown or in a project rule 8 hides is the usual `404`. Without `scope`: every unarchived
+  project the caller can see (rule 8), each read as its own scope and the lists merged — overdue and due by due end,
+  actionable by when it became so.
+
+```jsonc
+{ "asOf": "…", "seq": 1234,
+  "zone": "Europe/Rome",                 // the workspace's zone (IANA)
+  "until": "2026-11-22T23:00:00+00:00",  // the instants the window was read as
+  "since": "2026-11-19T23:00:00+00:00",
+  "scope": ItemRef | null,               // null without scope
+  "overdue":    [AgendaRow],             // open, due already passed, soonest first
+  "due":        [AgendaRow],             // open, due after asOf and by until
+  "actionable": [AgendaRow] }            // ready now (open|ready, no unfinished blocker or open child, not_before
+                                         //   reached) and became so at or after since
+AgendaRow = { "item": ItemRef, "status": "open", "due": "2026-11-20" | "…Z" | null, "notBefore": "…" | null,
+              "dueEnd": "…" | null,      // the instant the due is read as in the zone
+              "readySince": "…" | null,  // latest of not_before, the last blocker's close, and opened
+              "holder": "aw-m1" | null,  // a live claim's session name, else its agent label
+              "blockers": [ItemRef] }    // unfinished `blocks` blockers
+```
+The lists are not capped (the MCP text shows 20 per list). An item can be in `overdue` or `due` and in `actionable`.
 
 ### `GET /api/stream`
 SSE, unchanged transport. An event means "re-read"; its data is

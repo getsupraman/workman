@@ -4,8 +4,8 @@ namespace Workman.Core.Queries;
 
 /// <summary>
 /// One open item on the agenda. <see cref="Ref"/> is bare inside the scope's run and qualified outside it;
-/// <see cref="Due"/> is the written form (a day, or an instant in UTC); <see cref="Blockers"/> are the refs of
-/// its unfinished <c>blocks</c> blockers.
+/// <see cref="Due"/> and <see cref="NotBefore"/> are the written form (a day, or an instant in UTC); <see cref="Blockers"/>
+/// are the refs of its unfinished <c>blocks</c> blockers, <see cref="BlockerIds"/> their ids in the same order.
 /// </summary>
 public sealed record AgendaRow(
     Guid Id,
@@ -16,7 +16,9 @@ public sealed record AgendaRow(
     DateTimeOffset? DueEnd,
     string? HeldBy,
     string[] Blockers,
-    DateTimeOffset? ReadySince);
+    DateTimeOffset? ReadySince,
+    string? NotBefore = null,
+    Guid[]? BlockerIds = null);
 
 /// <summary>
 /// work_agenda's three lists, as of <see cref="Now"/>: overdue, due by <see cref="UntilEnd"/>, and ready now
@@ -45,7 +47,9 @@ public sealed partial class BoardQueries
         DateTimeOffset? DueEnd,
         string? HeldBy,
         string[] Blockers,
+        string[] BlockerIds,
         DateTimeOffset? ReadySince,
+        string? NotBefore,
         bool IsOverdue,
         bool IsDueBy,
         bool IsActionable);
@@ -105,6 +109,12 @@ public sealed partial class BoardQueries
                            WHERE  l.to_item_id = o.id AND l.type = 'blocks'
                              AND  b.status NOT IN ('done','cancelled','superseded')
                            ORDER  BY b.seq) AS blockers,
+                     ARRAY(SELECT b.id::text
+                           FROM   item_link l
+                           JOIN   item b ON b.id = l.from_item_id
+                           WHERE  l.to_item_id = o.id AND l.type = 'blocks'
+                             AND  b.status NOT IN ('done','cancelled','superseded')
+                           ORDER  BY b.seq) AS blocker_ids,
                      greatest(o.nb_start,
                               (SELECT max(b.closed_at)
                                FROM   item_link l JOIN item b ON b.id = l.from_item_id
@@ -122,7 +132,10 @@ public sealed partial class BoardQueries
                    j.due_end AS "DueEnd",
                    h.label AS "HeldBy",
                    j.blockers AS "Blockers",
+                   j.blocker_ids AS "BlockerIds",
                    j.ready_since AS "ReadySince",
+                   coalesce(to_char(j.not_before_on, 'YYYY-MM-DD'),
+                            to_char(j.not_before_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"')) AS "NotBefore",
                    coalesce(j.due_end <= @now, false) AS "IsOverdue",
                    coalesce(j.due_end > @now AND j.due_end <= @untilEnd, false) AS "IsDueBy",
                    (j.status IN ('open','ready')
@@ -153,7 +166,7 @@ public sealed partial class BoardQueries
         }, cancellationToken);
 
         static AgendaRow Row(AgendaHit h)
-            => new(h.Id, h.Ref, h.Title, h.Status, h.Due, h.DueEnd, h.HeldBy, h.Blockers, h.ReadySince);
+            => new(h.Id, h.Ref, h.Title, h.Status, h.Due, h.DueEnd, h.HeldBy, h.Blockers, h.ReadySince, h.NotBefore, [.. h.BlockerIds.Select(Guid.Parse)]);
 
         return new Agenda(
             bounds.Zone,

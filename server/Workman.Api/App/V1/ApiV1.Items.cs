@@ -41,6 +41,7 @@ public static partial class ApiV1
         var assumptions = await api.AssumptionsAsync(id, cancellationToken);
         var claim = (await api.HeldClaimsAsync([id], cancellationToken)).FirstOrDefault(c => c.ItemId == id);
         var imported = (await board.ImportsAsync([id], cancellationToken)).FirstOrDefault();
+        var dated = (await board.DatesAsync([id], cancellationToken)).FirstOrDefault();
 
         var page = await api.EventsAsync(
             snapshot.WorkspaceId, id, exact: true, 0, ItemEventLimit + 1, oldestFirst: false, null, cancellationToken);
@@ -133,7 +134,11 @@ public static partial class ApiV1
                     imported.Why,
                     imported.ImportedBy,
                     book.Session(imported.SessionId),
-                    imported.UpdatedAt)));
+                    imported.UpdatedAt),
+            dated?.Due,
+            dated?.NotBefore,
+            dated?.Late ?? false,
+            (int)(dated?.Slips ?? 0)));
     }
 
     /// <summary>

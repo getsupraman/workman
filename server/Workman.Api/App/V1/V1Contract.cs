@@ -96,6 +96,9 @@ public sealed record OverviewView(
 
 public sealed record CriteriaCountView(int Checked, int Total);
 
+// deadlines/6: Due and NotBefore as written (a day YYYY-MM-DD, or an instant in UTC); Late, closed as done after its
+// due; Slips, the times its due moved later. An item that never carried a date reads null, null, false, 0.
+
 public sealed record VerificationSummaryView(bool Passed, string RunBy, DateTimeOffset At);
 
 public sealed record BoardRowView(
@@ -116,7 +119,11 @@ public sealed record BoardRowView(
     IReadOnlyList<string> Flags,
     DateTimeOffset OpenedAt,
     DateTimeOffset? StartedAt,
-    DateTimeOffset? ClosedAt);
+    DateTimeOffset? ClosedAt,
+    string? Due = null,
+    string? NotBefore = null,
+    bool Late = false,
+    int Slips = 0);
 
 public sealed record BoardView(
     DateTimeOffset AsOf,
@@ -208,7 +215,11 @@ public sealed record ItemPageView(
     IReadOnlyList<AssumptionView> Assumptions,
     IReadOnlyList<JournalEventView> Events,
     bool EventsHasMore,
-    ImportedView? Imported = null);
+    ImportedView? Imported = null,
+    string? Due = null,
+    string? NotBefore = null,
+    bool Late = false,
+    int Slips = 0);
 
 /// <summary>Set on an item <c>work_import</c> wrote: its source in the repo, and why it was judged still true.</summary>
 public sealed record ImportedView(
@@ -267,3 +278,29 @@ public sealed record PromptsView(DateTimeOffset AsOf, long Seq, ItemRefView Scop
 public sealed record SearchHitView(ItemRefView Item, ItemRefView? Run, ItemRefView? Project, string Match, string? Snippet);
 
 public sealed record SearchView(DateTimeOffset AsOf, long Seq, IReadOnlyList<SearchHitView> Hits);
+
+/// <summary>
+/// One agenda row (deadlines/6): <c>work_agenda</c>'s line. <c>dueEnd</c> is the instant the due is read as in the
+/// workspace's zone; <c>readySince</c> when it last became actionable; <c>holder</c> a live claim's session or agent.
+/// </summary>
+public sealed record AgendaRowView(
+    ItemRefView Item,
+    string Status,
+    string? Due,
+    string? NotBefore,
+    DateTimeOffset? DueEnd,
+    DateTimeOffset? ReadySince,
+    string? Holder,
+    IReadOnlyList<ItemRefView> Blockers);
+
+/// <summary><c>until</c> and <c>since</c> are the instants the window was read as, in <c>zone</c>.</summary>
+public sealed record AgendaView(
+    DateTimeOffset AsOf,
+    long Seq,
+    string Zone,
+    DateTimeOffset Until,
+    DateTimeOffset Since,
+    ItemRefView? Scope,
+    IReadOnlyList<AgendaRowView> Overdue,
+    IReadOnlyList<AgendaRowView> Due,
+    IReadOnlyList<AgendaRowView> Actionable);

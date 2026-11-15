@@ -124,6 +124,8 @@ public static partial class ApiV1
             .Where(l => l.Type == LinkType.Blocks && !Closed(l.FromStatus))
             .ToLookup(l => l.ToId, l => l.FromId);
 
+        var dates = (await board.DatesAsync(ids, cancellationToken)).ToDictionary(d => d.ItemId);
+
         var configs = (await api.RunConfigsAsync([.. trees.Select(t => t.RunId).Distinct()], cancellationToken))
             .ToDictionary(c => c.RunId);
 
@@ -136,6 +138,7 @@ public static partial class ApiV1
             var views = rows.Select(row =>
             {
                 claims.TryGetValue(row.Id, out var claim);
+                dates.TryGetValue(row.Id, out var dated);
 
                 return new BoardRowView(
                     book.Item(row.Id),
@@ -157,7 +160,11 @@ public static partial class ApiV1
                     Flags(row, claim),
                     row.OpenedAt,
                     row.StartedAt,
-                    row.ClosedAt);
+                    row.ClosedAt,
+                    dated?.Due,
+                    dated?.NotBefore,
+                    dated?.Late ?? false,
+                    (int)(dated?.Slips ?? 0));
             }).ToList();
 
             var root = book.Row(id);

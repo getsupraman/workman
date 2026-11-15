@@ -55,6 +55,7 @@ public static partial class ApiV1
         v1.MapGet("/resolve", ResolveAsync);
         v1.MapGet("/search", SearchAsync);
         v1.MapGet("/prompts", PromptsAsync);
+        v1.MapGet("/agenda", AgendaAsync);
     }
 
     /// <summary>
