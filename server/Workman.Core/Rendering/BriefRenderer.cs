@@ -21,6 +21,15 @@ public sealed record VerifyLine(
     TimeSpan Ago,
     bool Passed);
 
+/// <summary>One dated row of the brief's DATES block: overdue, or due within the window.</summary>
+public sealed record DateLine(string Ref, string Title, string Due, int DaysLeft, bool Overdue, IReadOnlyList<string> Blockers);
+
+/// <summary>
+/// The brief's DATES block: what is overdue or due within the window, at most <see cref="BriefRenderer.DatesCap"/>
+/// rows of <paramref name="Total"/>, and the <c>work_agenda</c> call that lists them all.
+/// </summary>
+public sealed record DatesBlock(string Zone, string Today, IReadOnlyList<DateLine> Lines, int Total, string Pointer);
+
 /// <summary>
 /// Everything <c>work_brief</c> renders, already trimmed to what fits. The <c>*Total</c> counts are
 /// the numbers <em>before</em> capping, so the header can say how much was left out and point at
@@ -46,10 +55,14 @@ public sealed record BriefModel(
     IReadOnlyList<AttentionLine> Attention,
     string? ScopeKind = null,
     string? ScopeRef = null,
-    bool NotesConsumed = false);
+    bool NotesConsumed = false,
+    DatesBlock? Dates = null);
 
 public static class BriefRenderer
 {
+    /// <summary>Rows the DATES block shows; the rest are behind its work_agenda pointer.</summary>
+    public const int DatesCap = 5;
+
     private const int GoalIndent = 5;
     private const int StatementWidth = 48;
 
@@ -103,6 +116,7 @@ public static class BriefRenderer
         lines.Add($"WHERE  {Glyph.Flat(model.Where)}");
         lines.Add($"NEXT   {Glyph.Flat(model.Next)}");
 
+        AddDates(lines, model.Dates);
         AddBinding(lines, model.Binding, model.BindingTotal);
 
         AddAssumptions(lines, model.Assumptions, model.AssumptionTotal, handle);
@@ -110,6 +124,36 @@ public static class BriefRenderer
         AddLastVerify(lines, model.LastVerify);
 
         return Attention.Append(string.Join("\n", lines), model.Attention);
+    }
+
+    /// <summary>
+    /// deadlines: only when something is overdue or due soon — an undated scope renders exactly as before dates.
+    /// </summary>
+    internal static void AddDates(List<string> lines, DatesBlock? dates)
+    {
+        if (dates is null || dates.Total == 0)
+        {
+            return;
+        }
+
+        lines.Add(string.Empty);
+        lines.Add($"DATES ({dates.Total})   — zone {dates.Zone}, today {dates.Today}");
+        foreach (var d in dates.Lines)
+        {
+            var when = d.Overdue ? "overdue" : d.DaysLeft switch
+            {
+                <= 0 => "today",
+                1 => "tomorrow",
+                _ => $"in {d.DaysLeft} days",
+            };
+            var blocked = d.Blockers.Count > 0 ? $"  ·  blocked by {string.Join(", ", d.Blockers)}" : string.Empty;
+            lines.Add($"  {Glyph.Pad(when, 10)} {d.Ref}  {Glyph.Row(d.Title, 40)}  ·  due {d.Due}{blocked}");
+        }
+
+        var hidden = dates.Total - dates.Lines.Count;
+        lines.Add(hidden > 0
+            ? $"  · +{hidden} more — {dates.Pointer}"
+            : $"  · all of them — {dates.Pointer}");
     }
 
     internal static void AddAssumptions(List<string> lines, IReadOnlyList<AssumptionLine> assumptions, int total, string handle)

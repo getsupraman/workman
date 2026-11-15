@@ -454,7 +454,8 @@ public sealed partial class BoardQueries(NpgsqlDataSource dataSource)
                    r.closed_at      AS "RevisitClosedAt",
                    a.scope_item_id  AS "ScopeItemId",
                    {{CallableAssumptionSql}}
-                                    AS "Callable"
+                                    AS "Callable",
+                   a.revisit_at     AS "RevisitAt"
             FROM   assumption a
             LEFT   JOIN item s ON s.id = a.ref_scope_id
             LEFT   JOIN item r ON r.id = a.revisit_item_id

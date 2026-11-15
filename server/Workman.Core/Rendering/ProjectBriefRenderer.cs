@@ -35,7 +35,8 @@ public sealed record ProjectBriefModel(
     IReadOnlyList<AttentionLine> Attention,
     IReadOnlyList<AssumptionLine>? Assumptions = null,
     int AssumptionTotal = 0,
-    bool NotesConsumed = false);
+    bool NotesConsumed = false,
+    DatesBlock? Dates = null);
 
 /// <summary>
 /// doc 06 §4a. Nobody works on a project, so its NEXT never transitions it: it names the run to
@@ -114,6 +115,7 @@ public static class ProjectBriefRenderer
                 : $"  · all of them — {model.BacklogRoute}");
         }
 
+        BriefRenderer.AddDates(lines, model.Dates);
         BriefRenderer.AddBinding(lines, model.Binding, model.BindingTotal);
         BriefRenderer.AddAssumptions(lines, model.Assumptions ?? [], model.AssumptionTotal, model.ProjectRef);
         BriefRenderer.AddNotes(

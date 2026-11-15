@@ -394,10 +394,10 @@ Everything waiting on a **human**, newest first.
 ```jsonc
 { "asOf": "…", "seq": 1234, "rows": [{
     "key": "blocked:uuid",           // stable: kind + ":" + item id; a client may remember dismissals by it
-    "kind": "blocked|blocker_finding|question|expired_claim|assumption_due|done_unverified|stale_in_progress|unconsumed_note",
+    "kind": "blocked|blocker_finding|question|expired_claim|assumption_due|overdue|done_unverified|stale_in_progress|unconsumed_note",
     "item": ItemRef, "run": ItemRef, "what": "…", "since": "…",
     "call": "work_status(ref:\"ws/12\", to:\"in_progress\")",       // the resolving MCP call, qualified
-    "audience": "human|controller",  // human: question, blocked; every other kind: controller
+    "audience": "human|controller",  // human: question, blocked, overdue; every other kind: controller
     "detail": "…" | null,            // the one fact a person needs: plain text, one line, ≤ ~200 chars
     "actor": "…" | null,             // done_unverified: closed_by; expired_claim: the claim's agent
     "tree": "…" | null,              // expired_claim: the claim's tree
@@ -414,6 +414,7 @@ and `since` instead. `detail` per kind:
 | `blocked` | the `reason` of the latest transition to `blocked` |
 | `blocker_finding` | `"<source> · against: <target title>"` |
 | `assumption_due` | the first assumption's statement, then `" (+N more)"` when there are several |
+| `overdue` | `"due <date>"`: the due as written, a day (`2026-11-19`) or an instant in UTC |
 | `unconsumed_note` | the first line of the oldest unconsumed note addressed to the item |
 | `done_unverified`, `stale_in_progress`, `expired_claim` | null: `actor`, `tree` and `since` carry the facts |
 
@@ -422,6 +423,12 @@ else this request's scheme and host); it is null only when there is neither.
 
 An item that is open and waiting on another item's `blocks` edge is **not** an inbox row: it waits on
 work, not on a person.
+
+`overdue` is one row per open item whose `due` has passed (a date-only due at the end of that day in the
+workspace time zone), with `since` the instant it fell due. Only what is overdue now: an item merely due soon is
+on the agenda, not in the inbox. `assumption_due` counts an open assumption whose revisit item has closed **or**
+whose `revisit_at` has passed; one that meets both is counted once, and `since` is the later of the two that
+happened.
 
 ### `GET /api/v1/journal?scope={id}&since={seq}&before={seq}&limit=&kinds=`
 Ascending by seq. `kinds` comma-separated:

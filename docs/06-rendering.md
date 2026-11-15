@@ -164,6 +164,26 @@ LAST VERIFY  dotnet test --filter Importer → 181/181, by orchestrator, 6m ago
 ⚠ 2.8 claim expired 13m ago — work_status(ref:"2.8", to:"in_progress") to retake it
 ```
 
+**A DATES block appears only when something is overdue or due soon.** Between `NEXT` and `BINDING`,
+when an open item in scope is overdue or due within three days (calendar days in the workspace time
+zone, read as of the server clock), the brief prints at most five of them, earliest due first, then the
+`work_agenda` call that lists them all. A scope with nothing dated in that window renders exactly as it
+did before dates existed — no header, no blank line. The project brief prints the same block in the
+same place.
+
+```
+DATES (6)   — zone Europe/Rome, today 2026-11-20
+  overdue    1.5  Send the signed contract  ·  due 2026-11-19  ·  blocked by 1.6
+  today      1.1  Release candidate  ·  due 2026-11-20
+  tomorrow   1.2  Changelog  ·  due 2026-11-21
+  in 3 days  1.3  Tag the release  ·  due 2026-11-23T17:00:00Z
+  in 3 days  1.4  Announce  ·  due 2026-11-23
+  · +1 more — work_agenda(scope:"run-a", until:"2026-11-23")
+```
+
+With five or fewer the last line reads `· all of them — work_agenda(…)`. A due is printed as written: a
+day, or an instant in UTC.
+
 **`NEXT` is a literal, callable line.** An agent that only ever does what `NEXT` says is running the
 system correctly — that is the tutorial channel of doc 04 §4, and it is why this line is never prose.
 
@@ -354,8 +374,21 @@ these lines — expired claims and phase gates appear nowhere else — so the ro
 > rest: the one count cap that broke the noclip rule.
 
 Ranking: expired claims → blocker findings → **phases whose tasks are all done and whose gate has not
-run** → items done-but-unverified → assumptions past revisit → unconsumed notes for the current scope
-→ stale `in_progress`.
+run** → items done-but-unverified → **overdue items** → **items due within three days that an open
+blocker still holds** → assumptions past revisit → unconsumed notes for the current scope → stale
+`in_progress`.
+
+```
+⚠ overdue: 1.5 Send the signed contract (due 2026-11-19) — work_get(refs:["1.5"]), then finish it or work_update(ref:"1.5", due:"…")
+⚠ 1.2 due in 2 days, still blocked by 1.6 — work_get(refs:["1.6"]) to unblock it
+```
+
+An overdue item gets the overdue line only, blocked or not. An assumption is past revisit when its
+revisit item has closed **or** its `revisit_at` has passed (`A3 is past revisit_at (2026-11-19 09:00
+UTC)`); one that meets both prints the revisit-item line, once.
+
+> **Changed 2026-11-15 (deadlines/5).** Dates reached work_next and work_agenda but no surface an agent
+> already reads; and `revisit_at` was stored and selected but never made an assumption due.
 
 ```
 ⚠ phase-2: all 8 tasks done, gate not run — work_brief(scope:"phase-2", for:"gate") to run it

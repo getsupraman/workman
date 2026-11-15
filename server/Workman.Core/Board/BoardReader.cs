@@ -18,6 +18,9 @@ public sealed partial class BoardReader(WorkmanQueries queries, BoardQueries boa
     /// <summary>An <c>in_progress</c> item untouched for this long is a parked agent, not a busy one.</summary>
     private const int StaleHours = 4;
 
+    /// <summary>The DATES block's and attention's window: overdue, or due within this many days in the zone.</summary>
+    public const int DueSoonDays = 3;
+
     /// <summary>
     /// doc 06 §4 targets ≤35 lines, paid on every session start. These caps are what keeps it
     /// there on a real run; what they hide is counted in the header and routed to a call.
@@ -295,7 +298,8 @@ public sealed partial class BoardReader(WorkmanQueries queries, BoardQueries boa
                     Since(verify.At),
                     verify.Passed),
             Attention: attention,
-            NotesConsumed: IsWorkerVariant(variant) && shown.Any(n => n.ToItemId == item.Id));
+            NotesConsumed: IsWorkerVariant(variant) && shown.Any(n => n.ToItemId == item.Id),
+            Dates: await DatesAsync(scope, callable, cancellationToken));
 
         var text = await MarkArchivedAsync(item.Id, BriefRenderer.Render(model, IsWorkerVariant(variant)), cancellationToken);
 
@@ -461,12 +465,38 @@ public sealed partial class BoardReader(WorkmanQueries queries, BoardQueries boa
                 unverified.QualifiedRef));
         }
 
+        var now = _clock.GetUtcNow();
+        var home = await board.RunOfAsync(item.Id, cancellationToken);
+        foreach (var dated in await board.DueSoonAsync(item.Id, home?.Id ?? item.Id, now, DueSoonDays, cancellationToken))
+        {
+            if (dated.Overdue)
+            {
+                lines.Add(new AttentionLine(
+                    AttentionRank.Overdue,
+                    $"overdue: {dated.Ref} {Glyph.Row(dated.Title, 40)} (due {dated.Due})",
+                    $"work_get(refs:[\"{dated.Ref}\"]), then finish it or work_update(ref:\"{dated.Ref}\", due:\"…\")",
+                    dated.Ref,
+                    dated.QualifiedRef));
+            }
+            else if (dated.Blockers.Length > 0)
+            {
+                lines.Add(new AttentionLine(
+                    AttentionRank.DueSoonBlocked,
+                    $"{dated.Ref} {DueIn(dated.DaysLeft)}, still blocked by {string.Join(", ", dated.Blockers)}",
+                    $"work_get(refs:[\"{dated.Blockers[0]}\"]) to unblock it",
+                    dated.Ref,
+                    dated.QualifiedRef));
+            }
+        }
+
         var assumptions = await board.AssumptionsAsync(scope.WorkspaceId, item.Id, true, cancellationToken);
-        foreach (var assumption in assumptions.Where(Due))
+        foreach (var assumption in assumptions.Where(a => Due(a, now)))
         {
             lines.Add(new AttentionLine(
                 AttentionRank.AssumptionPastRevisit,
-                $"{assumption.Ref} is past revisit_when ({assumption.RevisitRef} is closed)",
+                RevisitClosed(assumption)
+                    ? $"{assumption.Ref} is past revisit_when ({assumption.RevisitRef} is closed)"
+                    : $"{assumption.Ref} is past revisit_at ({assumption.RevisitAt!.Value.UtcDateTime:yyyy-MM-dd HH:mm} UTC)",
                 $"work_assume(ref:\"{assumption.Callable}\", resolve:\"confirmed\", evidence:\"…\")",
                 assumption.Ref,
                 assumption.QualifiedRef));
@@ -582,9 +612,48 @@ public sealed partial class BoardReader(WorkmanQueries queries, BoardQueries boa
         return string.Join("\n", lines);
     }
 
-    private static bool Due(AssumptionRow assumption)
+    /// <summary>
+    /// An open assumption is due once its revisit item has closed, or once its <c>revisit_at</c> has passed as of
+    /// <paramref name="now"/> (the injected clock). Either is enough; both still make one line.
+    /// </summary>
+    public static bool Due(AssumptionRow assumption, DateTimeOffset now)
         => assumption.State == AssumptionState.Open
-           && assumption.RevisitStatus is ItemStatus.Done or ItemStatus.Cancelled or ItemStatus.Superseded;
+           && (RevisitClosed(assumption) || assumption.RevisitAt is { } at && at <= now);
+
+    private static bool RevisitClosed(AssumptionRow assumption)
+        => assumption.RevisitStatus is ItemStatus.Done or ItemStatus.Cancelled or ItemStatus.Superseded;
+
+    /// <summary>"due today", "due tomorrow", "due in N days".</summary>
+    internal static string DueIn(int daysLeft) => daysLeft switch
+    {
+        <= 0 => "due today",
+        1 => "due tomorrow",
+        _ => $"due in {daysLeft} days",
+    };
+
+    /// <summary>
+    /// The brief's DATES block, or null when nothing in scope is overdue or due within <see cref="DueSoonDays"/>
+    /// days — which keeps an undated scope's brief byte-for-byte what it was.
+    /// </summary>
+    private async Task<DatesBlock?> DatesAsync(ScopeResult.Found scope, string handle, CancellationToken cancellationToken)
+    {
+        var now = _clock.GetUtcNow();
+        var home = await board.RunOfAsync(scope.Item.Id, cancellationToken);
+        var rows = await board.DueSoonAsync(scope.Item.Id, home?.Id ?? scope.Item.Id, now, DueSoonDays, cancellationToken);
+        if (rows.Count == 0)
+        {
+            return null;
+        }
+
+        var zone = await board.ZoneTodayAsync(scope.WorkspaceId, now, cancellationToken);
+        var until = zone.Today.AddDays(DueSoonDays).ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture);
+        return new DatesBlock(
+            zone.Zone,
+            zone.Day,
+            [.. rows.Take(BriefRenderer.DatesCap).Select(r => new DateLine(r.Ref, r.Title, r.Due, r.DaysLeft, r.Overdue, r.Blockers))],
+            rows.Count,
+            $"work_agenda(scope:\"{handle}\", until:\"{until}\")");
+    }
 
     private static BindingLine ToBinding(ConstraintRow row)
         => new(row.Ref, row.Text, row.Kind == ConstraintKind.RedLine, row.Route);

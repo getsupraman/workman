@@ -1,3 +1,4 @@
+using Workman.Core.Board;
 using Microsoft.AspNetCore.Mvc;
 using Workman.Core.Domain;
 using Workman.Core.Queries;
@@ -20,6 +21,7 @@ public static partial class ApiV1
         ApiQueries api,
         RequestTenant tenant,
         WebBase web,
+        TimeProvider clock,
         CancellationToken cancellationToken)
     {
         var snapshot = await SnapshotAsync(api, tenant, cancellationToken);
@@ -41,7 +43,7 @@ public static partial class ApiV1
             scopes = [.. (await board.ProjectsAsync(snapshot.WorkspaceId, cancellationToken)).Select(p => p.Id)];
         }
 
-        var rows = await InboxRowsAsync(snapshot, scopes, book, board, api, web.Current, cancellationToken);
+        var rows = await InboxRowsAsync(snapshot, scopes, book, board, api, web.Current, clock.GetUtcNow(), cancellationToken);
         return Results.Ok(new InboxView(snapshot.AsOf, snapshot.Seq, rows));
     }
 
@@ -68,6 +70,7 @@ public static partial class ApiV1
         BoardQueries board,
         ApiQueries api,
         string? webBase,
+        DateTimeOffset now,
         CancellationToken cancellationToken)
     {
         var waiting = new List<Waiting>();
@@ -105,10 +108,10 @@ public static partial class ApiV1
                     Actor: claim.AgentName, Tree: claim.Tree));
             }
 
+            // Due when the revisit item closed or revisit_at passed (BoardReader.Due): one row per scope item, and an
+            // assumption that meets both is still counted once.
             var due = (await board.AssumptionsAsync(snapshot.WorkspaceId, scope, true, cancellationToken))
-                .Where(a => a.ScopeItemId is not null
-                            && a.State == AssumptionState.Open
-                            && a.RevisitStatus is ItemStatus.Done or ItemStatus.Cancelled or ItemStatus.Superseded)
+                .Where(a => a.ScopeItemId is not null && BoardReader.Due(a, now))
                 .GroupBy(a => a.ScopeItemId!.Value);
 
             foreach (var group in due)
@@ -118,10 +121,20 @@ public static partial class ApiV1
                 waiting.Add(new Waiting(
                     "assumption_due", group.Key,
                     $"{count} assumption(s) past revisit_when: {string.Join(", ", group.Select(a => a.Ref))}",
-                    group.Max(a => a.RevisitClosedAt) ?? DateTimeOffset.MinValue,
+                    group.Max(DueSince) ?? DateTimeOffset.MinValue,
                     _ => $"work_assume(ref:\"{first.Callable}\", resolve:\"confirmed\", evidence:\"…\")",
                     Detail: OneLine(first.Statement, count > 1 ? $" (+{count - 1} more)" : string.Empty),
                     Count: count));
+            }
+
+            // deadlines: an open item past its due waits on whoever set the date — a person decides to finish it or
+            // move it. The window is 0: only what is overdue now, not what is merely due soon.
+            foreach (var overdue in (await board.DueSoonAsync(scope, null, now, 0, cancellationToken)).Where(d => d.Overdue))
+            {
+                waiting.Add(new Waiting(
+                    "overdue", overdue.Id, $"overdue: was due {overdue.Due}",
+                    overdue.DueEnd, q => $"work_update(ref:\"{q}\", due:\"…\") or finish it",
+                    Detail: OneLine($"due {overdue.Due}")));
             }
 
             foreach (var unverified in await board.DoneUnverifiedAsync(scope, cancellationToken))
@@ -189,7 +202,7 @@ public static partial class ApiV1
                     w.What,
                     since,
                     w.Call(item.QualifiedRef),
-                    w.Kind is "question" or "blocked" ? "human" : "controller",
+                    w.Kind is "question" or "blocked" or "overdue" ? "human" : "controller",
                     detail,
                     w.Kind == "done_unverified" ? fact?.ClosedBy : w.Actor,
                     w.Tree,
@@ -200,6 +213,10 @@ public static partial class ApiV1
             .OrderByDescending(r => r.Since)
             .ThenBy(r => r.Key, StringComparer.Ordinal)];
     }
+
+    /// <summary>When an assumption fell due: the revisit item's close, or its revisit_at — the later one that happened.</summary>
+    private static DateTimeOffset? DueSince(AssumptionRow assumption)
+        => new[] { assumption.RevisitClosedAt, assumption.RevisitAt }.Max();
 
     private static string? Against(string? source, string? targetTitle)
         => (source is { Length: > 0 }, targetTitle is { Length: > 0 }) switch

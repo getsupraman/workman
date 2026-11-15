@@ -17,9 +17,18 @@ public enum AttentionRank
     PhaseGateNotRun = 2,
 
     DoneUnverified = 3,
-    AssumptionPastRevisit = 4,
-    UnconsumedNote = 5,
-    StaleInProgress = 6,
+
+    /// <summary>
+    /// deadlines: an open item whose due has passed, then one due within three days that an open blocker still
+    /// holds. Placed after the closing obligations and before the softer ones; only the numbers of the kinds below
+    /// moved, so their order among themselves is what it was.
+    /// </summary>
+    Overdue = 4,
+    DueSoonBlocked = 5,
+
+    AssumptionPastRevisit = 6,
+    UnconsumedNote = 7,
+    StaleInProgress = 8,
 }
 
 /// <summary>

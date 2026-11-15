@@ -98,7 +98,8 @@ public sealed partial class BoardReader
             Assumptions: [.. assumptions.Take(BriefAssumptionCap)
                 .Select(a => ToAssumption(a) with { Ref = a.QualifiedRef ?? a.Ref })],
             AssumptionTotal: assumptions.Count,
-            NotesConsumed: worker && shown.Any(n => n.ToItemId == project.Id));
+            NotesConsumed: worker && shown.Any(n => n.ToItemId == project.Id),
+            Dates: await DatesAsync(scope, projectRef, cancellationToken));
 
         return (ProjectBriefRenderer.Render(model), [.. shown.Select(n => n.Id)]);
     }

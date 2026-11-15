@@ -316,6 +316,12 @@ Plus checks no file-based audit can do: items `done` without verification; force
 expired claims; findings deferred to nowhere; assumptions past `revisit_when`; notes never consumed;
 docs whose blocks were never read by the agent that closed the item they belong to.
 
+Dates add one mechanical check, `due-after-parent`: an open child whose `due` ends after its parent's
+`due` ends, both dated. A day and a date-time are compared as the instants the workspace time zone reads
+them as: under a parent due `2026-11-20`, a child due `2026-11-20T23:30:00Z` passes in UTC (the 20th
+ends at midnight UTC) and is flagged in Europe/Rome (the 20th ends at 23:00 UTC). The fix it names is
+`work_update(ref:"<child>", due:"…")`, or moving the parent's due.
+
 ---
 
 ## 6. Authorization, roles and scoped tool lists

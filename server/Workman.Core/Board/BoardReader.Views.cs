@@ -644,6 +644,7 @@ public sealed partial class BoardReader
         rows.AddRange(await board.SupersededStillReferencedAsync(scope.Item.Id, cancellationToken));
         rows.AddRange(await board.UncoveredRiskAsync(scope.Item.Id, cancellationToken));
         rows.AddRange(await board.RouteLessConstraintsAsync(scope.WorkspaceId, scope.Item.Id, cancellationToken));
+        rows.AddRange(await board.DueAfterParentAsync(scope.Item.Id, cancellationToken));
 
         foreach (var unverified in await board.DoneUnverifiedAsync(scope.Item.Id, cancellationToken))
         {
