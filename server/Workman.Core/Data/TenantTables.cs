@@ -10,7 +10,7 @@ public static class TenantTables
 {
     /// <summary>Tables that carry their workspace: the policy compares the column.</summary>
     public static readonly IReadOnlyDictionary<string, string> Direct =
-        TenantRls.Direct.Concat(ProjectMembers.Direct).Concat(ClaimWorkspacePolicy.Direct).ToDictionary(t => t.Key, t => t.Value);
+        TenantRls.Direct.Concat(ProjectMembers.Direct).Concat(ClaimWorkspacePolicy.Direct).Concat(CalendarFeeds.Direct).ToDictionary(t => t.Key, t => t.Value);
 
     /// <summary>Tables with no workspace of their own: a row is the tenant's when its parent is.</summary>
     public static readonly IReadOnlyDictionary<string, string> ThroughParent =

@@ -393,6 +393,7 @@ internal sealed record RlsWorld(Guid WorkspaceId, Guid ProjectId, Guid RunId)
             INSERT INTO project_member (project_item_id, user_id, workspace_id) VALUES (@project, @user, @ws);
             INSERT INTO user_link (id, kind, token_hash, workspace_id, role, expires_at)
             VALUES (gen_random_uuid(), 'invite', 'rls-' || @tag, @ws, 'member', now() + interval '1 day');
+            INSERT INTO calendar_feed (id, user_id, workspace_id, token_hash) VALUES (gen_random_uuid(), @user, @ws, 'rls-' || @tag);
             INSERT INTO agent_session (id, workspace_id, name, role) VALUES (gen_random_uuid(), @ws, 'rls', 'worker');
             INSERT INTO agent_token (id, workspace_id, role, agent_name, token_hash)
             VALUES (gen_random_uuid(), @ws, 'worker', 'rls', decode(md5(@tag), 'hex'));

@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.Net.Http.Headers;
+using Workman.Api.App;
 using Workman.Api.Auth.OAuth;
 using Workman.Mcp;
 
@@ -31,7 +32,7 @@ public static class ChallengeLog
                 logger.LogInformation(
                     "Unauthenticated {Method} {Path}: client={Client} agent={Agent} user-agent={UserAgent} authorization={Authorization} reason={Reason}",
                     context.Request.Method,
-                    context.Request.Path.Value,
+                    Redacted(context.Request.Path.Value),
                     Clean(headers[WorkmanHeaders.Client]),
                     Clean(headers[WorkmanHeaders.Agent]),
                     Clean(headers[HeaderNames.UserAgent]),
@@ -55,6 +56,12 @@ public static class ChallengeLog
 
         return reasons.Count == 0 ? "none" : string.Join("; ", reasons);
     }
+
+    /// <summary>A calendar feed's path is its secret (CalendarEndpoints): the line names the route, never the token.</summary>
+    public static string? Redacted(string? path)
+        => path is not null && path.StartsWith(CalendarEndpoints.FeedPrefix, StringComparison.OrdinalIgnoreCase)
+            ? CalendarEndpoints.FeedPrefix + "{token}.ics"
+            : path;
 
     private static string Clean(string? value)
     {

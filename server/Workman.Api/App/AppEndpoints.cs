@@ -31,6 +31,7 @@ public static class AppEndpoints
         api.MapProjectArchive();
         api.MapProjectMembers();
         api.MapSessionRelease();
+        api.MapCalendar();
 
         // doc 10 rule 5: the stream and the v1 reads take a cookie or an agent token.
         api.MapGet("/stream", EventStream.HandleAsync).RequireAuthorization(ApiV1.Policy);

@@ -195,3 +195,9 @@ public sealed record InboxFactRow(Guid Id, string? Source, Guid? ParentId, strin
 public sealed record BlockedReasonRow(Guid ItemId, string? Reason);
 
 public sealed record BacklogRow(Guid Id, Guid? OriginId);
+
+/// <summary>
+/// An open item with a due, for the calendar feed: a day as <c>YYYYMMDD</c> with the day after it (the all-day
+/// event's exclusive end), or an instant as <c>YYYYMMDDTHHMMSSZ</c> in UTC.
+/// </summary>
+public sealed record CalendarRow(Guid Id, ItemStatus Status, string? Day, string? DayAfter, string? At);

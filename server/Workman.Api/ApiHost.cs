@@ -270,6 +270,7 @@ public static class ApiHost
         builder.Services.AddSingleton(sp => new UserStore(sp.GetRequiredService<NpgsqlDataSource>()));
         builder.Services.AddSingleton(sp => new AdminStore(sp.GetRequiredService<NpgsqlDataSource>()));
         builder.Services.AddSingleton(sp => new UserLinkStore(sp.GetRequiredService<NpgsqlDataSource>()));
+        builder.Services.AddSingleton(sp => new CalendarFeedStore(sp.GetRequiredService<NpgsqlDataSource>()));
         builder.Services.AddScoped<RequestTenant>();
 
         OAuthServer.Add(builder.Services, connectionString, publicUrls);

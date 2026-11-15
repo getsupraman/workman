@@ -12,6 +12,7 @@ tenant (`GET /api/session/tenants`, `POST /api/session/tenant`, below), its user
 `POST /api/session/apps/{id}/revoke`), `/api/stream`, `/api/agent-sessions`
 (doc 14, bearer only), the admin API (`/api/admin/*`) and the invite and reset links
 (`/api/invite/{token}`, `/api/reset/{token}`), a project's members (`/api/projects/{id}/members`),
+the calendar feed and its token (`/api/calendar/{token}.ics`, `/api/session/calendar`),
 all below, and the dashboard's two writes:
 
 ### `POST /api/projects/{id}/archive` · `POST /api/projects/{id}/unarchive` (outside v1)
@@ -143,6 +144,52 @@ rate-limited per client, the `POST` with the `X-Workman-Write` guard. `GET` answ
 expiresAt }`. `POST { password }` answers `200 { name }` once the password is set — every cookie of
 that user is signed out, and the browser is not signed in — or `400 {error}` for a password under 12
 characters. A used, replaced, expired or unknown token is `404 {error}` on both.
+
+### `GET|POST|DELETE /api/session/calendar` · `GET /api/calendar/{token}.ics` (outside v1)
+
+The calendar feed (deadlines/7, doc 02 §12c): the due dates of the open items a user can see, as an iCalendar
+URL a calendar app subscribes to. The app sends no header, so the URL carries a long-lived secret.
+
+**The token** — cookie only, in the cookie's workspace; a bearer token gets 401. Writes carry the
+`X-Workman-Write` guard.
+
+| Route | Answers |
+|---|---|
+| `GET /api/session/calendar` | `200 { exists, createdAt }` — whether the user has a feed here, never its token |
+| `POST /api/session/calendar` | `201 { token, url, createdAt }` — the **only** answer that carries the token; `url` is `<origin>/api/calendar/<token>.ics`. A new token replaces the user's old one, whose URL then answers 404. `403 {error}` for a user who is not a member of the workspace (a visiting system administrator) |
+| `DELETE /api/session/calendar` | `204` once revoked; `404 {error}` when the user has none |
+
+Only the token's SHA-256 is stored. One feed per user per workspace; removing the user from the workspace deletes it.
+
+**The feed** — `GET /api/calendar/{token}.ics`, no session, `200` with `Content-Type: text/calendar;
+charset=utf-8` and `Cache-Control: no-store`. It reads **as the token's user**, at request time, through the same
+tenant/user path as a cookie request (doc 02 §15b). A project the user cannot see has no event in it, and a project
+they leave drops out on the next poll. An unknown, replaced or revoked token, a disabled user, and a user no longer in
+the workspace all get the same bare `404`, with no body.
+
+One `VEVENT` per item with a `due` whose status is `open`, `ready`, `in_progress`, `blocked` or `review`, soonest first:
+
+| Property | Value |
+|---|---|
+| `UID` | `<item id>@<host of the public origin>`, stable for the item |
+| `DTSTART` | a date-only due: `DTSTART;VALUE=DATE:YYYYMMDD` with `DTEND;VALUE=DATE` the next day, an all-day event (the day in the workspace's time zone, which is how the day is stored). An instant: `DTSTART:YYYYMMDDTHHMMSSZ` in UTC, which the app shows in its own zone |
+| `SUMMARY` | `<qualifiedRef> <title>` (rule 2's callable ref, as the user sees the workspace) |
+| `URL` | the item's `/r/` link, over the public origin `work_brief`'s `web` lines use |
+| `DESCRIPTION` | the status, as rule 6 spells it |
+| `DTSTAMP` | the request time |
+
+The calendar carries `X-WR-CALNAME: Workman <workspace slug>` and `X-WR-TIMEZONE: <workspace zone>`. The text follows
+RFC 5545: CRLF line ends, lines folded at 75 octets (never inside a UTF-8 character), and `\`, `;`, `,` and newlines
+escaped in text values.
+
+**The URL is the secret, so it is never logged.** The handler writes no log line, refusals have no body, only the
+token's hash reaches a query, and the 401 challenge line names this route as `/api/calendar/{token}.ics`, the placeholder and not the value. At the shipped log
+levels (`appsettings.json`: `Microsoft.AspNetCore` at `Warning`) nothing names the path. Two settings do: `Information`
+on `Microsoft.AspNetCore.Hosting` writes the request line, and `Debug` on the auth handlers writes lines inside the
+request's scope, whose `RequestPath` a provider that prints scopes shows. Turn neither on in production. **A reverse
+proxy's access log sees the full URL**, token included, like any URL with a secret in it: keep that log private, or
+have the proxy leave the path of `/api/calendar/` out of it. Anyone with the URL reads the feed until its user
+replaces or revokes it.
 
 ## Rules
 

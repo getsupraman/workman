@@ -10,7 +10,7 @@ namespace Workman.Core.Queries;
 /// field states something an MCP tool also states — attention, the honesty counts, a callable ref —
 /// the API calls the <see cref="BoardQueries"/> method instead, so the two cannot disagree.
 /// </summary>
-public sealed class ApiQueries(NpgsqlDataSource dataSource)
+public sealed partial class ApiQueries(NpgsqlDataSource dataSource)
 {
     private readonly WorkmanConnections _connections = new(dataSource);
 

@@ -1022,6 +1022,32 @@ project with every member of its workspace is the tenant-wide one (doc 08 §4 "P
 - **It decides who sees the project** (m59, §15b): a project's rows reach its members only, enforced in
   the database on every read and write path.
 
+### 12c. Calendar feeds — `calendar_feed`
+
+```sql
+CREATE TABLE calendar_feed (           -- deadlines/7, migration CalendarFeeds (raw SQL, not in the EF model)
+  id           uuid PRIMARY KEY,
+  user_id      uuid NOT NULL,
+  workspace_id uuid NOT NULL,
+  token_hash   text NOT NULL,           -- SHA-256 hex of the token (LinkToken.Hash); the token is shown once
+  created_at   timestamptz NOT NULL DEFAULT now(),
+  CONSTRAINT calendar_feed_membership FOREIGN KEY (user_id, workspace_id)
+      REFERENCES tenant_membership (user_id, workspace_id) ON DELETE CASCADE
+);
+CREATE UNIQUE INDEX calendar_feed_token_hash_idx ON calendar_feed (token_hash);
+CREATE UNIQUE INDEX calendar_feed_user_idx ON calendar_feed (user_id, workspace_id);
+```
+
+The secret in a calendar feed's URL (doc 10, `GET /api/calendar/{token}.ics`): a calendar app polls without
+headers, so the URL is the credential. One row per user per workspace; making a new one replaces the row, so the
+old URL stops working, and revoking deletes it. The key to `tenant_membership` ends the feed with the membership,
+and the feed of a disabled user answers 404 while the row stays. Only a member has one: a system administrator
+visiting a workspace they are not a member of is refused. Raw SQL, like `ItemDates`: only Dapper reads and writes
+it (`CalendarFeedStore`). A tenant table (§15), listed in `TenantTables` through `CalendarFeeds.Direct`.
+
+The feed holds no project: what it lists is read **as its user**, at request time, through the tenant path
+(§15b), so a project the user cannot see has no event in it and a membership removed is gone from the next poll.
+
 ---
 
 ## 13. Views the server leans on
@@ -1132,7 +1158,7 @@ image is one.
 
 | policy | tables |
 |---|---|
-| its own column, `workspace_id = tenant` | `item`, `item_link`, `doc`, `event`, `assumption`, `constraint_rule`, `note`, `verification`, `project_repo`, `agent_token`, `agent_session`, `import_record`, `tenant_membership`, `user_link` (a reset link has no workspace, so no tenant sees it), `project_member` (m58, created with its policy by its own migration), `claim` (its `key_workspace_id`, migration `ClaimWorkspacePolicy`; a write must also name an item of the tenant) |
+| its own column, `workspace_id = tenant` | `item`, `item_link`, `doc`, `event`, `assumption`, `constraint_rule`, `note`, `verification`, `project_repo`, `agent_token`, `agent_session`, `import_record`, `tenant_membership`, `user_link` (a reset link has no workspace, so no tenant sees it), `project_member` (m58, created with its policy by its own migration), `claim` (its `key_workspace_id`, migration `ClaimWorkspacePolicy`; a write must also name an item of the tenant), `calendar_feed` (§12c, created with its policy by its own migration) |
 | its own id, `id = tenant` | `workspace` |
 | its parent `item` is the tenant's | `item_criterion`, `attempt`, `artifact`, `project_config`, `run_config` |
 | through two parents | `report` (→ `attempt` → `item`), `doc_block` (→ `doc`), `doc_block_revision` (→ `doc_block` → `doc`) |
@@ -1215,7 +1241,7 @@ schema owner, OpenIddict's registration and the offline importer.
 
 | `Bypass` | path | why it cannot run as the tenant |
 |---|---|---|
-| `Authentication` | `SessionStore.AuthenticateAsync` (a `wss_` token → its session) | the token is what names the tenant; there is none yet |
+| `Authentication` | `SessionStore.AuthenticateAsync` (a `wss_` token → its session), `CalendarFeedStore.OpenAsync` (a calendar feed's token → its user and workspace) | the token is what names the tenant; there is none yet. The feed then reads its items as that user, through `TenantAsync` |
 | `WorkspaceBinding` | `BoardQueries.WorkspaceAsync`, `WorkWriter.EnsureWorkspaceAsync` | a workspace is looked up by slug, or created on first use, before any tenant is entered (C62) |
 | `Users` | `UserStore`: sign-in, the cookie's stamp check, the OAuth user, the tenant switcher, password change | a user and their memberships span workspaces |
 | `Administration` | `AdminStore` (`/api/admin/*`) | it acts on the workspace its path names; the caller's rights are read from the table on every call (C62) |
@@ -1307,7 +1333,7 @@ tables (migrations `ProjectAccess`, then `ProjectAccessSeq`, which rewrote its p
 | its item is visible — `EXISTS (SELECT 1 FROM item p WHERE p.id = <column>)`, read under `item`'s policies | `verification` and `claim` (`item_id`), `project_repo` and `import_record` (`project_item_id`), `item_link` (both ends) |
 | the same, or the reference is null: a workspace row | `doc` (`item_id`), `event` (`item_id`), `assumption` and `constraint_rule` (`scope_item_id`), `agent_token` (`scope_item_id`), `note` (`to_item_id` and `from_item_id`) |
 | none of its own: its tenant policy already reads its parent, which reads `item` | `item_criterion`, `attempt`, `artifact`, `project_config`, `run_config`, `report`, `doc_block`, `doc_block_revision` |
-| none — no project | `workspace`, `tenant_membership`, `user_link`, `agent_session` |
+| none — no project | `workspace`, `tenant_membership`, `user_link`, `agent_session`, `calendar_feed` |
 
 `TenantTables.ByProject` lists the first three rows; `ProjectAccessRlsTests` reads it. The views run as
 their caller (§15), so `item_rollup` and `open_thread` count and list only what the caller may see.
