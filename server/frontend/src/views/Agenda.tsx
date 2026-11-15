@@ -11,6 +11,7 @@ import { reveal, useListKeys } from '../listkeys.ts'
 import { short } from '../format.ts'
 import { CopyRef, Dot, Known } from '../ui.tsx'
 import { SplitView } from '../split-view.tsx'
+import { agendaBack } from '../back.ts'
 import Detail, { asTab, type Tab } from './Detail.tsx'
 
 /** `/agenda`, `/agenda/{item}` (doc 13): what is overdue, due today and in the next 14 days, and what became actionable this morning. */
@@ -36,7 +37,8 @@ export default function Agenda() {
   const href = (item: Pick<ItemRef, 'id' | 'kind'>, tabFor: Tab = tab(), cancelledFor = cancelled()) =>
     onAgenda(item.id) || item.id === params.item ? `${agendaHref(item.id)}${planQuery(DEFAULT_FILTER, tabFor, cancelledFor)}` : itemHref(item, null)
 
-  const close = () => navigate(agendaHref(), { scroll: false })
+  const back = () => agendaBack()
+  const close = () => navigate(back().href, { scroll: false })
 
   // ArrowUp/ArrowDown, Home/End walk the rows as drawn: the panel follows the selection.
   let keyed = false
@@ -73,6 +75,7 @@ export default function Agenda() {
       open={params.item !== undefined}
       onClose={close}
       showing={params.item ?? ''}
+      back={back()}
       main={
         <div class="page">
           <div class="page-h">

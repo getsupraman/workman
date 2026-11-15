@@ -1,11 +1,14 @@
 import { Show, createEffect, createSignal, onCleanup, onMount, type JSX } from 'solid-js'
+import { A } from '@solidjs/router'
+import { backText, type Back } from './back.ts'
 import { useDocumentKeys } from './listkeys.ts'
 import { isClearKey } from './listnav.ts'
 import { NUDGE, PANEL_MIN, SHEET_MAX, clampWidth, docks, maxWidth, panelWidth, rememberWidth, rememberedWidth } from './split.ts'
 
 /**
  * The main content and a panel on its right: docked beside it with a drag handle when the measured
- * width holds both, a sheet over it with a title row and a close when it does not. The main content
+ * width holds both, a sheet over it when it does not. With an item open the panel starts with the
+ * return bar (`back`); a sheet without one gets a title row and a Close. The main content
  * scrolls with `<main>`; the docked panel stays at full height and scrolls on its own.
  */
 export function SplitView(props: {
@@ -18,6 +21,8 @@ export function SplitView(props: {
   onClose: () => void
   /** Changes when the panel shows something else, which starts it at the top. */
   showing: string
+  /** With an item open, the panel starts with a bar back to here (`src/back.ts`); as a sheet it is the header. */
+  back?: Back
 }) {
   let root!: HTMLDivElement
   let side: HTMLElement | undefined
@@ -119,13 +124,30 @@ export function SplitView(props: {
           aria-label={props.title}
           ref={side}
         >
-          <Show when={!docked()}>
-            <div class="sheet-h">
-              <span class="sheet-t">{props.title}</span>
-              <button type="button" class="proj-act" onClick={() => props.onClose()}>
-                Close
-              </button>
-            </div>
+          <Show
+            when={props.open && props.back}
+            fallback={
+              <Show when={!docked()}>
+                <div class="sheet-h">
+                  <span class="sheet-t">{props.title}</span>
+                  <button type="button" class="proj-act" onClick={() => props.onClose()}>
+                    Close
+                  </button>
+                </div>
+              </Show>
+            }
+          >
+            {(back) => (
+              <A href={back().href} class="back-bar" title={backText(back())} noScroll>
+                <span class="back-to">
+                  <span class="back-l">← {back().label}</span>
+                  <Show when={back().context}>
+                    <span class="back-c"> · {back().context}</span>
+                  </Show>
+                </span>
+                <kbd class="back-k">Esc</kbd>
+              </A>
+            )}
           </Show>
           {props.side}
         </aside>

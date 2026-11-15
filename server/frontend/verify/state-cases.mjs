@@ -25,6 +25,7 @@ import { expiresIn, isLastAdmin, isLinkPath, joinStep, joinToken, nameProblem, p
 import { addDays, agendaGroups, agendaOrder, agendaRowFacts, agendaUntil, dateChips, dayHeading, dueEnd, zonedDay } from '../src/dates.ts'
 import { INBOX_FILTERS, inboxKind } from '../src/inbox.ts'
 import { agendaHref } from '../src/nav.ts'
+import { agendaBack, backText, inboxBack, runBack } from '../src/back.ts'
 import { THEME_CHOICES, headerFacts, liveLabel, menuStep, shownTheme, storedForTheme, themeFromStored, toggledTheme } from '../src/account.ts'
 
 let failures = 0
@@ -956,6 +957,33 @@ console.log('\n── the account header: who, where, the live dot, the theme ch
   check('menu: Home / End', [menuStep('Home', 2, 4), menuStep('End', 0, 4)], [0, 3])
   check('menu: other keys are not the menu\'s', [menuStep('Enter', 0, 4), menuStep('a', 0, 4), menuStep('ArrowDown', 0, 0)], [null, null, null])
   check('the keys table says Esc closes the account menu', KEYS.some((k) => k.keys === 'Esc' && k.where.includes('account menu')), true)
+}
+
+
+console.log('── the panel return bar (src/back.ts) ───────────────────────────────────────')
+{
+  const run = runBack('R', 'Entity store', 'all', 'evidence', true)
+  check('run: ← Run · <run title>', backText(run), '← Run · Entity store')
+  check('run: the href is the run page with filter, tab and cancelled kept', run.href, '/runs/R?filter=all&tab=evidence&cancelled=show')
+  check('run: the href equals Esc\'s runPageHref, every filter and tab', FILTERS.flatMap(([f]) => ['overview', 'notes'].flatMap((t) => [false, true].map((c) => runBack('R', 'x', f, t, c).href === runPageHref('R', f, t, c)))).every(Boolean), true)
+  check('run: on defaults the bar goes to the bare run', runBack('R', 'x', DEFAULT_FILTER, 'overview').href, '/runs/R')
+  check('run: the bar has a page behind it', routeReads(runBack('R', 'x', 'due', 'notes').href), ['/api/v1/runs/R/board', '/api/v1/items/R'])
+
+  check('needs you: All names no context', [backText(inboxBack('all')), inboxBack('all').href], ['← Needs you', '/inbox'])
+  check('needs you: a filter is named by its bar label', INBOX_FILTERS.map(([f]) => backText(inboxBack(f))), ['← Needs you', '← Needs you · Questions', '← Needs you · Blocked', '← Needs you · Overdue'])
+  check('needs you: the href keeps the filter, as close did', INBOX_FILTERS.map(([f]) => inboxBack(f).href === `${inboxHref()}${withInboxFilter('', f)}`), [true, true, true, true])
+  check('needs you: the filtered href', inboxBack('overdue').href, '/inbox?kind=overdue')
+
+  check('agenda: ← Agenda back to the list', [backText(agendaBack()), agendaBack().href], ['← Agenda', agendaHref()])
+  check('a page passes its own bar (← Calendar · <period>)', backText({ label: 'Calendar', context: 'Week of 16 Nov', href: '/agenda?view=week' }), '← Calendar · Week of 16 Nov')
+
+  // The bar and Esc share one href: each page closes to back().href and hands the same back to SplitView.
+  for (const page of ['Run', 'Inbox', 'Agenda']) {
+    const src = readFileSync(new URL(`../src/views/${page}.tsx`, import.meta.url), 'utf8')
+    check(`${page}: close() and the bar use the same back()`, [/const close = \(\) => navigate\(back\(\)\.href, \{ scroll: false \}\)/.test(src), /back=\{back\(\)\}/.test(src)], [true, true])
+  }
+  const split = readFileSync(new URL('../src/split-view.tsx', import.meta.url), 'utf8')
+  check('split view: the sheet\'s Close only when no bar replaces it', /when=\{props\.open && props\.back\}[\s\S]*fallback=[\s\S]*Close/.test(split), true)
 }
 
 

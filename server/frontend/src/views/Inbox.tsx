@@ -25,6 +25,7 @@ import { reveal, useListKeys } from '../listkeys.ts'
 import { ago, plural, short } from '../format.ts'
 import { CopyRef, Dot, Known } from '../ui.tsx'
 import { SplitView } from '../split-view.tsx'
+import { inboxBack } from '../back.ts'
 import Detail, { asTab, type Tab } from './Detail.tsx'
 
 /**
@@ -162,7 +163,8 @@ export default function Inbox() {
   const filterHref = (f: InboxFilter) =>
     `${params.item ? inboxHref(params.item) : inboxHref()}${withInboxFilter(planQuery(DEFAULT_FILTER, tab(), cancelled()), f)}`
 
-  const close = () => navigate(`${inboxHref()}${withInboxFilter('', filter())}`, { scroll: false })
+  const back = () => inboxBack(filter())
+  const close = () => navigate(back().href, { scroll: false })
 
   // ArrowUp/ArrowDown, Home/End walk the rows as drawn: the panel follows the selection.
   let keyed = false
@@ -200,6 +202,7 @@ export default function Inbox() {
       open={params.item !== undefined}
       onClose={close}
       showing={params.item ?? ''}
+      back={back()}
       main={
         <div class="page">
           <div class="page-h">

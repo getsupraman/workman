@@ -12,6 +12,7 @@ import { UNKNOWN, claimHolder, short } from '../format.ts'
 import { dateChips } from '../dates.ts'
 import { CancelledToggle, CopyRef, Dot, ProjectName, Segs } from '../ui.tsx'
 import { SplitView } from '../split-view.tsx'
+import { runBack } from '../back.ts'
 import Detail, { asTab, type Tab } from './Detail.tsx'
 import { PromptActions } from './Prompts.tsx'
 
@@ -39,6 +40,7 @@ export default function Run() {
   /** A plan row: the selected one leads back to the run's details. */
   const rowHref = (item: ItemRef) => keepPlace(rowToggleHref(params.run, params.item, onBoard, item))
   const runPage = () => runPageHref(params.run, filter(), tab(), cancelled())
+  const back = () => runBack(params.run, short(board.data()?.run.title ?? ''), filter(), tab(), cancelled())
 
   const here = () => (params.item ? `${runHref(params.run)}/${params.item}` : runHref(params.run))
 
@@ -47,7 +49,7 @@ export default function Run() {
   const planToggle = () => `${here()}${planShown() ? query(filter(), tab(), false) : query('all', tab(), true)}`
 
   const navigate = useNavigate()
-  const close = () => navigate(runPage(), { scroll: false })
+  const close = () => navigate(back().href, { scroll: false })
   // ArrowUp/ArrowDown, Home/End walk the plan as it is drawn: the panel follows the selection.
   let keyed = false
   useListKeys((m) => {
@@ -109,6 +111,7 @@ export default function Run() {
               open={params.item !== undefined}
               onClose={close}
               showing={selected()}
+              back={back()}
               main={
                 <div class="page">
                   <RunHeader board={b()} />
