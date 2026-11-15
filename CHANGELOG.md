@@ -7,6 +7,29 @@ All notable changes to the Workman server and the `workman` plugin are recorded 
 
 ## [Unreleased]
 
+Server only (dashboard and one read endpoint). No migration; the plugin stays 3.1.0.
+
+### Added
+
+- **`GET /api/v1/calendar?from=&to=&scope=`:** every dated item whose `due` or `not_before` falls in a range of
+  at most 100 days, in the workspace's time zone, done items included (`late`, `closedAt`). Cancelled,
+  superseded and archived work is left out.
+- **A calendar in the Agenda page:** with nothing selected, the panel shows Days, Week or Month, with ‹ Today ›.
+  View and date are in the URL, and ←/→ move the period. Overdue work shows in the stop colour, waits with a
+  dashed ring, done items dimmed and late ones marked. The panel opens wider (60%) and remembers its own width.
+  Narrow windows get a List | Calendar switch.
+- **A return bar at the top of the item panel:** `← Run · <title>`, `← Needs you`, `← Calendar · <period>`,
+  with Esc. On narrow windows it is the sheet's header.
+
+### Changed
+
+- **The sidebar starts with an account header:** initials, name, workspace and role, and a live dot that
+  replaces the "As of" line. Its menu holds Account, Theme System/Light/Dark, Keyboard shortcuts, the
+  workspace switch and Sign out. The sidebar footer is gone.
+- **The Account page is one column:** a profile header, connected apps grouped by app (one Revoke per
+  connection), a calendar status line, and the password form behind a button. The calendar link panel moved
+  to the Agenda page, below "Actionable since this morning".
+
 ## [3.1.0] — 2026-11-15
 
 Server 3.1.0 and plugin 3.1.0. Additive: an item without dates behaves exactly as before. Three migrations:
