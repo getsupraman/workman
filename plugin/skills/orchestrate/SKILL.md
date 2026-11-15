@@ -105,7 +105,7 @@ For each task, in the order `work_next` gives. **Writing agents run one at a tim
 next → claim → brief → delegate → report → verify → judge → commit → close → next
 ```
 
-**1. Next and claim.** `work_next(scope: "<run ref>")` names the ready task and its command. `work_status(ref, "in_progress")` claims it.
+**1. Next and claim.** `work_next(scope: "<run ref>")` names the ready task and its command. `work_status(ref, "in_progress")` claims it. It already ranks overdue and due-today tasks first and holds back one whose `not_before` has not come. A task blocked by an open `wait` (something outside) is not stuck: the wait closes with what arrived, `work_status(…, "done", reason:)`. On a scheduled check (a loop or cron that wakes you), call `work_agenda(until: <today>, since: <the last check>)` first.
 
 **2. Brief.** Use the template in `references/briefs.md`. The done-criteria, verification command and BINDING block come from `work_brief(scope: "<task ref>", for: "worker")` — hand those over verbatim. The brief adds what the store cannot give: the allow-list, the banned shell shapes, the facts you established, the environment's benign noise.
 

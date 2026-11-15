@@ -87,7 +87,13 @@ to miss because the diagnostic fix looks cosmetic.
 
 Write the order into the store, not into a list: `work_link(from: "<prerequisite>", to: "<unit>",
 type: "blocks")` for every real dependency, and `priority` for the rest. `work_next` then hands you
-the next unit in that order.
+the next unit in that order; it already puts overdue and due-today units first and leaves out one whose
+`not_before` has not come. A unit waiting on something outside is blocked by a `wait` item: it closes
+with what arrived (`work_status(…, "done", reason:)`), never with a verification.
+
+**On a scheduled check** (a loop or a cron that wakes you), start with
+`work_agenda(until: <today>, since: <the last check>)`: what is overdue, what is due, and what became
+actionable since you last looked. Act on that before `work_next`.
 
 **Get one approval for the queue, then run it.** Present `work_tree(scope: "<queue ref>")` — the
 eligible units, the blocked ones with what each needs, and your proposed order. Then run to completion without asking

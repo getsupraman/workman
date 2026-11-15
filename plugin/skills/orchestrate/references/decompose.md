@@ -52,6 +52,8 @@ When you group tasks into a phase, note **where they touch each other** — the 
 | Phase — its observable slice, gate criterion and seams | `kind: "phase"`; the slice and gate criterion as `title` / `intent`, the seams in `intent` ("seams: none" is a valid answer and means the gate can be skipped), the phase-level suite as `verify_cmd` |
 | Task — intent, likely files, done-criteria, verification | `kind: "task"`, `parent:` the phase ref; `intent` with the likely files; `criteria: [...]`; `verify_cmd` |
 | "B cannot start before A is done" | `work_link(from: A, to: B, type: "blocks")` |
+| A date the human named — "by", "not before", "on" | `due:` / `not_before:` (both for "on"); never a child due after its parent |
+| "B waits on something outside" (an email, a sign-off) | a `kind: "wait"` item, `due:` the chase date, that `blocks` B |
 | A task that is review-required per the risk dial | `risk_tags: [...]` |
 | Repo conventions, stack facts, safety rules, commands | `work_constrain`, once, scoped to the run — **never** in a task |
 

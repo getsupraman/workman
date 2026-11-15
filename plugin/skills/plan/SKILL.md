@@ -75,6 +75,10 @@ A request that mixes modes runs them in order and still stops at each gate.
    - **assumptions** with `work_assume`: everything you believe but did not check.
    - **order** with `work_link(type: "blocks")` for every real dependency, and `priority` for the
      rest. Put the diagnostic before the diagnosis.
+   - **dates**, only when the human names one: `due:` for "by", `not_before:` for "not before"; to
+     start on a day, both on that day. Waiting on something outside (a client's email, a sign-off) is
+     a `kind: "wait"` item that `blocks` the task, its `due` the day to chase. A hard deadline with an
+     earlier warning is a second dated item that blocks it. A child is never due after its parent.
    - **open decisions** as `kind: "question"` items under the run — an executor handed an undecided
      question decides it quietly. A unit that waits on a question is `blocked` until it is answered.
 5. **Present it, then stop.** Show `work_tree(scope: "<run>")` and add:

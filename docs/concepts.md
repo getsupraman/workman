@@ -83,6 +83,70 @@ work_brief → work_next → work_status(in_progress) → do the work
 - Every result ends with an **`attention`** block: expired claims, assumptions past their revisit
   point, notes for the item you're about to brief.
 
+## Dates
+
+Any item can carry **`due`** (must be done by) and **`not_before`** (not actionable before), set with
+`work_create` or `work_update`. Each is a day, `2026-12-01`, meaning that whole day in the workspace's
+time zone (UTC unless an admin sets another), or an ISO date-time with an offset. `work_next` leaves
+out an item whose `not_before` has not come and ranks overdue, then due-today items first; an item
+with no dates behaves as before. Every change of a date is journalled, so `work_get` shows how often a
+due slipped and whether an item closed late. Workman never pushes: agents ask (`work_agenda`,
+`work_next`, `attention`), people look (the dashboard's **Agenda** page, the calendar feed).
+→ [02-data-model.md](02-data-model.md#dates--due-and-not_before)
+
+**Start on a date.** Give the task `not_before` and `due` both on that day:
+`work_update(ref:"site-refresh", not_before:"2026-12-01", due:"2026-12-01")`. It stays off `work_next`
+until the 1st, then ranks first that day, and is overdue once the day has ended.
+
+**Wait on a client's email.** Waiting on something outside is a **`wait`** item that blocks the real
+task; its `due` is the day to chase:
+
+```
+work_create(items:[{kind:"wait", parent:"1", ref:"W1",
+                    title:"Signed scope from the client", due:"2026-11-24"}])
+work_link(from:"W1", to:"1.3", type:"blocks")
+```
+
+A wait is never offered by `work_next`; it shows on the agenda by its chase date, and in `attention`
+once that has passed. When the email arrives, anyone closes it with what arrived as the evidence, not
+a verification: an orchestrator with `work_status(ref:"W1", to:"done", reason:"scope signed, v2
+attached")`, a worker with `work_report(ref:"W1", status:"done", verify:"scope signed, v2 attached")`.
+Closing it releases 1.3.
+
+**A legal deadline with an earlier warning.** Put the hard date on the filing and a second item, due
+earlier, that blocks it:
+
+```
+work_create(items:[{kind:"task", parent:"2", ref:"2.1", title:"Draft and check the reply",
+                    due:"2027-01-08", …},
+                   {kind:"task", parent:"2", ref:"2.2", title:"File the reply",
+                    due:"2027-01-15", …}])
+work_link(from:"2.1", to:"2.2", type:"blocks")
+```
+
+The draft turns overdue a week before the filing does, and if 2.1 is still open as the 15th nears,
+`attention` warns that 2.2 is due soon and still blocked by it.
+
+**A run's launch date.** Put `due` on the run itself, and date its phases inside it. `work_audit` flags
+`due-after-parent`: an open item due after its own parent is due, both dated; the fix it names is the
+child's date or the parent's.
+
+**A scheduled orchestrator check.** An orchestrator woken twice a day (07:30 and 16:30, by a loop or a
+cron) starts each check with
+
+```
+work_agenda(until:"2026-11-16", since:"2026-11-15T16:30:00+01:00")
+```
+
+and gets three lists: **OVERDUE**, **DUE BY** the end of `until`, and **ACTIONABLE SINCE** the last check
+(its `not_before` came, or its last blocker closed). That replaces an external todo list. The same data
+is `GET /api/v1/agenda`. → [01-mcp-surface.md](01-mcp-surface.md), [10-read-api.md](10-read-api.md)
+
+**The calendar feed.** On the dashboard's Account page, create a calendar feed and subscribe to its URL
+(`https://workman.example/api/calendar/<token>.ics`) in a calendar app: every open item with a due, in
+the projects you can see, as an all-day or a timed event. The URL is shown once and is the secret;
+replace or revoke it there. → [10-read-api.md](10-read-api.md)
+
 ## The dashboard
 
 The same server serves a dashboard for people: what needs you, who is working on what, every run's

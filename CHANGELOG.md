@@ -7,6 +7,47 @@ All notable changes to the Workman server and the `workman` plugin are recorded 
 
 ## [Unreleased]
 
+## [3.1.0] — 2026-11-15
+
+Server 3.1.0 and plugin 3.1.0. Additive: an item without dates behaves exactly as before. Three migrations:
+`ItemDates`, `CalendarFeeds` and `WaitKind`. Recurring dates are not in this release (phase 2).
+
+### Added
+
+- **`due` and `not_before` on any item:** `work_create` and `work_update` take each as a day (`YYYY-MM-DD`,
+  that whole day in the workspace's time zone) or an ISO date-time with an offset; `not_before` after `due`
+  is refused, and `""` clears a date. Each change is journalled as `dates_changed {field, from, to}`;
+  `work_get` prints the dates, the slip count and `late` for an item closed after its due (migration
+  `ItemDates`).
+- **A workspace time zone:** an IANA name, UTC by default, read at query time;
+  `GET|PATCH /api/admin/tenants/{id}/settings` (admin only), and a Time zone field on the workspace page.
+- **`work_agenda(until, since?, scope?)`**, every role: OVERDUE, DUE BY `until`, and ACTIONABLE SINCE
+  `since` (its `not_before` came or its last blocker closed), for an orchestrator that checks on a schedule.
+  `GET /api/v1/agenda` returns the same query as JSON.
+- **The `wait` kind** (migration `WaitKind`): something outside the work, such as a client's email, that
+  blocks a task, with its `due` as the chase date. It is never on `work_next`, and closes with what arrived
+  as its evidence: `work_status(…, "done", reason:)`, or a worker's `work_report(…, status:"done", verify:)`.
+- **Dates in the brief and attention:** a DATES block when something is overdue or due within three days;
+  attention lines for overdue items and items due soon that are still blocked; an open assumption past its
+  `revisit_at` shows as due.
+- **Plan audit check `due-after-parent`:** an open child due after its parent is due.
+- **Calendar feed:** `GET /api/calendar/{token}.ics`, the due dates of the open items a user can see, as
+  all-day or timed events; the user creates, replaces and revokes it under `/api/session/calendar` and on
+  the Account page. Only the token's SHA-256 is stored (migration `CalendarFeeds`).
+- **Dashboard:** date chips (due, overdue, not before, late, slips) on run rows and the item page, a *Due*
+  filter on a run, the **Agenda** page by day (`/agenda`, and *Go to Agenda* in the palette), and an
+  overdue kind and filter in Needs you; the inbox gains the `overdue` kind.
+- **Plugin skills:** `/workman:plan` sets `due`/`not_before` when the human names a date and models a wait on
+  something outside as a `wait` item; `/workman:controller` and `/workman:orchestrate` start a scheduled
+  check with `work_agenda`. `docs/concepts.md` has a *Dates* section with recipes.
+
+### Changed
+
+- **`work_next`** leaves out an item whose `not_before` has not started and ranks overdue, then due-today
+  items ahead of priority; undated items keep their order among themselves.
+- **Run page:** with an item open there is a way back to the run's details: a *Run* link at the end of the
+  filter bar, a click on the selected row or phase head, and Esc with the panel docked (also on Needs you).
+
 ## [3.0.3] — 2026-11-07
 
 Server 3.0.3 (dashboard only). No migration; the plugin stays 3.0.1.
