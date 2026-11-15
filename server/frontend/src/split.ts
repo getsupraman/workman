@@ -24,6 +24,11 @@ export const SHEET_MAX = 640
 
 export const WIDTH_KEY = 'workman.run-panel-width'
 
+/** The Agenda calendar, while it is the panel's content: wider by default, its width remembered on its own. */
+export const CALENDAR_SHARE = 0.6
+
+export const CALENDAR_WIDTH_KEY = 'workman.calendar-panel-width'
+
 /** Docked when the list, the handle and the panel all fit at their minimum; otherwise a sheet. */
 export const docks = (width: number): boolean => width >= LIST_MIN + HANDLE + PANEL_MIN
 
@@ -34,8 +39,8 @@ export const clampWidth = (want: number, width: number): number =>
   Math.round(Math.min(maxWidth(width), Math.max(PANEL_MIN, want)))
 
 /** The panel's width: what the user chose, or the default share, always inside both floors. */
-export const panelWidth = (preferred: number | undefined, width: number): number =>
-  clampWidth(preferred ?? (width - HANDLE) * PANEL_SHARE, width)
+export const panelWidth = (preferred: number | undefined, width: number, share = PANEL_SHARE): number =>
+  clampWidth(preferred ?? (width - HANDLE) * share, width)
 
 type Store = Pick<Storage, 'getItem' | 'setItem' | 'removeItem'>
 
@@ -43,9 +48,9 @@ type Store = Pick<Storage, 'getItem' | 'setItem' | 'removeItem'>
 const local = (): Store => localStorage
 
 /** The remembered width, or `undefined` for "no preference" when nothing usable is stored. */
-export function rememberedWidth(store: () => Store = local): number | undefined {
+export function rememberedWidth(store: () => Store = local, key = WIDTH_KEY): number | undefined {
   try {
-    const raw = store().getItem(WIDTH_KEY)
+    const raw = store().getItem(key)
     const value = raw === null ? NaN : Number(raw)
     return Number.isFinite(value) && value > 0 ? value : undefined
   } catch {
@@ -54,10 +59,10 @@ export function rememberedWidth(store: () => Store = local): number | undefined 
 }
 
 /** `undefined` forgets the preference, so the default share applies again. */
-export function rememberWidth(value: number | undefined, store: () => Store = local): void {
+export function rememberWidth(value: number | undefined, store: () => Store = local, key = WIDTH_KEY): void {
   try {
-    if (value === undefined) store().removeItem(WIDTH_KEY)
-    else store().setItem(WIDTH_KEY, String(Math.round(value)))
+    if (value === undefined) store().removeItem(key)
+    else store().setItem(key, String(Math.round(value)))
   } catch {
     // remembered for this page only
   }

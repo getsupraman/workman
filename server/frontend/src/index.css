@@ -627,3 +627,60 @@ a.chip:hover { color: var(--ink); background: var(--line); }
 .agenda-feed { margin-top: 20px; }
 .feed-row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; padding: 14px 18px; }
 .feed-row p { flex-basis: 100%; margin: 0; font-size: 12.5px; color: var(--ink-3); }
+
+/* ── the Agenda calendar (doc 13) ───────────────────────────────────────────────────────────── */
+
+.cal { padding: 0 0 18px; outline: none; }
+.cal:focus-visible { box-shadow: inset 0 0 0 2px var(--accent); }
+.cal-h { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; padding: 12px 16px 10px 20px; border-bottom: 1px solid var(--line-2); }
+.cal-nav { display: flex; gap: 4px; }
+.cal-btn { display: inline-grid; place-items: center; min-width: 30px; height: 28px; padding: 0 9px; border: 1px solid var(--line); border-radius: 8px; color: var(--ink-2); font-size: 12.5px; font-weight: 500; text-decoration: none; }
+.cal-btn:hover { background: var(--bg); color: var(--ink); }
+.cal-t { margin: 0; font-size: 15px; font-weight: 600; flex: 1 1 auto; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cal-views { padding: 0; border: 0; }
+.cal-fail { margin: 12px 16px; }
+.cal .empty { padding: 26px 20px; }
+
+.cal-e { display: flex; align-items: center; gap: 5px; min-width: 0; padding: 2px 5px; border-radius: 6px; font-size: 12px; line-height: 17px; color: var(--ink); text-decoration: none; }
+.cal-e:hover { background: var(--bg); }
+.cal-e.on { background: var(--accent-soft); }
+.cal-e .dot { width: 8px; height: 8px; margin-top: 0; }
+.cal-e .dot.s-stop, .cal-e .dot.s-doing { box-shadow: none; }
+.cal-et { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cal-time { color: var(--ink-3); font-variant-numeric: tabular-nums; flex: none; }
+.cal-start { color: var(--ink-3); font-size: 11px; flex: none; }
+.cal-start::before { content: '▸ '; }
+.cal-e.start .cal-et { color: var(--ink-2); }
+.cal-e.overdue .cal-et, .cal-e.overdue .cal-time { color: var(--stop); font-weight: 500; }
+.cal-e.done, .cal-row.done { opacity: 0.5; }
+.cal-e.done .cal-et { text-decoration: line-through; text-decoration-color: var(--ink-3); }
+.cal-late { color: var(--claimed); font-size: 11px; font-weight: 600; flex: none; }
+
+.cal-days { padding-top: 4px; }
+.cal-dh { display: flex; align-items: baseline; gap: 8px; padding: 14px 18px 4px 20px; font-weight: 600; font-size: 13px; }
+.cal-dh .n { color: var(--ink-3); font-weight: 400; font-size: 12px; }
+.cal-day.today .cal-dh span:first-child { color: var(--accent); }
+.cal-row .item-side { white-space: nowrap; color: var(--ink-2); font-size: 12.5px; }
+
+.cal-week { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 0; padding: 0 8px; }
+.cal-col { min-width: 0; min-height: 220px; padding: 6px 2px; border-right: 1px solid var(--line-2); }
+.cal-col:last-child { border-right: 0; }
+.cal-ch { padding: 2px 5px 6px; font-size: 11.5px; color: var(--ink-3); white-space: nowrap; }
+.cal-ch b { color: var(--ink); font-weight: 600; }
+.cal-col.today .cal-ch b { color: var(--accent); }
+
+.cal-month { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); padding: 0 8px; }
+.cal-mh { padding: 8px 5px 4px; font-size: 11.5px; color: var(--ink-3); }
+.cal-cell { min-width: 0; min-height: 84px; padding: 3px 2px; border-top: 1px solid var(--line-2); border-right: 1px solid var(--line-2); }
+.cal-cell:nth-child(7n) { border-right: 0; }
+.cal-cell.out { background: var(--bg); }
+.cal-cell.out .cal-cn { color: var(--ink-3); }
+.cal-cn { padding: 0 5px 2px; font-size: 11.5px; font-weight: 600; }
+.cal-cell.today .cal-cn { color: var(--accent); }
+.cal-more { display: block; padding: 1px 5px; font-size: 11.5px; font-weight: 600; color: var(--ink-2); text-decoration: none; }
+.cal-more:hover { color: var(--accent); text-decoration: underline; }
+
+.agenda-switch { padding: 0; border: 0; }
+.agenda-switch button { padding: 4px 10px; border: 0; border-radius: 8px; background: none; font: inherit; font-size: 12.5px; font-weight: 500; color: var(--ink-2); cursor: pointer; }
+.agenda-switch button.on { background: var(--accent-soft); color: var(--accent); }
+.cal-page { padding: 0; }

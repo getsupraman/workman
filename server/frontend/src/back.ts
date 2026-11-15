@@ -6,6 +6,7 @@
 import { runPageHref, type Filter } from './plan.ts'
 import { INBOX_FILTERS, withInboxFilter, type InboxFilter } from './inbox.ts'
 import { agendaHref, inboxHref } from './nav.ts'
+import { periodText, withCalendar, type CalState } from './calendar.ts'
 
 export type Back = {
   /** The page it returns to: *Run*, *Needs you*, *Agenda*, *Calendar*. */
@@ -32,5 +33,12 @@ export const inboxBack = (filter: InboxFilter): Back => ({
   href: `${inboxHref()}${withInboxFilter('', filter)}`,
 })
 
-/** The Agenda list. The calendar unit passes its own `Back` (`← Calendar · <period>`). */
+/** The Agenda list. While the calendar is the panel's home, Agenda passes `calendarBack` instead. */
 export const agendaBack = (): Back => ({ label: 'Agenda', context: '', href: agendaHref() })
+
+/** The Agenda with nothing selected, the calendar on the same view and period: `← Calendar · Week of 16 Nov`. */
+export const calendarBack = (cal: CalState, today: string): Back => ({
+  label: 'Calendar',
+  context: periodText(cal, today),
+  href: `${agendaHref()}${withCalendar('', cal, today)}`,
+})

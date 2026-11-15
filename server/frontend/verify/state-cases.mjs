@@ -26,6 +26,9 @@ import { addDays, agendaGroups, agendaOrder, agendaRowFacts, agendaUntil, dateCh
 import { INBOX_FILTERS, inboxKind } from '../src/inbox.ts'
 import { agendaHref } from '../src/nav.ts'
 import { agendaBack, backText, inboxBack, runBack } from '../src/back.ts'
+import { CAL_VIEWS, DAYS_SPAN, asDay, calendarKey, calendarParams, dayGroups, dayView, monday, monthCell, monthGrid, parseCalendar, periodDays, periodRange, periodText, placeEntries, shiftPeriod, switchView, withCalendar } from '../src/calendar.ts'
+import { calendarBack } from '../src/back.ts'
+import { CALENDAR_SHARE, CALENDAR_WIDTH_KEY } from '../src/split.ts'
 import { THEME_CHOICES, headerFacts, liveLabel, menuStep, shownTheme, storedForTheme, themeFromStored, toggledTheme } from '../src/account.ts'
 
 let failures = 0
@@ -1011,6 +1014,111 @@ console.log('── the panel return bar (src/back.ts) ────────�
   check('split view: the sheet\'s Close only when no bar replaces it', /when=\{props\.open && props\.back\}[\s\S]*fallback=[\s\S]*Close/.test(split), true)
 }
 
+
+console.log('\n── the Agenda calendar (src/calendar.ts, account-calendar/5) ─────────────────')
+{
+  const ROME = 'Europe/Rome'
+  const TODAY = '2026-11-15' // a Sunday
+  const q = (cal) => withCalendar('', cal, TODAY)
+  const back = (query) => parseCalendar(Object.fromEntries(new URLSearchParams(query)))
+
+  // The URL: defaults left out, and every state reads back as itself.
+  check('url: Days today is the bare page', q({ view: 'days', date: null }), '')
+  check('url: a view on today keeps the view, no date', q({ view: 'week', date: null }), '?view=week')
+  check('url: today written out is left out', q({ view: 'month', date: TODAY }), '?view=month')
+  check('url: Days on another day keeps the date only', q({ view: 'days', date: '2026-11-20' }), '?date=2026-11-20')
+  check('url: view and date', q({ view: 'week', date: '2026-11-20' }), '?view=week&date=2026-11-20')
+  check('parse: nothing is Days on today', parseCalendar({}), { view: 'days', date: null })
+  check('parse: a view without a date keeps the view', parseCalendar({ view: 'week' }), { view: 'week', date: null })
+  check('parse: month with a date', parseCalendar({ view: 'month', date: '2026-12-03' }), { view: 'month', date: '2026-12-03' })
+  check('parse: an unknown view is Days, an impossible date is today', parseCalendar({ view: 'year', date: '2026-02-30' }), { view: 'days', date: null })
+  check('parse: junk dates are today', ['2026-11-5', 'tomorrow', '', null].map(asDay), [null, null, null, null])
+  check('url: every view and date round-trips', CAL_VIEWS.flatMap(([v]) => [null, '2026-11-20', '2027-01-31'].map((d) => {
+    const read = back(q({ view: v, date: d }))
+    return read.view === v && (read.date ?? TODAY) === (d ?? TODAY)
+  })).every(Boolean), true)
+  check('url: a row link keeps tab and cancelled, then the calendar', withCalendar('?tab=notes&cancelled=show', { view: 'month', date: '2026-12-01' }, TODAY), '?tab=notes&cancelled=show&view=month&date=2026-12-01')
+  check('url: a stale view/date in the query is replaced', withCalendar('?view=week&date=2026-01-01', { view: 'days', date: null }, TODAY), '')
+  check('url: params as pairs', calendarParams({ view: 'week', date: '2026-11-20' }, TODAY), [['view', 'week'], ['date', '2026-11-20']])
+
+  // Periods: weeks run Monday to Sunday; a month is six weeks from the Monday on or before the 1st.
+  check('monday: a Sunday goes back six days, a Monday is itself', [monday('2026-11-15'), monday('2026-11-16'), monday('2026-11-18')], ['2026-11-09', '2026-11-16', '2026-11-16'])
+  const nov = monthGrid('2026-11-20')
+  check('month: six weeks of seven', [nov.length, nov.every((w) => w.length === 7)], [6, true])
+  check('month: Nov 2026 starts Mon 26 Oct (the 1st is a Sunday), ends Sun 6 Dec', [nov[0][0], nov[5][6]], ['2026-10-26', '2026-12-06'])
+  const feb = monthGrid('2027-02-14')
+  check('month: a 1st on a Monday starts on it and still has six weeks', [feb[0][0], feb[5][6], feb.flat().length], ['2027-02-01', '2027-03-14', 42])
+  check('month: across the DST change every day is there once', new Set(monthGrid('2026-03-10').flat()).size, 42)
+  check('period: Days is 14 days from the anchor', [periodDays({ view: 'days', date: null }, TODAY).length, periodRange({ view: 'days', date: null }, TODAY)], [DAYS_SPAN, { from: '2026-11-15', to: '2026-11-28' }])
+  check('period: Week is Monday to Sunday around the anchor', periodRange({ view: 'week', date: null }, TODAY), { from: '2026-11-09', to: '2026-11-15' })
+  check('period: Month reads its whole grid (42 days, under 100)', [periodDays({ view: 'month', date: null }, TODAY).length, periodRange({ view: 'month', date: '2026-11-20' }, TODAY)], [42, { from: '2026-10-26', to: '2026-12-06' }])
+  check('shift: Days moves 14 days', [shiftPeriod({ view: 'days', date: null }, 1, TODAY).date, shiftPeriod({ view: 'days', date: '2026-11-20' }, -1, TODAY).date], ['2026-11-29', '2026-11-06'])
+  check('shift: Week moves to the next / previous Monday', [shiftPeriod({ view: 'week', date: '2026-11-18' }, 1, TODAY).date, shiftPeriod({ view: 'week', date: '2026-11-18' }, -1, TODAY).date], ['2026-11-23', '2026-11-09'])
+  check('shift: Month moves to the 1st, across the year', [shiftPeriod({ view: 'month', date: '2026-12-20' }, 1, TODAY).date, shiftPeriod({ view: 'month', date: '2026-01-31' }, -1, TODAY).date], ['2027-01-01', '2025-12-01'])
+  check('shift: keeps the view', shiftPeriod({ view: 'week', date: null }, 1, TODAY).view, 'week')
+  check('switch: keeps the anchor', switchView({ view: 'days', date: '2026-11-20' }, 'month'), { view: 'month', date: '2026-11-20' })
+  check('+N opens Days at that day', dayView('2026-11-20'), { view: 'days', date: '2026-11-20' })
+  check('period text: Days, Week, Month', [periodText({ view: 'days', date: null }, TODAY), periodText({ view: 'week', date: '2026-11-18' }, TODAY), periodText({ view: 'month', date: '2026-11-18' }, TODAY)], ['15 Nov – 28 Nov', 'Week of 16 Nov', 'November 2026'])
+  check('period text: another year names it', [periodText({ view: 'days', date: '2026-12-25' }, TODAY), periodText({ view: 'week', date: '2027-01-06' }, TODAY)], ['25 Dec – 7 Jan 2027', 'Week of 4 Jan 2027'])
+
+  // ←/→: no modifier, not while typing.
+  check('keys: ← and → move the period', [calendarKey({ key: 'ArrowLeft' }, false), calendarKey({ key: 'ArrowRight' }, false)], [-1, 1])
+  check('keys: not while typing', calendarKey({ key: 'ArrowLeft' }, true), null)
+  check('keys: no modifier (Alt+← is the browser back)', ['altKey', 'ctrlKey', 'metaKey', 'shiftKey'].map((m) => calendarKey({ key: 'ArrowRight', [m]: true }, false)), [null, null, null, null])
+  check('keys: other keys are not the calendar\'s', ['ArrowUp', 'ArrowDown', 'Home', 'a'].map((key) => calendarKey({ key }, false)), [null, null, null, null])
+  check('the keys table names ← / → for the Agenda calendar', KEYS.some((k) => k.keys === '← / →' && k.where.includes('Agenda calendar')), true)
+
+  // Placement: the zone's calendar day, never the UTC day.
+  const it = (id) => ({ id, ref: id, qualifiedRef: `r/${id}`, kind: 'task', title: id, status: 'open', fullRef: `p/r/${id}` })
+  const crow = (id, over = {}) => ({ item: it(id), kind: 'task', status: 'open', due: null, notBefore: null, dueEnd: null, notBeforeStart: null, late: false, closedAt: null, holder: null, blockers: [], ...over })
+  const asOf = '2026-11-19T12:00:00Z'
+  const at = (rows, zone = ROME) => [...placeEntries(rows, zone, asOf)].map(([day, es]) => [day, es.map((e) => `${e.item.id}:${e.mark}${e.time ? `@${e.time}` : ''}`)]).sort()
+  check('place: 23:30 UTC is the next day in Rome, at 00:30', at([crow('a', { due: '2026-11-19T23:30:00Z' })]), [['2026-11-20', ['a:due@00:30']]])
+  check('place: … and the same day in UTC', at([crow('a', { due: '2026-11-19T23:30:00Z' })], 'UTC'), [['2026-11-19', ['a:due@23:30']]])
+  check('place: just after UTC midnight is the day before in New York', at([crow('a', { due: '2026-11-20T02:00:00Z' })], 'America/New_York'), [['2026-11-19', ['a:due@21:00']]])
+  check('place: a day due is that day in every zone, all day', [ROME, 'UTC', 'Pacific/Auckland'].map((z) => at([crow('d', { due: '2026-11-20' })], z)), [0, 1, 2].map(() => [['2026-11-20', ['d:due']]]))
+  check('place: across the spring DST change in the zone', at([crow('before', { due: '2026-03-28T23:30:00Z' }), crow('after', { due: '2026-03-29T22:30:00Z' })]), [['2026-03-29', ['before:due@00:30']], ['2026-03-30', ['after:due@00:30']]])
+  check('place: across the autumn DST change in the zone', at([crow('x', { due: '2026-10-24T22:30:00Z' }), crow('y', { due: '2026-10-25T23:30:00Z' })]), [['2026-10-25', ['x:due@00:30']], ['2026-10-26', ['y:due@00:30']]])
+  check('place: not_before is a start mark on its own day', at([crow('n', { due: '2026-11-25', notBefore: '2026-11-20T08:00:00Z' })]), [['2026-11-20', ['n:start@09:00']], ['2026-11-25', ['n:due']]])
+  check('place: in a day, whole days first, then by time', at([crow('late-t', { due: '2026-11-20T17:00:00Z' }), crow('early-t', { due: '2026-11-20T07:00:00Z' }), crow('day', { due: '2026-11-20' })]), [['2026-11-20', ['day:due', 'early-t:due@08:00', 'late-t:due@18:00']]])
+
+  const one = (row, now = asOf) => {
+    const e = [...placeEntries([row], ROME, now).values()].flat().find((x) => x.mark === 'due')
+    return { dot: e.dot, overdue: e.overdue, done: e.done, late: e.late }
+  }
+  check('mark: open and past its due end is overdue, stop', one(crow('o', { due: '2026-11-18' })), { dot: 'stop', overdue: true, done: false, late: false })
+  check('mark: a day due is overdue once it ended in the zone', [one(crow('o', { due: '2026-11-19' }), '2026-11-19T22:30:00Z').overdue, one(crow('o', { due: '2026-11-19' }), '2026-11-19T23:30:00Z').overdue], [false, true])
+  check('mark: the server\'s dueEnd is used when given', one(crow('o', { due: '2026-11-19', dueEnd: '2026-11-19T11:00:00Z' })).overdue, true)
+  check('mark: done is dimmed, never overdue; late marked', one(crow('d', { status: 'done', due: '2026-11-10', late: true, closedAt: '2026-11-12T10:00:00Z' })), { dot: 'claimed', overdue: false, done: true, late: true })
+  check('mark: done on time is dimmed, not late', one(crow('d', { status: 'done', due: '2026-11-25' })), { dot: 'claimed', overdue: false, done: true, late: false })
+  check('mark: an open wait has the dashed ring', one(crow('w', { due: '2026-11-25', blockers: [it('x')] })).dot, 'wait')
+  check('mark: blocked is stop; in progress, review doing', ['blocked', 'in_progress', 'review'].map((st) => one(crow('s', { status: st, due: '2026-11-25' })).dot), ['stop', 'doing', 'doing'])
+  check('mark: the tip names the item, the due and the zone', [...placeEntries([crow('t', { due: '2026-11-20T16:00:00Z' })], ROME, asOf).values()][0][0].title, 'p/r/t · t — due 2026-11-20 17:00 Europe/Rome')
+
+  const placed = placeEntries([crow('a', { due: '2026-11-16' }), crow('b', { due: '2026-11-18' }), crow('c', { notBefore: '2026-11-18' })], ROME, asOf)
+  check('days: only days with marks, in order', dayGroups(periodDays({ view: 'days', date: '2026-11-15' }, TODAY), placed).map((g) => [g.day, g.entries.length]), [['2026-11-16', 1], ['2026-11-18', 2]])
+  const dues = (n) => Array.from({ length: n }, (_, i) => ({ mark: 'due', i }))
+  check('month cell: three fit, no +N', [monthCell(dues(3)).shown.length, monthCell(dues(3)).more], [3, 0])
+  check('month cell: five show two and +3', [monthCell(dues(5)).shown.length, monthCell(dues(5)).more], [2, 3])
+  check('month cell: start marks are not drawn in Month', monthCell([{ mark: 'start' }, { mark: 'due' }]).shown.map((e) => e.mark), ['due'])
+  check('month cell: an empty day', monthCell(undefined), { shown: [], more: 0 })
+
+  // The return bar and the widths.
+  const cb = calendarBack({ view: 'week', date: '2026-11-18' }, TODAY)
+  check('bar: ← Calendar · <period>, same view and date', [backText(cb), cb.href], ['← Calendar · Week of 16 Nov', '/agenda?view=week&date=2026-11-18'])
+  check('bar: Days on today goes to the bare Agenda', calendarBack({ view: 'days', date: null }, TODAY).href, '/agenda')
+  check('bar: its href has a page behind it, calendar read included', routeReads(cb.href).some((r) => r.startsWith('/api/v1/calendar?from=')), true)
+  const agendaSrc = readFileSync(new URL('../src/views/Agenda.tsx', import.meta.url), 'utf8')
+  check('Agenda: calendarBack while the calendar is home; wide with no item', [/calendarHome\(\) \? calendarBack\(cal\(\), today\(\)\)/.test(agendaSrc), /wide=\{params\.item === undefined\}/.test(agendaSrc)], [true, true])
+  check('width: the calendar has its own key and a wider default', [CALENDAR_WIDTH_KEY !== WIDTH_KEY, CALENDAR_SHARE > PANEL_SHARE, panelWidth(undefined, 1600, CALENDAR_SHARE) > panelWidth(undefined, 1600)], [true, true, true])
+  check('width: the calendar default is 60% of the room', panelWidth(undefined, 1609, CALENDAR_SHARE), 960)
+  const mem = new Map()
+  const fake = () => ({ getItem: (k) => mem.get(k) ?? null, setItem: (k, v) => mem.set(k, v), removeItem: (k) => mem.delete(k) })
+  rememberWidth(700, fake, CALENDAR_WIDTH_KEY)
+  check('width: the calendar width is remembered on its own key only', [rememberedWidth(fake, CALENDAR_WIDTH_KEY), rememberedWidth(fake), [...mem.keys()]], [700, undefined, [CALENDAR_WIDTH_KEY]])
+  rememberWidth(500, fake)
+  check('width: the item width stays where it was', [rememberedWidth(fake), rememberedWidth(fake, CALENDAR_WIDTH_KEY)], [500, 700])
+}
 
 console.log(failures === 0 ? '\nAll checks passed.' : `\n${failures} check(s) failed.`)
 if (failures > 0) process.exitCode = 1

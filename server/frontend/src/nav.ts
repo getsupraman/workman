@@ -1,5 +1,5 @@
 import type { ItemRef } from './api.ts'
-import { DEFAULT_ZONE, agendaUntil } from './dates.ts'
+import { DEFAULT_ZONE, addDays, agendaUntil, zonedDay } from './dates.ts'
 
 /**
  * Every link to an item goes through here, so every link has a page behind it: a run opens its
@@ -92,7 +92,9 @@ export function routeReads(href: string): string[] {
   if (parts[0] === 'inbox' && parts.length === 2) return ['/api/v1/inbox', `/api/v1/items/${parts[1]}`]
   if (parts[0] === 'agenda' && parts.length <= 2) {
     const read = `/api/v1/agenda?until=${agendaUntil(Date.now(), DEFAULT_ZONE)}`
-    return parts.length === 1 ? [read] : [read, `/api/v1/items/${parts[1]}`]
+    const today = zonedDay(Date.now(), DEFAULT_ZONE)
+    const calendar = `/api/v1/calendar?from=${today}&to=${addDays(today, 13)}`
+    return parts.length === 1 ? [read, calendar] : [read, `/api/v1/items/${parts[1]}`, calendar]
   }
   if (parts[0] === 'activity' && parts.length === 1) return ['/api/v1/journal?limit=1']
   if (parts[0] === 'sessions' && parts.length === 1) return ['/api/v1/sessions']

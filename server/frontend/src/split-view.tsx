@@ -3,7 +3,7 @@ import { A } from '@solidjs/router'
 import { backText, type Back } from './back.ts'
 import { useDocumentKeys } from './listkeys.ts'
 import { isClearKey } from './listnav.ts'
-import { NUDGE, PANEL_MIN, SHEET_MAX, clampWidth, docks, maxWidth, panelWidth, rememberWidth, rememberedWidth } from './split.ts'
+import { CALENDAR_SHARE, CALENDAR_WIDTH_KEY, NUDGE, PANEL_MIN, PANEL_SHARE, SHEET_MAX, WIDTH_KEY, clampWidth, docks, maxWidth, panelWidth, rememberWidth, rememberedWidth } from './split.ts'
 
 /**
  * The main content and a panel on its right: docked beside it with a drag handle when the measured
@@ -23,11 +23,17 @@ export function SplitView(props: {
   showing: string
   /** With an item open, the panel starts with a bar back to here (`src/back.ts`); as a sheet it is the header. */
   back?: Back
+  /** The panel holds the Agenda calendar: the wider default share and its own remembered width (`src/split.ts`). */
+  wide?: boolean
+  /** Told whether the panel docks, as the measured width changes. */
+  onDock?: (docked: boolean) => void
 }) {
   let root!: HTMLDivElement
   let side: HTMLElement | undefined
   const [width, setWidth] = createSignal(0)
-  const [preferred, setPreferred] = createSignal(rememberedWidth())
+  const [itemWidth, setItemWidth] = createSignal(rememberedWidth())
+  const [calendarWidth, setCalendarWidth] = createSignal(rememberedWidth(undefined, CALENDAR_WIDTH_KEY))
+  const preferred = () => (props.wide ? calendarWidth() : itemWidth())
   const [dragging, setDragging] = createSignal(false)
 
   onMount(() => {
@@ -40,13 +46,16 @@ export function SplitView(props: {
 
   // Unmeasured is docked: the common case, and no sheet flashes over the list on the first frame.
   const docked = () => width() === 0 || docks(width())
-  const size = () => panelWidth(preferred(), width())
+  const size = () => panelWidth(preferred(), width(), props.wide ? CALENDAR_SHARE : PANEL_SHARE)
 
   const prefer = (value: number | undefined) => {
     const next = value === undefined ? undefined : clampWidth(value, width())
-    setPreferred(next)
-    rememberWidth(next)
+    if (props.wide) setCalendarWidth(next)
+    else setItemWidth(next)
+    rememberWidth(next, undefined, props.wide ? CALENDAR_WIDTH_KEY : WIDTH_KEY)
   }
+
+  createEffect(() => props.onDock?.(docked()))
 
   createEffect(() => {
     void props.showing

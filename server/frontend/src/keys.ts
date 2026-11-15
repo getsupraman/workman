@@ -14,6 +14,7 @@ export const KEYS: readonly KeyHelp[] = [
   { keys: 'Home / End', where: 'run page, Needs you, Agenda, Backlog, Project, Activity', does: 'the first / last row' },
   { keys: 'Enter', where: 'a focused row', does: 'opens it' },
   { keys: 'Alt+↓ / Alt+↑ (⌥ on macOS)', where: 'any page', does: 'opens the next / previous run in the sidebar' },
+  { keys: '← / →', where: 'Agenda calendar, while it has focus', does: 'the previous / next period: 14 days, a week or a month' },
   { keys: 'Esc', where: 'palette, dialog, account menu, phone menu, detail sheet', does: 'closes it' },
   { keys: 'Esc', where: 'run page, Needs you, Agenda, with the panel docked', does: 'clears the selection; the run page shows the run again' },
   { keys: '?', where: 'any page', does: 'shows these keys' },

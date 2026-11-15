@@ -70,6 +70,20 @@ export function addDays(day: string, n: number): string {
   return `${t.getUTCFullYear()}-${pad(t.getUTCMonth() + 1)}-${pad(t.getUTCDate())}`
 }
 
+/** The day of the week of a calendar day, 0 = Sunday … 6 = Saturday (no zone: a day is a day). */
+export const weekday = (day: string): number => new Date(dayUtc(day)).getUTCDay()
+
+/** `Mon`, `Tue`, … for 0 = Sunday … 6 = Saturday. */
+export const weekdayName = (n: number): string => WEEKDAYS[n] ?? ''
+
+/** `November 2026` for the month a day is in. */
+export function monthText(day: string): string {
+  const [, y, m] = DAY.exec(day) ?? []
+  return `${MONTH_NAMES[Number(m) - 1]} ${y}`
+}
+
+const MONTH_NAMES = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December']
+
 /** The instant a day starts in `zone` (midnight there; a DST shift is settled by a second pass). */
 export function dayStart(day: string, zone: string): number {
   const local = dayUtc(day)
@@ -87,8 +101,8 @@ export function dueEnd(due: string, zone: string): number {
 export const notBeforeStart = (notBefore: string, zone: string): number =>
   isDay(notBefore) ? dayStart(notBefore, zone) : Date.parse(notBefore)
 
-/** `20 Nov`, with the year when it is not `asOf`'s year in the zone. */
-function dayText(day: string, today: string): string {
+/** `20 Nov`, with the year when it is not `today`'s year. */
+export function dayText(day: string, today: string): string {
   const [, y, m, d] = DAY.exec(day) ?? []
   const year = y === today.slice(0, 4) ? '' : ` ${y}`
   return `${Number(d)} ${MONTHS[Number(m) - 1]}${year}`

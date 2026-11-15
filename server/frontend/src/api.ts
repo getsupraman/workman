@@ -283,6 +283,33 @@ export type Agenda = {
   actionable: AgendaRow[]
 }
 
+/** doc 10 `GET /api/v1/calendar`: one dated item, open or done. */
+export type CalendarRow = {
+  item: ItemRef
+  kind: string
+  status: string
+  due: string | null
+  notBefore: string | null
+  /** The instant the due is read as in the workspace's zone. */
+  dueEnd: string | null
+  notBeforeStart: string | null
+  /** Done at or after its due end; an open item past due is `dueEnd < asOf`, for the client to mark. */
+  late: boolean
+  closedAt: string | null
+  holder: string | null
+  blockers: ItemRef[]
+}
+
+export type Calendar = {
+  asOf: string
+  seq: number
+  zone: string
+  from: string
+  to: string
+  scope: ItemRef | null
+  items: CalendarRow[]
+}
+
 export type JournalPage = { asOf: string; seq: number; cursor: number; hasMore: boolean; events: JournalEvent[] }
 
 export type Backlog = {
@@ -371,6 +398,9 @@ export const inbox = () => json<Inbox>('/api/v1/inbox')
 
 /** `until` is a day `YYYY-MM-DD`, read as the end of that day in the workspace's zone; `since` defaults to this morning there. */
 export const agenda = (until: string) => json<Agenda>(`/api/v1/agenda?until=${id(until)}`)
+
+/** Every dated item, open and done, whose due or not_before falls in the days `from`..`to` (inclusive, in the workspace's zone; 100 days at most). */
+export const calendar = (from: string, to: string) => json<Calendar>(`/api/v1/calendar?from=${id(from)}&to=${id(to)}`)
 
 export const journal = (limit: number) => json<JournalPage>(`/api/v1/journal?limit=${limit}`)
 

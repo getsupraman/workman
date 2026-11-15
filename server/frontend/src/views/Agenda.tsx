@@ -1,9 +1,9 @@
-import { For, Index, Show, createEffect, on } from 'solid-js'
+import { For, Index, Show, createEffect, createSignal, on } from 'solid-js'
 import { A, useNavigate, useParams, useSearchParams } from '@solidjs/router'
 import * as api from '../api.ts'
 import type { AgendaRow, ItemRef } from '../api.ts'
 import { load, noteZone, workspaceZone } from '../store.ts'
-import { agendaGroups, agendaOrder, agendaRowFacts, agendaUntil } from '../dates.ts'
+import { agendaGroups, agendaOrder, agendaRowFacts, agendaUntil, zonedDay } from '../dates.ts'
 import { SHOW_CANCELLED, agendaHref, itemHref } from '../nav.ts'
 import { DEFAULT_FILTER, planQuery } from '../plan.ts'
 import { step } from '../listnav.ts'
@@ -11,14 +11,16 @@ import { reveal, useListKeys } from '../listkeys.ts'
 import { short } from '../format.ts'
 import { CopyRef, Dot, Known } from '../ui.tsx'
 import { SplitView } from '../split-view.tsx'
-import { agendaBack } from '../back.ts'
+import { agendaBack, calendarBack } from '../back.ts'
+import { parseCalendar, periodRange, withCalendar, type CalState } from '../calendar.ts'
+import AgendaCalendar from './AgendaCalendar.tsx'
 import Detail, { asTab, type Tab } from './Detail.tsx'
 import CalendarFeed from './CalendarFeed.tsx'
 
 /** `/agenda`, `/agenda/{item}` (doc 13): what is overdue, due today and in the next 14 days, and what became actionable this morning. */
 export default function Agenda() {
   const params = useParams<{ item?: string }>()
-  const [search] = useSearchParams<{ tab?: string; cancelled?: string }>()
+  const [search] = useSearchParams<{ tab?: string; cancelled?: string; view?: string; date?: string }>()
   const tab = () => asTab(search.tab)
   const cancelled = () => search.cancelled === SHOW_CANCELLED
   const navigate = useNavigate()
@@ -28,23 +30,44 @@ export default function Agenda() {
   createEffect(() => noteZone(agenda.data()?.zone))
   const page = load(() => params.item, api.item)
 
+  // The calendar: view and anchor from the URL; today is the agenda read's (its asOf, in its zone).
+  const cal = () => parseCalendar(search)
+  const today = () => {
+    const a = agenda.data()
+    return a ? zonedDay(a.asOf, a.zone) : zonedDay(Date.now(), workspaceZone())
+  }
+  const calendar = load(() => {
+    const r = periodRange(cal(), today())
+    return `${r.from}/${r.to}`
+  }, (k) => api.calendar(k.split('/')[0]!, k.split('/')[1]!))
+  createEffect(() => noteZone(calendar.data()?.zone))
+  const onCalendar = (id: string) => calendar.data()?.items.some((r) => r.item.id === id) ?? false
+
+  // Docked, the calendar is the panel's home; as a sheet the page switches between the list and the calendar.
+  const [docked, setDocked] = createSignal(true)
+  const [narrowView, setNarrowView] = createSignal<'list' | 'calendar'>('list')
+  const calendarHome = () => docked() || narrowView() === 'calendar'
+  const calHref = (c: CalState) => `${params.item ? agendaHref(params.item) : agendaHref()}${withCalendar(planQuery(DEFAULT_FILTER, tab(), cancelled()), c, today())}`
+
   const groups = () => {
     const a = agenda.data()
     return a ? agendaGroups(a) : []
   }
-  const onAgenda = (id: string) => groups().some((g) => g.rows.some((r) => r.item.id === id))
+  const onAgenda = (id: string) => groups().some((g) => g.rows.some((r) => r.item.id === id)) || onCalendar(id)
 
   /** On this page an agenda item opens beside the list; anything else goes to its own page. */
   const href = (item: Pick<ItemRef, 'id' | 'kind'>, tabFor: Tab = tab(), cancelledFor = cancelled()) =>
-    onAgenda(item.id) || item.id === params.item ? `${agendaHref(item.id)}${planQuery(DEFAULT_FILTER, tabFor, cancelledFor)}` : itemHref(item, null)
+    onAgenda(item.id) || item.id === params.item
+      ? `${agendaHref(item.id)}${withCalendar(planQuery(DEFAULT_FILTER, tabFor, cancelledFor), cal(), today())}`
+      : itemHref(item, null)
 
-  const back = () => agendaBack()
+  const back = () => (calendarHome() ? calendarBack(cal(), today()) : { ...agendaBack(), href: calendarBack(cal(), today()).href })
   const close = () => navigate(back().href, { scroll: false })
 
   // ArrowUp/ArrowDown, Home/End walk the rows as drawn: the panel follows the selection.
   let keyed = false
   useListKeys((m) => {
-    if (agenda.data() === undefined) return false
+    if (agenda.data() === undefined || !docked() && narrowView() === 'calendar') return false
     const to = step(agendaOrder(groups()), params.item, m)
     if (to === undefined) return false
     if (to !== params.item) {
@@ -65,6 +88,18 @@ export default function Agenda() {
     ),
   )
 
+  const calendarView = () => (
+    <AgendaCalendar
+      cal={cal()}
+      today={today()}
+      data={calendar.data()}
+      error={calendar.error()}
+      calHref={calHref}
+      itemHref={(id) => href({ id, kind: 'task' })}
+      selected={params.item}
+    />
+  )
+
   const sheetTitle = () => {
     const item = page.data()?.item
     return item ? `${item.ref} · ${short(item.title)}` : 'Item detail'
@@ -77,6 +112,8 @@ export default function Agenda() {
       onClose={close}
       showing={params.item ?? ''}
       back={back()}
+      wide={params.item === undefined}
+      onDock={setDocked}
       main={
         <div class="page">
           <div class="page-h">
@@ -87,7 +124,22 @@ export default function Agenda() {
                 <Show when={agenda.data()}>{(a) => <>, in {a().zone}</>}</Show>.
               </div>
             </div>
+            <Show when={!docked()}>
+              <div class="filters agenda-switch" role="group" aria-label="Show">
+                <button type="button" class={narrowView() === 'list' ? 'on' : ''} aria-pressed={narrowView() === 'list'} onClick={() => setNarrowView('list')}>
+                  List
+                </button>
+                <button type="button" class={narrowView() === 'calendar' ? 'on' : ''} aria-pressed={narrowView() === 'calendar'} onClick={() => setNarrowView('calendar')}>
+                  Calendar
+                </button>
+              </div>
+            </Show>
           </div>
+
+          <Show when={!docked() && narrowView() === 'calendar'}>
+            <div class="panel cal-page">{calendarView()}</div>
+          </Show>
+          <Show when={docked() || narrowView() === 'list'}>
 
           <Show when={agenda.error()}>{(e) => <div class="failure">{e()}</div>}</Show>
           <Known value={agenda.data()} class="panel empty">
@@ -123,10 +175,11 @@ export default function Agenda() {
           <div class="agenda-feed">
             <CalendarFeed />
           </div>
+          </Show>
         </div>
       }
       side={
-        <Show when={params.item} fallback={<div class="placeholder">Select a row to see the item here.</div>}>
+        <Show when={params.item} fallback={<Show when={docked()}>{calendarView()}</Show>}>
           <Show when={page.missing()}>
             <div class="placeholder">There is no item with this id.</div>
           </Show>
