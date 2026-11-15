@@ -473,7 +473,7 @@ public sealed partial class BoardReader(WorkmanQueries queries, BoardQueries boa
             {
                 lines.Add(new AttentionLine(
                     AttentionRank.Overdue,
-                    $"overdue: {dated.Ref} {Glyph.Row(dated.Title, 40)} (due {dated.Due})",
+                    $"overdue: {dated.Ref} {Glyph.Flat(dated.Title)} (due {dated.Due})",
                     $"work_get(refs:[\"{dated.Ref}\"]), then finish it or work_update(ref:\"{dated.Ref}\", due:\"…\")",
                     dated.Ref,
                     dated.QualifiedRef));

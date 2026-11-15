@@ -147,7 +147,7 @@ public static class BriefRenderer
                 _ => $"in {d.DaysLeft} days",
             };
             var blocked = d.Blockers.Count > 0 ? $"  ·  blocked by {string.Join(", ", d.Blockers)}" : string.Empty;
-            lines.Add($"  {Glyph.Pad(when, 10)} {d.Ref}  {Glyph.Row(d.Title, 40)}  ·  due {d.Due}{blocked}");
+            lines.Add($"  {Glyph.Pad(when, 10)} {d.Ref}  {Glyph.Flat(d.Title)}  ·  due {d.Due}{blocked}");
         }
 
         var hidden = dates.Total - dates.Lines.Count;
