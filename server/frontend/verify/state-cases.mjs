@@ -1088,6 +1088,8 @@ console.log('\n── the Agenda calendar (src/calendar.ts, account-calendar/5) 
   }
   check('mark: open and past its due end is overdue, stop', one(crow('o', { due: '2026-11-18' })), { dot: 'stop', overdue: true, done: false, late: false })
   check('mark: a day due is overdue once it ended in the zone', [one(crow('o', { due: '2026-11-19' }), '2026-11-19T22:30:00Z').overdue, one(crow('o', { due: '2026-11-19' }), '2026-11-19T23:30:00Z').overdue], [false, true])
+  check('mark: overdue at the exact due end, as the server and dateChips judge it (<=)', [one(crow('o', { due: '2026-11-19T12:00:00Z' }), '2026-11-19T11:59:59Z').overdue, one(crow('o', { due: '2026-11-19T12:00:00Z' }), '2026-11-19T12:00:00Z').overdue, one(crow('o', { due: '2026-11-19' }), '2026-11-19T23:00:00Z').overdue], [false, true, true])
+  check('mark: the calendar and the chips agree at the boundary', [one(crow('o', { due: '2026-11-19T12:00:00Z' }), '2026-11-19T12:00:00Z').overdue, dateChips({ due: '2026-11-19T12:00:00Z', status: 'open' }, ROME, '2026-11-19T12:00:00Z')[0].k === 'overdue'], [true, true])
   check('mark: the server\'s dueEnd is used when given', one(crow('o', { due: '2026-11-19', dueEnd: '2026-11-19T11:00:00Z' })).overdue, true)
   check('mark: done is dimmed, never overdue; late marked', one(crow('d', { status: 'done', due: '2026-11-10', late: true, closedAt: '2026-11-12T10:00:00Z' })), { dot: 'claimed', overdue: false, done: true, late: true })
   check('mark: done on time is dimmed, not late', one(crow('d', { status: 'done', due: '2026-11-25' })), { dot: 'claimed', overdue: false, done: true, late: false })

@@ -130,7 +130,7 @@ export type CalEntry = {
   time: string | null
   /** The state dot: stop when overdue or blocked, doing, the dashed wait ring, the done mark, else idle. */
   dot: 'stop' | 'doing' | 'wait' | 'claimed' | 'idle'
-  /** Open and its due end before `asOf`: the stop colour. */
+  /** Open and its due end at or before `asOf` (the server's and `dateChips`' rule): the stop colour. */
   overdue: boolean
   /** Done: drawn dimmed. */
   done: boolean
@@ -154,7 +154,7 @@ export function placeEntries(rows: readonly CalendarRow[], zone: string, asOf: s
     const done = CLOSED.has(row.status)
     const open = !done
     const end = row.due ? (row.dueEnd ? Date.parse(row.dueEnd) : dueEnd(row.due, zone)) : NaN
-    const overdue = open && row.due !== null && end < now
+    const overdue = open && row.due !== null && end <= now
     const wait = open && row.blockers.length > 0
     const dot: CalEntry['dot'] = done ? 'claimed' : overdue || row.status === 'blocked' ? 'stop' : row.status === 'in_progress' || row.status === 'review' ? 'doing' : wait ? 'wait' : 'idle'
     const base = { item: row.item, dot, done, late: row.late }
