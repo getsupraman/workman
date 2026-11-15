@@ -542,6 +542,44 @@ AgendaRow = { "item": ItemRef, "status": "open", "due": "2026-11-20" | "…Z" | 
 ```
 The lists are not capped (the MCP text shows 20 per list). An item can be in `overdue` or `due` and in `actionable`.
 
+### `GET /api/v1/calendar?from=&to=&scope={id}` (account-calendar/3, additive)
+Every dated item in a range of days, **open and done alike**, for a calendar that looks back as well as ahead
+(`/agenda` only looks forward and lists open work). Read-only like every v1 route; `holder` is judged as of the
+server's clock (`asOf`).
+
+- `from`, `to` (both required): a day `YYYY-MM-DD` — `from` read as the start of that day, `to` as its end, both in the
+  workspace's zone — or an ISO date-time with an offset, an instant. A missing or unreadable date, or a date-time
+  without an offset, is a `400 {error}` naming both forms; a `to` that begins before `from` is a `400`; a range longer
+  than **100 days** (from the start of `from` to the end of `to`) is a `400` naming the limit — ask in pieces.
+- `scope` (optional): an item **id** (rule 1); the list covers its subtree, itself included. An id that is unknown or in
+  a project rule 8 hides is the usual `404`. Without `scope`: every project the caller can see (rule 8).
+- An item is in the range when its due or its not_before falls in it, read in the workspace's zone: a **day** when it
+  is one of the range's days there (so a day item shows on a range whose instants touch its day), an **instant** when
+  it lies in `[from, to]` (a day `to` ends at the next midnight, which belongs to the next day). A due at 23:30 UTC is
+  the next day in `Europe/Rome`, and is listed there.
+- Statuses: open, ready, in progress, blocked, review and **done**. Cancelled and superseded items are left out — they
+  did not happen, and a calendar does not show them. An **archived** project's items are left out too, even with its
+  id as `scope` (the list is then empty).
+- Order: by the earlier of `dueEnd` and `notBeforeStart`, then by seq. Not capped beyond the 100-day range.
+
+```jsonc
+{ "asOf": "…", "seq": 1234,
+  "zone": "Europe/Rome",                 // the workspace's zone (IANA)
+  "from": "2026-11-19T23:00:00+00:00",   // the instants the range was read as
+  "to":   "2026-11-20T23:00:00+00:00",
+  "scope": ItemRef | null,               // null without scope
+  "items": [CalendarRow] }
+CalendarRow = { "item": ItemRef, "kind": "task", "status": "done",
+                "due": "2026-11-20" | "…Z" | null, "notBefore": "…" | null,   // as written (Dates)
+                "dueEnd": "…" | null,          // the instant the due is read as in the zone
+                "notBeforeStart": "…" | null,  // the instant the not_before is read as
+                "late": false,                 // done at or after its due end (the Dates `late`); an open item
+                                               //   past due is dueEnd < asOf, for the client to mark
+                "closedAt": "…" | null,        // when it was done; null while open
+                "holder": "aw-m1" | null,      // a live claim's session name, else its agent label
+                "blockers": [ItemRef] }        // unfinished `blocks` blockers — an open wait shows here
+```
+
 ### `GET /api/stream`
 SSE, unchanged transport. An event means "re-read"; its data is
 `{ "seq": 1235, "runId": "uuid" | null, "itemId": "uuid" | null, "kind": "transition" }`.

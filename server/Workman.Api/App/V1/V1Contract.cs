@@ -304,3 +304,30 @@ public sealed record AgendaView(
     IReadOnlyList<AgendaRowView> Overdue,
     IReadOnlyList<AgendaRowView> Due,
     IReadOnlyList<AgendaRowView> Actionable);
+
+/// <summary>
+/// One dated item of <c>/calendar</c>: <c>due</c> and <c>notBefore</c> as written, <c>dueEnd</c> and <c>notBeforeStart</c>
+/// the instants they are read as; <c>late</c> is done at or after its due end; <c>closedAt</c> is set once it is done.
+/// </summary>
+public sealed record CalendarRowView(
+    ItemRefView Item,
+    string Kind,
+    string Status,
+    string? Due,
+    string? NotBefore,
+    DateTimeOffset? DueEnd,
+    DateTimeOffset? NotBeforeStart,
+    bool Late,
+    DateTimeOffset? ClosedAt,
+    string? Holder,
+    IReadOnlyList<ItemRefView> Blockers);
+
+/// <summary><c>from</c> and <c>to</c> are the instants the range was read as, in <c>zone</c>.</summary>
+public sealed record CalendarView(
+    DateTimeOffset AsOf,
+    long Seq,
+    string Zone,
+    DateTimeOffset From,
+    DateTimeOffset To,
+    ItemRefView? Scope,
+    IReadOnlyList<CalendarRowView> Items);
