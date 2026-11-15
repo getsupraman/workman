@@ -12,7 +12,7 @@ The dashboard does not call the pre-v1 routes (`/api/projects`, `/api/watch`,
 ## Information architecture
 
 A sidebar (the workspace switcher, for a user who may enter more than one; the search field that
-opens the command palette; Overview, Needs you with its count, Activity, Sessions, and Admin for a
+opens the command palette; Overview, Needs you with its count, Agenda, Activity, Sessions, and Admin for a
 user who administers a workspace; then the projects; at the foot the live state, the theme, and the
 account menu — the user's name, opening *Change password* and *Sign out*) and one page beside it.
 Every page is a URL.
@@ -51,13 +51,13 @@ the two differ):
 | Key | Where | What it does |
 |---|---|---|
 | Ctrl+P (⌘P on macOS), / | any page | opens the command palette; / only outside a text field |
-| ↓ / ↑ | run page, Needs you | selects the next / previous row as drawn and shows it in the detail panel |
+| ↓ / ↑ | run page, Needs you, Agenda | selects the next / previous row as drawn and shows it in the detail panel |
 | ↓ / ↑ | Backlog, Project, Activity | moves focus to the next / previous row |
-| Home / End | run page, Needs you, Backlog, Project, Activity | the first / last row |
+| Home / End | run page, Needs you, Agenda, Backlog, Project, Activity | the first / last row |
 | Enter | a focused row | opens it |
 | Alt+↓ / Alt+↑ (⌥ on macOS) | any page | opens the next / previous run in the sidebar |
 | Esc | palette, dialog, phone menu, detail sheet | closes it |
-| Esc | run page, Needs you, with the panel docked | clears the selection; the run page shows the run again |
+| Esc | run page, Needs you, Agenda, with the panel docked | clears the selection; the run page shows the run again |
 | ? | any page | shows these keys |
 
 Global keys never act while focus is in an input, textarea, select or contenteditable, or while the
@@ -74,6 +74,9 @@ binding. Ctrl+↑/↓ are left alone (macOS takes them; in a field on Windows th
 - **Needs you.** The same, over the rows as drawn (`inboxOrder`): the person's rows, then the rows of
   each housekeeping group that is open while Housekeeping is shown. The URL is `/inbox/{item}`, and
   keeps tab and cancelled.
+- **Agenda.** The same, over the rows as drawn (`agendaOrder`, `src/dates.ts`): Overdue, each day,
+  then *Actionable since this morning*; an item on two rows counts once, where it first shows. The URL
+  is `/agenda/{item}`, and keeps tab and cancelled.
 - **Backlog, Project, Activity.** These keys move focus along the page's row links, which carry
   `data-row`, and the focus ring shows. The order is the one the page draws:
   - Backlog: the origin links and their items, with cancelled items last when shown.
@@ -112,20 +115,21 @@ binding. Ctrl+↑/↓ are left alone (macOS takes them; in a field on Windows th
 |---|---|---|
 | `/` | **Overview** — Needs you (the top 5 as compact decision rows: kind dot, title, kind · ref with copy, age, no detail line; each opens `/inbox/{item}`; then a link to the rest), Working now, four honesty counts, then one panel per project not archived, by last activity: a serif header band (the name links to the project page; its prompt actions below it), open runs, then *Show n closed runs* (collapsed by default; closed by `runIsOpen`), each run a segmented bar with **one segment per leaf**, coloured by state; below them *n archived projects*, which shows the archived panels; the legend once below | `overview`, `inbox`, the board of every run of a project not archived |
 | `/projects/{id}` | **Project** — that project's overview panel, archived or not, with its Archive / Unarchive button | `overview` |
-| `/inbox`, `/inbox/{item}` | **Needs you** — the `audience: human` rows (questions, blocked work), newest first, under a filter bar as on a run page: *All*, *Questions*, *Blocked*, each with its count (`?kind=question|blocked`, All by default; the filter stays when a row is opened, and ↓/↑ walk only the rows it shows; empty under a filter: *Nothing matches this filter.*). Each is a decision row in the plan list's look (`.item`, `.on` when selected): line 1 the kind dot, the item's title (at most two lines, the whole title in a tip) and the age (the date in a tip); line 2 muted: kind · full ref with copy · actor · project · run; line 3 the server's `detail` as given (a question's intent, first line; a blocked item's *waits on: …*), no line when it is null; empty: *Nothing needs you.* A row opens the item beside the list (split view as on a run page, a sheet when narrow; Esc — docked or as a sheet — or Close returns to `/inbox`); ↓/↑ walk the rows. A selected row that leaves the inbox stays, struck through and marked *resolved*, until the selection moves. Then *Housekeeping for the controller* (hidden when empty, collapsed by default): one line per kind and run (*5 not verified · Run A*), each opening to one-line rows (ref · title · who · age) that open in the same panel. Unread-note rows (`unconsumed_note`) show nowhere on the page or in its counts. No row prints the MCP `call` | `inbox`; `items/{item}` when one is open |
+| `/inbox`, `/inbox/{item}` | **Needs you** — the `audience: human` rows (questions, blocked work, overdue items), newest first, under a filter bar as on a run page: *All*, *Questions*, *Blocked*, *Overdue*, each with its count (`?kind=question|blocked|overdue`, All by default; the filter stays when a row is opened, and ↓/↑ walk only the rows it shows; empty under a filter: *Nothing matches this filter.*). Each is a decision row in the plan list's look (`.item`, `.on` when selected): line 1 the kind dot, the item's title (at most two lines, the whole title in a tip) and the age (the date in a tip); line 2 muted: kind · full ref with copy · actor · project · run; line 3 the server's `detail` as given (a question's intent, first line; a blocked item's *waits on: …*; an overdue item's *due 2026-11-19*, the due as written), no line when it is null; empty: *Nothing needs you.* A row opens the item beside the list (split view as on a run page, a sheet when narrow; Esc — docked or as a sheet — or Close returns to `/inbox`); ↓/↑ walk the rows. A selected row that leaves the inbox stays, struck through and marked *resolved*, until the selection moves. Then *Housekeeping for the controller* (hidden when empty, collapsed by default): one line per kind and run (*5 not verified · Run A*), each opening to one-line rows (ref · title · who · age) that open in the same panel. Unread-note rows (`unconsumed_note`) show nowhere on the page or in its counts. No row prints the MCP `call` | `inbox`; `items/{item}` when one is open |
+| `/agenda`, `/agenda/{item}` | **Agenda** — the dates of the open work the user can see, in the workspace's time zone (named under the heading), from one read of `GET /api/v1/agenda?until=<today + 14 days>` (doc 10; `since` left out, so the server reads it as the start of today in the zone). One panel per group, in this order (`agendaGroups`, `src/dates.ts`): **Overdue** (soonest due first); **Today**, **Tomorrow**, then each later day up to 14 days ahead (*Fri 20 Nov*, with its `YYYY-MM-DD`), a row under the day its due falls on **in the workspace's zone** — a day due under that day, an instant under the zone's calendar day it happens on, never the UTC day — soonest due end first; then **Actionable since this morning** (the `actionable` list: ready now and became so today; latest first). Empty groups are left out; with none, *Nothing is overdue, due in the next 14 days, or newly actionable.* A row is a plan-list `.item`: the dot (stop when overdue or blocked, doing while in progress or review, the dashed wait ring with an unfinished blocker, else idle), the title (two lines at most, whole in a tip), then muted the full ref with copy, its status when not open, *on it: &lt;holder&gt;*, *waits on &lt;refs&gt;*; on the right the time (an instant's `HH:MM` in the zone, *all day* for a day due), on an overdue row *due 20 Nov* in the stop colour, on an actionable row *ready &lt;when&gt;*. A row opens the item beside the list (split view as on Needs you, a sheet when narrow; Esc docked or as a sheet, or Close, returns to `/agenda`); ↓/↑ walk the rows. An item can show twice (due and newly actionable). Live like every page | `agenda`; `items/{item}` when one is open |
 | `/activity` | **Activity** — the last 300 journal events across the workspace, grouped by day | `journal?limit=300` |
-| `/runs/{run}` | **Run** — plan list (filters All / Open / Needs attention; phases as group headers; full titles; ref; claim holder; criteria x/y) beside the detail panel for the run | `runs/{run}/board`, `items/{run}` |
+| `/runs/{run}` | **Run** — plan list (filters Open / All / Needs attention / Due; phases as group headers; full titles; ref; date chips; claim holder; criteria x/y) beside the detail panel for the run | `runs/{run}/board`, `items/{run}` |
 | `/runs/{run}/{item}` | the same, with `{item}` selected; a *Run* link at the right end of the filter bar, a click on the selected row (or phase head) and, with the panel docked, Esc go back to `/runs/{run}` with the filter, tab and cancelled query kept (`runPageHref`, `rowToggleHref`) | `runs/{run}/board`, `items/{item}` |
 | `/items/{id}` | resolves any item: if it sits in a run it becomes `/runs/{run}/{id}`; otherwise (a project, project-level work) it is shown standalone | `items/{id}` |
 | `/projects/{id}/backlog` | **Backlog** — the project's open deferrals, grouped by the run they came from | `backlog?project={id}` |
 | `/admin` | **Admin** — the workspaces the user administers (every one for a system administrator), each with its member, admin and pending-invite counts, linking to its page; for a system administrator a *New workspace* form (slug, judged as the server does) and a link to Users | `/api/admin/tenants` |
-| `/admin/tenants/{id}` | **Workspace** — its members, each with a role select, Remove (asks first; both locked on the last admin) and *Create reset link* (the link shown once under the row; a refusal in the server's words), and its invite links: a role and *Create invite link*, the new link shown **once** in a field with Copy, then the pending ones, each with Revoke | `/api/admin/tenants`, `…/{id}/members`, `…/{id}/invites` |
+| `/admin/tenants/{id}` | **Workspace** — its members, each with a role select, Remove (asks first; both locked on the last admin) and *Create reset link* (the link shown once under the row; a refusal in the server's words), and its invite links: a role and *Create invite link*, the new link shown **once** in a field with Copy, then the pending ones, each with Revoke; then **Time zone** (deadlines/8): the workspace's IANA zone in a text field offering every name the browser knows, and Save (`PATCH …/{id}/settings {timezone}`); a name the server does not know is its 400, shown under the field in its words; saving the current workspace's zone re-reads the dashboard's dates in it at once | `/api/admin/tenants`, `…/{id}/members`, `…/{id}/invites`, `…/{id}/settings` |
 | `/admin/users` | **Users** — system administrator only: every user, their memberships as chips linking to each workspace's page, *Create reset link* and Disable (asks first; not oneself) / Enable | `/api/admin/users` |
-| `/account` | **Account** — who is signed in; then **Connected apps** (m65): the user's own OAuth approvals in this workspace, most recently used first, each with the client's icon (or its initials), name, scopes, when it was connected and last used (relative; *last used* is when its newest token was issued, a sign-in or a refresh) and its live agent sessions; *No apps hold access to this workspace.* when there are none. *Revoke* asks first, saying the app will need to sign in again and its sessions stop, and ends the approval, every token under it, and every `wss_` session minted with one of them, releasing their claims; the list then reloads. Only the user's own apps are listed, an admin's included. Then *Change password*: the current one, the new one twice (12 characters at least). It says that the other sessions end and this one and the OAuth connections stay; a wrong current password says nothing changed | `/api/session/me`, `/api/session/apps` |
+| `/account` | **Account** — who is signed in; then **Connected apps** (m65): the user's own OAuth approvals in this workspace, most recently used first, each with the client's icon (or its initials), name, scopes, when it was connected and last used (relative; *last used* is when its newest token was issued, a sign-in or a refresh) and its live agent sessions; *No apps hold access to this workspace.* when there are none. *Revoke* asks first, saying the app will need to sign in again and its sessions stop, and ends the approval, every token under it, and every `wss_` session minted with one of them, releasing their claims; the list then reloads. Only the user's own apps are listed, an admin's included. Then **Calendar feed** (deadlines/8): whether the user has a feed URL in this workspace and since when (`GET /api/session/calendar`, which never returns the URL). Without one, *Create calendar URL*; with one, *Replace* and *Revoke*, each asking first (Replace: the old URL stops working at once; Revoke: the calendar app stops getting the dates). A new URL (`POST`, the only answer that carries it) is shown **once** in a field with Copy, saying that it is shown once, that the server keeps only its hash, and that it is a secret: anyone with it reads the due dates the user can see until it is replaced or revoked. Revoke is `DELETE`; both writes carry `X-Workman-Write`, and a refusal (a visiting system administrator who is not a member) shows in the server's words. Then *Change password*: the current one, the new one twice (12 characters at least). It says that the other sessions end and this one and the OAuth connections stay; a wrong current password says nothing changed | `/api/session/me`, `/api/session/apps`, `/api/session/calendar` |
 | `/reset/{token}` | **Reset** — outside the dashboard, like the invite page. Names whose password it sets and until when the link works; the new password twice; once set, says every session of that user was signed out and offers the sign-in | `/api/reset/{token}` |
 | `/join/{token}` | **Invite** — outside the dashboard, like the OAuth pages: no router, store, stream or sign-in gate. Names the workspace and role and until when the link works; with a session, *Join as &lt;name&gt;* and *Not you? Sign out*; without, a name and a password twice (12 characters at least) and *Create account and join*, or *Sign in first*, which shows the sign-in form and comes back. Accepting opens `/` in that workspace; a used, revoked or expired link says so and offers nothing | `/api/invite/{token}` |
 
-`?filter=open|attention` and `?tab=evidence|notes|activity|brief` ride on the run URL, so a
+`?filter=all|attention|due` (Open is the default and stays out of the URL) and `?tab=evidence|notes|activity|brief` ride on the run URL, so a
 selection is deep-linkable and back/forward walk it.
 
 **Readable links: `/r/{path}`** (server-side, `Workman.Api/App/RefLinks.cs`; not an SPA route).
@@ -144,7 +148,8 @@ about the store (no id, no candidate) is said before the cookie is. `work_brief`
 these links as their `web` line (doc 01 §8).
 
 The **detail panel**: crumbs, full title and qualified ref, a state pill, chips (kind, commit,
-claim holder, tree, priority, severity, resolution, closed/started), then tabs:
+claim holder, tree, priority, severity, resolution, closed/started, then the date chips below and
+*slipped n times* when the due was moved later, `slips` > 0), then tabs:
 
 - **Overview** — what it is for, what it waits on, its done-when criteria with evidence, the verify
   command, findings against it, what is inside it.
@@ -153,6 +158,39 @@ claim holder, tree, priority, severity, resolution, closed/started), then tabs:
 - **Notes**, **Activity** — the item's own.
 - **Brief** — the verbatim `work_brief`, as text. Never the main pane; its `read work://workspace/conventions` line is a link that
   opens every rule in scope below it (`GET /api/v1/items/{id}/conventions`).
+
+### Dates
+
+An item's `due` and `notBefore` come as written (doc 10 "Dates"): a day `YYYY-MM-DD`, which means that
+whole day in the workspace's time zone, or an instant in UTC. The rules live in `src/dates.ts`, pure, and
+`verify/state-cases.mjs` holds them:
+
+- **A day is shown as a day**, never shifted by a zone: `2026-11-20` reads *20 Nov* everywhere. **An
+  instant is shown in the workspace's zone**: `2026-11-20T16:00:00Z` in Europe/Rome reads *20 Nov 17:00*.
+  The year is added when it is not the current one (*3 Jan 2027*). A tip gives the whole date and the zone.
+- **Which zone.** The workspace's (`workspace.settings` timezone, default UTC), never the browser's: the
+  server judges overdue, the agenda and the calendar in it, so the dashboard draws in the same one. Only
+  an admin may read the workspace's settings, and every member may read the agenda, which names the
+  zone (`zone`), so the shell reads it from there: one `GET /api/v1/agenda?until=<today>` when the store
+  opens (`src/store.ts` `workspaceZone`), refreshed by every Agenda read and by a time zone saved on
+  the workspace page. Until it answers, and on a server without the agenda, dates read in UTC.
+- **"Now" is the server's `asOf`** of the read that drew the row (the board, the item page, the
+  agenda), never this machine's clock.
+- **The chips** (`dateChips`). A plan row shows them on the right before the claim holder, the detail
+  panel among its chips: *not before 18 Nov* while the item is open and its not_before is still ahead
+  (a day from its start in the zone); *due 20 Nov* — or, once the due has passed (a day at its end in
+  the zone) while the item is open, *overdue · due 20 Nov* in the stop colour; *late* on an item closed
+  as done after its due. A closed item keeps its due chip, plain. An item without dates has none.
+- **The Due filter** on a run page (`?filter=due`): every open item under the run with a due, as one
+  flat list without phase heads, soonest first by the instant the due ends in the zone — so a day due
+  `2026-11-20` comes after an instant due `2026-11-20T16:00:00Z` that day, not before it as the text
+  would sort — then in plan order. ↓/↑ walk it as drawn (`planOrder`). Empty: *No open item here has a
+  due date.*
+- **Needs you** has the server's `overdue` rows (`audience: human`): one per open item whose due has
+  passed, kind *Overdue*, the stop dot, under its own *Overdue* filter.
+
+The command palette has no *Go to Agenda* command: its command list is pinned by the existing verify
+cases, so the Agenda is reached from the sidebar and by URL.
 
 A claim holder is shown as the session name with the role beside it — `aw-m4-2b · controller` — when
 the claim has a session (v1 `Claim.heldBySession`), else by the role alone. The same text in the

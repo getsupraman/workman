@@ -22,6 +22,9 @@ import { appLine, revokeWarning, sessionsLabel } from '../src/apps.ts'
 import { BOARDS_MAX, boardsRead } from '../src/boards.ts'
 import { asInboxFilter, cardFacts, choreRow, decisionRow, filterInbox, forController, groupHousekeeping, inboxOrder, keepSelected, needsYou, needsYouCount, rowProject, withInboxFilter } from '../src/inbox.ts'
 import { expiresIn, isLastAdmin, isLinkPath, joinStep, joinToken, nameProblem, passwordMessage, passwordProblem, resetStep, resetToken, roleLabel, showSwitcher, slugFrom, slugProblem } from '../src/admin.ts'
+import { addDays, agendaGroups, agendaOrder, agendaRowFacts, agendaUntil, dateChips, dayHeading, dueEnd, zonedDay } from '../src/dates.ts'
+import { INBOX_FILTERS, inboxKind } from '../src/inbox.ts'
+import { agendaHref } from '../src/nav.ts'
 
 let failures = 0
 
@@ -810,6 +813,114 @@ console.log('── inbox: the item beside the list, and the keys that walk it �
   check('reads for /inbox/I', routeReads('/inbox/I?tab=notes'), ['/api/v1/inbox', '/api/v1/items/I'])
   check('the top bar names /inbox/I Needs you', pageName('/inbox/I', sidebar), 'Needs you')
   check('the keys table names Needs you for ↓ / ↑', KEYS.some((k) => k.keys === '↓ / ↑' && k.where.includes('Needs you')), true)
+}
+
+console.log('\n── dates: chip text, the Due filter, the Agenda across the zone (deadlines/8) ──')
+{
+  const ROME = 'Europe/Rome'
+  const asOf = '2026-11-15T09:00:00Z'
+  const texts = (item, zone = ROME, at = asOf) => dateChips(item, zone, at).map((c) => [c.k, c.text])
+
+  check('a day due is shown as the day, not shifted', texts({ due: '2026-11-20', status: 'open' }), [['due', 'due 20 Nov']])
+  check('… the same in any zone', texts({ due: '2026-11-20', status: 'open' }, 'America/New_York'), [['due', 'due 20 Nov']])
+  check('an instant is shown in the workspace zone', texts({ due: '2026-11-20T16:00:00Z', status: 'open' }), [['due', 'due 20 Nov 17:00']])
+  check('an instant past midnight there is the next day', texts({ due: '2026-11-20T23:30:00Z', status: 'open' }), [['due', 'due 21 Nov 00:30']])
+  check('another year names it', texts({ due: '2027-01-03', status: 'open' }), [['due', 'due 3 Jan 2027']])
+  check('no dates, no chips', texts({ due: null, notBefore: null, status: 'open' }), [])
+  check('a day due is overdue only once that day has ended in the zone',
+    [texts({ due: '2026-11-20', status: 'open' }, ROME, '2026-11-20T22:30:00Z'), texts({ due: '2026-11-20', status: 'open' }, ROME, '2026-11-20T23:30:00Z')],
+    [[['due', 'due 20 Nov']], [['overdue', 'overdue · due 20 Nov']]])
+  check('an instant due is overdue once passed', texts({ due: '2026-11-15T08:00:00Z', status: 'in_progress' }), [['overdue', 'overdue · due 15 Nov 09:00']])
+  check('a closed item is never overdue; late says it closed after its due', texts({ due: '2026-11-10', status: 'done', late: true }), [['due', 'due 10 Nov'], ['late', 'late']])
+  check('not_before while ahead, then the due', texts({ due: '2026-11-20', notBefore: '2026-11-18', status: 'open' }), [['not_before', 'not before 18 Nov'], ['due', 'due 20 Nov']])
+  check('not_before reached (its day started in the zone): no chip', texts({ notBefore: '2026-11-15', status: 'open' }), [])
+  check('not_before an instant, ahead', texts({ notBefore: '2026-11-15T10:00:00Z', status: 'ready' }), [['not_before', 'not before 15 Nov 11:00']])
+  check('not_before on a closed item: no chip', texts({ notBefore: '2026-11-18', status: 'cancelled' }), [])
+  check('the overdue chip draws in the stop colour', dateChips({ due: '2026-11-01', status: 'open' }, ROME, asOf)[0].k, 'overdue')
+
+  check('a day ends at the next midnight in the zone', new Date(dueEnd('2026-11-20', ROME)).toISOString(), '2026-11-20T23:00:00.000Z')
+  check('… across the spring DST change', new Date(dueEnd('2026-03-29', ROME)).toISOString(), '2026-03-29T22:00:00.000Z')
+  check('an instant ends at itself', new Date(dueEnd('2026-11-20T16:00:00Z', ROME)).toISOString(), '2026-11-20T16:00:00.000Z')
+  check('zonedDay of an instant late in the UTC day', [zonedDay('2026-11-20T23:30:00Z', 'UTC'), zonedDay('2026-11-20T23:30:00Z', ROME)], ['2026-11-20', '2026-11-21'])
+  check('day headings', [dayHeading('2026-11-20', '2026-11-20'), dayHeading('2026-11-21', '2026-11-20'), dayHeading('2026-11-22', '2026-11-20')], ['Today', 'Tomorrow', 'Sun 22 Nov'])
+  check('the agenda asks to today + 14 in the zone', [agendaUntil('2026-11-19T23:30:00Z', ROME), agendaUntil('2026-11-19T23:30:00Z', 'UTC')], ['2026-12-04', '2026-12-03'])
+
+  // The Due filter: open items with a due, flat, soonest due END first (not the text as written).
+  const runItem = ref('run', 'in_progress', 'Run')
+  const phase = ref('phase', 'open', 'Phase')
+  const dayDue = ref('task', 'open', 'day 20 Nov')
+  const evening = ref('task', 'in_progress', 'instant 20 Nov 16:00')
+  const early = ref('task', 'blocked', 'instant 19 Nov')
+  const closed = ref('task', 'done', 'closed, dated')
+  const undated = ref('task', 'open', 'undated')
+  const dueBoard = {
+    asOf,
+    rows: [
+      row(runItem, 0),
+      row(dayDue, 1, { due: '2026-11-20' }),
+      row(phase, 1, { hasChildren: true }),
+      row(evening, 2, { due: '2026-11-20T16:00:00Z' }),
+      row(early, 2, { due: '2026-11-19T10:00:00Z' }),
+      row(closed, 2, { due: '2026-11-01' }),
+      row(undated, 2),
+    ],
+  }
+  const dueTitles = (zone) => planOrder(plan(dueBoard, 'due', false, zone)).map((r) => r.item.title)
+  check('Due: dated open items, soonest due end first', dueTitles('UTC'), ['instant 19 Nov', 'instant 20 Nov 16:00', 'day 20 Nov'])
+  check('Due: a day due ends after an instant due that day, in any zone', dueTitles(ROME), ['instant 19 Nov', 'instant 20 Nov 16:00', 'day 20 Nov'])
+  check('Due: one flat group, no phase heads', plan(dueBoard, 'due', false, 'UTC').map((g) => [g.head, g.label, g.rows.map((r) => r.indent)]), [[null, 'Due', [0, 0, 0]]])
+  check('Due: nothing dated, nothing listed', plan({ rows: [row(runItem, 0), row(undated, 1)] }, 'due'), [])
+  check('Due is a filter in the nav, after the others', FILTERS.at(-1), ['due', 'Due'])
+  check('filter=due round-trips through its link', asFilter(new URLSearchParams(planQuery('due', 'overview')).get('filter') ?? undefined), 'due')
+  check('↓ walks the Due list as drawn', step(planOrder(plan(dueBoard, 'due', false, 'UTC')).map((r) => r.item.title), 'instant 19 Nov', 'next'), 'instant 20 Nov 16:00')
+
+  // The Agenda: grouped by the day each due falls on IN THE WORKSPACE ZONE, never the UTC day.
+  const it = (id) => ({ id, ref: id, qualifiedRef: `r/${id}`, kind: 'task', title: id, status: 'open', fullRef: `p/r/${id}` })
+  const arow = (id, due, over = {}) => ({ item: it(id), status: 'open', due, notBefore: null, dueEnd: null, readySince: null, holder: null, blockers: [], ...over })
+  const agenda = {
+    asOf: '2026-11-19T23:30:00Z', // 00:30 on 20 Nov in Rome, still 19 Nov in UTC
+    zone: ROME,
+    overdue: [arow('late', '2026-11-18')],
+    due: [
+      arow('sunday', '2026-11-22'),
+      arow('tonight', '2026-11-20T22:30:00Z'), // 23:30 on 20 Nov in Rome
+      arow('after-midnight', '2026-11-20T23:30:00Z'), // 21 Nov in Rome, 20 Nov in UTC
+      arow('today-day', '2026-11-20'),
+      arow('too-far', '2026-12-30'),
+    ],
+    actionable: [arow('fresh', null, { readySince: '2026-11-19T23:10:00Z' }), arow('tonight', '2026-11-20T22:30:00Z', { readySince: '2026-11-19T23:05:00Z' })],
+  }
+  const grouped = agendaGroups(agenda).map((g) => [g.label, g.rows.map((r) => r.item.id)])
+  check('agenda: Overdue, Today, Tomorrow, later days, then actionable', grouped, [
+    ['Overdue', ['late']],
+    ['Today', ['tonight', 'today-day']],
+    ['Tomorrow', ['after-midnight']],
+    ['Sun 22 Nov', ['sunday']],
+    ['Actionable since this morning', ['fresh', 'tonight']],
+  ])
+  check('agenda: the same instants under UTC fall on UTC days',
+    agendaGroups({ ...agenda, zone: 'UTC' }).map((g) => [g.label, g.rows.map((r) => r.item.id)]).slice(1, 3),
+    [['Tomorrow', ['tonight', 'after-midnight', 'today-day']], ['Sun 22 Nov', ['sunday']]])
+  check('agenda: the walk order counts an item once', agendaOrder(agendaGroups(agenda)), ['late', 'tonight', 'today-day', 'after-midnight', 'sunday', 'fresh'])
+  check('agenda: nothing at all, no groups', agendaGroups({ asOf: agenda.asOf, zone: ROME, overdue: [], due: [], actionable: [] }), [])
+  const facts = (r, g) => { const f = agendaRowFacts(r, g, ROME, agenda.asOf); return [f.dot, f.side, f.facts] }
+  check('agenda row: an instant shows its time in the zone', facts(arow('tonight', '2026-11-20T22:30:00Z'), 'day:2026-11-20'), ['idle', '23:30', []])
+  check('agenda row: a day due is all day', facts(arow('d', '2026-11-20'), 'day:2026-11-20'), ['idle', 'all day', []])
+  check('agenda row: overdue is stop, with its due', facts(arow('late', '2026-11-18'), 'overdue'), ['stop', 'due 18 Nov', []])
+  check('agenda row: blocked, held, waiting', facts(arow('b', '2026-11-20', { status: 'blocked', holder: 'aw-1', blockers: [it('x')] }), 'day:2026-11-20'), ['stop', 'all day', ['blocked', 'on it: aw-1', 'waits on r/x']])
+
+  check('agenda: its href and reads', [agendaHref(), agendaHref('I'), routeReads('/agenda/I?tab=notes')[1], routeReads('/agenda')[0].startsWith('/api/v1/agenda?until=')], ['/agenda', '/agenda/I', '/api/v1/items/I', true])
+  check('the top bar names the Agenda', [pageName('/agenda', sidebar), pageName('/agenda/I', sidebar)], ['Agenda', 'Agenda'])
+  check('the keys table names the Agenda for ↓ / ↑ and Esc', ['↓ / ↑', 'Esc'].every((key) => KEYS.some((k) => k.keys === key && k.where.includes('Agenda'))), true)
+
+  // Needs you: overdue rows, their kind and filter.
+  const od = inboxRow('overdue', 'human', { id: 'o1', detail: 'due 2026-11-19' })
+  const q = inboxRow('question', 'human', { id: 'q9' })
+  check('overdue reads Overdue, with the stop dot', [inboxKind('overdue').label, inboxKind('overdue').dot], ['Overdue', 'stop'])
+  check('overdue rows are the person\'s', needsYou([od, q]).map((r) => r.item.id), ['o1', 'q9'])
+  check('filter: Overdue keeps the overdue', filterInbox([od, q], 'overdue').map((r) => r.item.id), ['o1'])
+  check('filter: ?kind=overdue is the Overdue filter', [asInboxFilter('overdue'), INBOX_FILTERS.at(-1)], ['overdue', ['overdue', 'Overdue']])
+  check('an overdue decision row: the due as written on line 3', [decisionRow(od).kind, decisionRow(od).dot, decisionRow(od).detail], ['Overdue', 'stop', 'due 2026-11-19'])
 }
 
 console.log(failures === 0 ? '\nAll checks passed.' : `\n${failures} check(s) failed.`)

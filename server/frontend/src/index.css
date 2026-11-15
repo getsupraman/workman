@@ -575,3 +575,15 @@ a.chip:hover { color: var(--ink); background: var(--line); }
   .side { transition: transform 0.18s ease-out, visibility 0.18s; }
   @keyframes sheet-in { from { transform: translateX(24px); opacity: 0; } }
 }
+
+/* Dates (doc 13 "Dates"): a row's due and not_before beside its claim holder; overdue in the stop colour. */
+.date-chip { white-space: nowrap; color: var(--ink-2); }
+.date-chip.overdue { color: var(--stop); font-weight: 500; }
+.date-chip.not_before { color: var(--ink-3); }
+.date-chip.late { color: var(--claimed); }
+.chip.date.overdue { background: var(--stop-soft); }
+.chip.date.overdue b { color: var(--stop); }
+.agenda-row .item-side { white-space: nowrap; }
+.agenda-m { color: var(--ink-3); font-size: 12px; margin-top: 2px; overflow-wrap: anywhere; }
+.feed-row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; padding: 14px 18px; }
+.feed-row p { flex-basis: 100%; margin: 0; font-size: 12.5px; color: var(--ink-3); }

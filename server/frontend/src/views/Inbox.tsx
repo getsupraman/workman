@@ -205,7 +205,7 @@ export default function Inbox() {
           <div class="page-h">
             <div>
               <h1>Needs you</h1>
-              <div class="sub">The questions and blocked work that wait on a decision from you, newest first.</div>
+              <div class="sub">The questions, blocked work and overdue items that wait on a decision from you, newest first.</div>
             </div>
           </div>
 

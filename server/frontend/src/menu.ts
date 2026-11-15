@@ -7,6 +7,7 @@ export const PHONE_QUERY = '(max-width: 760px)'
 const FIXED: Record<string, string> = {
   '/': 'Overview',
   '/inbox': 'Needs you',
+  '/agenda': 'Agenda',
   '/activity': 'Activity',
   '/sessions': 'Sessions',
   [ACCOUNT]: 'Account',
@@ -30,6 +31,7 @@ export function pageName(pathname: string, projects: ProjectOverview[] | undefin
   }
 
   if (section === 'inbox' && id) return 'Needs you'
+  if (section === 'agenda' && id) return 'Agenda'
   if (section === 'items' && id) return 'Item'
   return 'Workman'
 }

@@ -8,7 +8,7 @@ import { countTitle, counted, tally } from './state.ts'
 import { ACCOUNT, ADMIN, projectHref, runHref } from './nav.ts'
 import { clock, short } from './format.ts'
 import { ProjectName, TipLayer, tipFor } from './ui.tsx'
-import { ActivityIcon, AdminIcon, InboxIcon, MenuIcon, OverviewIcon, SearchIcon, SessionsIcon } from './icons.tsx'
+import { ActivityIcon, AdminIcon, AgendaIcon, InboxIcon, MenuIcon, OverviewIcon, SearchIcon, SessionsIcon } from './icons.tsx'
 import { Brand, BrandIcon } from './brand.tsx'
 import { PHONE_QUERY, closesOnMove, pageName } from './menu.ts'
 import { showSwitcher } from './admin.ts'
@@ -167,6 +167,10 @@ export default function Shell(props: ParentProps) {
             <InboxIcon />
             Needs you
             <Show when={needsYouCount(inbox())}>{(n) => <span class="badge">{n()}</span>}</Show>
+          </A>
+          <A href="/agenda" class={on('/agenda') || location.pathname.startsWith('/agenda/') ? 'on' : ''}>
+            <AgendaIcon />
+            Agenda
           </A>
           <A href="/activity" class={on('/activity') ? 'on' : ''}>
             <ActivityIcon />

@@ -9,13 +9,13 @@ export type KeyHelp = { keys: string; where: string; does: string }
 
 export const KEYS: readonly KeyHelp[] = [
   { keys: 'Ctrl+P (⌘P on macOS), /', where: 'any page', does: 'opens the command palette; / only outside a text field' },
-  { keys: '↓ / ↑', where: 'run page, Needs you', does: 'selects the next / previous row as drawn and shows it in the detail panel' },
+  { keys: '↓ / ↑', where: 'run page, Needs you, Agenda', does: 'selects the next / previous row as drawn and shows it in the detail panel' },
   { keys: '↓ / ↑', where: 'Backlog, Project, Activity', does: 'moves focus to the next / previous row' },
-  { keys: 'Home / End', where: 'run page, Needs you, Backlog, Project, Activity', does: 'the first / last row' },
+  { keys: 'Home / End', where: 'run page, Needs you, Agenda, Backlog, Project, Activity', does: 'the first / last row' },
   { keys: 'Enter', where: 'a focused row', does: 'opens it' },
   { keys: 'Alt+↓ / Alt+↑ (⌥ on macOS)', where: 'any page', does: 'opens the next / previous run in the sidebar' },
   { keys: 'Esc', where: 'palette, dialog, phone menu, detail sheet', does: 'closes it' },
-  { keys: 'Esc', where: 'run page, Needs you, with the panel docked', does: 'clears the selection; the run page shows the run again' },
+  { keys: 'Esc', where: 'run page, Needs you, Agenda, with the panel docked', does: 'clears the selection; the run page shows the run again' },
   { keys: '?', where: 'any page', does: 'shows these keys' },
 ]
 

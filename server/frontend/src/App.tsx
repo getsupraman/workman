@@ -7,6 +7,7 @@ import { startStream } from './live.ts'
 import { startStore } from './store.ts'
 import Account from './views/Account.tsx'
 import Activity from './views/Activity.tsx'
+import Agenda from './views/Agenda.tsx'
 import Admin from './views/Admin.tsx'
 import AdminTenant from './views/AdminTenant.tsx'
 import AdminUsers from './views/AdminUsers.tsx'
@@ -40,6 +41,7 @@ export default function App() {
       <Router root={Shell}>
         <Route path="/" component={Overview} />
         <Route path="/inbox/:item?" component={Inbox} />
+        <Route path="/agenda/:item?" component={Agenda} />
         <Route path="/activity" component={Activity} />
         <Route path="/sessions" component={Sessions} />
         <Route path="/runs/:run/:item?" component={Run} />

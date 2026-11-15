@@ -257,6 +257,32 @@ export type InboxRow = {
 
 export type Inbox = { asOf: string; seq: number; rows: InboxRow[] }
 
+/** doc 10 `GET /api/v1/agenda`: one row of its three lists. */
+export type AgendaRow = {
+  item: ItemRef
+  status: string
+  due: string | null
+  notBefore: string | null
+  /** The instant the due is read as in the workspace's zone. */
+  dueEnd: string | null
+  readySince: string | null
+  holder: string | null
+  blockers: ItemRef[]
+}
+
+export type Agenda = {
+  asOf: string
+  seq: number
+  /** The workspace's time zone (IANA). */
+  zone: string
+  until: string
+  since: string
+  scope: ItemRef | null
+  overdue: AgendaRow[]
+  due: AgendaRow[]
+  actionable: AgendaRow[]
+}
+
 export type JournalPage = { asOf: string; seq: number; cursor: number; hasMore: boolean; events: JournalEvent[] }
 
 export type Backlog = {
@@ -343,6 +369,9 @@ export const conventions = async (item: string): Promise<string> =>
 
 export const inbox = () => json<Inbox>('/api/v1/inbox')
 
+/** `until` is a day `YYYY-MM-DD`, read as the end of that day in the workspace's zone; `since` defaults to this morning there. */
+export const agenda = (until: string) => json<Agenda>(`/api/v1/agenda?until=${id(until)}`)
+
 export const journal = (limit: number) => json<JournalPage>(`/api/v1/journal?limit=${limit}`)
 
 export const backlog = (project: string) => json<Backlog>(`/api/v1/backlog?project=${id(project)}`)
@@ -378,7 +407,7 @@ async function write(path: string): Promise<Response> {
 }
 
 /** A dashboard write with a JSON body and any method; a refusal throws the server's own words, as `write` does. */
-async function send(method: 'POST' | 'PUT' | 'DELETE', path: string, body?: unknown): Promise<Response> {
+async function send(method: 'POST' | 'PUT' | 'PATCH' | 'DELETE', path: string, body?: unknown): Promise<Response> {
   const response = await fetch(path, {
     method,
     credentials: 'same-origin',
@@ -574,6 +603,31 @@ export async function removeProjectMember(project: string, user: string): Promis
 
 export async function setArchived(project: string, archived: boolean): Promise<void> {
   await write(`/api/projects/${id(project)}/${archived ? 'archive' : 'unarchive'}`)
+}
+
+/** `/api/admin/tenants/{id}/settings`: the workspace's time zone, in which a date-only due is read. */
+export type TenantSettings = { timezone: string }
+
+export const tenantSettings = (tenant: string) => json<TenantSettings>(`/api/admin/tenants/${id(tenant)}/settings`)
+
+/** A name the server does not know is a 400 whose words the field shows. */
+export const setTenantTimezone = async (tenant: string, timezone: string): Promise<TenantSettings> =>
+  (await send('PATCH', `/api/admin/tenants/${id(tenant)}/settings`, { timezone })).json() as Promise<TenantSettings>
+
+/** `GET /api/session/calendar`: whether the user has a feed in this workspace, never its token. */
+export type CalendarFeed = { exists: boolean; createdAt: string | null }
+
+/** The only answer that carries the feed's token: the server keeps its hash. */
+export type CreatedFeed = { token: string; url: string; createdAt: string }
+
+export const calendarFeed = () => json<CalendarFeed>('/api/session/calendar')
+
+/** A new URL; the old one, if any, stops working. */
+export const createCalendarFeed = async (): Promise<CreatedFeed> =>
+  (await send('POST', '/api/session/calendar')).json() as Promise<CreatedFeed>
+
+export async function revokeCalendarFeed(): Promise<void> {
+  await send('DELETE', '/api/session/calendar')
 }
 
 /** The signed-in user's OAuth approvals in this workspace (doc 13). */

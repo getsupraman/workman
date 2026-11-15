@@ -2,13 +2,14 @@ import { For, Index, Show, createEffect, on } from 'solid-js'
 import { A, useNavigate, useParams, useSearchParams } from '@solidjs/router'
 import * as api from '../api.ts'
 import type { Board, BoardRow, ItemRef } from '../api.ts'
-import { load } from '../store.ts'
+import { load, workspaceZone } from '../store.ts'
 import { CLOSED, findingsOpen, progress, rowState, tally } from '../state.ts'
 import { FILTERS, asFilter, cancelledLines, plan, planOrder, planQuery as query, runPageHref, type Filter } from '../plan.ts'
 import { step } from '../listnav.ts'
 import { reveal, useListKeys } from '../listkeys.ts'
 import { SHOW_CANCELLED, boardHref, rowToggleHref, runHref } from '../nav.ts'
 import { UNKNOWN, claimHolder, short } from '../format.ts'
+import { dateChips } from '../dates.ts'
 import { CancelledToggle, CopyRef, Dot, ProjectName, Segs } from '../ui.tsx'
 import { SplitView } from '../split-view.tsx'
 import Detail, { asTab, type Tab } from './Detail.tsx'
@@ -52,7 +53,7 @@ export default function Run() {
   useListKeys((m) => {
     const b = board.data()
     if (!b) return false
-    const order = planOrder(plan(b, filter(), cancelled()))
+    const order = planOrder(plan(b, filter(), cancelled(), workspaceZone()))
     const to = step(order, order.find((r) => r.item.id === params.item), m)
     if (to === undefined) return false
     if (to.item.id !== params.item) {
@@ -197,10 +198,10 @@ function PlanList(props: {
   selected: string
   href: (item: ItemRef) => string
 }) {
-  const groups = () => plan(props.board, props.filter, props.cancelled)
+  const groups = () => plan(props.board, props.filter, props.cancelled, workspaceZone())
 
   return (
-    <Index each={groups()} fallback={<div class="empty">Nothing matches this filter.</div>}>
+    <Index each={groups()} fallback={<div class="empty">{props.filter === 'due' ? 'No open item here has a due date.' : 'Nothing matches this filter.'}</div>}>
       {(group) => (
         <>
           <Show
@@ -227,7 +228,9 @@ function PlanList(props: {
             )}
           </Show>
           <Index each={group().rows}>
-            {(entry) => <PlanItem row={entry().row} indent={entry().indent} selected={props.selected} href={props.href} />}
+            {(entry) => (
+              <PlanItem row={entry().row} indent={entry().indent} selected={props.selected} href={props.href} asOf={props.board.asOf} />
+            )}
           </Index>
         </>
       )}
@@ -235,10 +238,11 @@ function PlanList(props: {
   )
 }
 
-function PlanItem(props: { row: BoardRow; indent: number; selected: string; href: (item: ItemRef) => string }) {
+function PlanItem(props: { row: BoardRow; indent: number; selected: string; href: (item: ItemRef) => string; asOf: string }) {
   const s = () => rowState(props.row)
   const claim = () => (props.row.claim && !CLOSED.has(props.row.item.status) ? props.row.claim : null)
   const crit = () => (props.row.criteria.total > 0 ? `${props.row.criteria.checked}/${props.row.criteria.total}` : '')
+  const dates = () => dateChips({ ...props.row, status: props.row.item.status }, workspaceZone(), props.asOf)
 
   return (
     <A
@@ -256,6 +260,13 @@ function PlanItem(props: { row: BoardRow; indent: number; selected: string; href
         {props.row.item.title}
       </div>
       <div class="item-side">
+        <For each={dates()}>
+          {(chip) => (
+            <span class={`date-chip ${chip.k}`} title={chip.title}>
+              {chip.text}
+            </span>
+          )}
+        </For>
         <Show when={claim()}>{(c) => <span class="who">{claimHolder(c())}</span>}</Show>
         {crit()}
       </div>

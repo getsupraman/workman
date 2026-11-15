@@ -2,12 +2,13 @@ import { For, Index, Match, Show, Switch, createSignal, type JSX } from 'solid-j
 import { A } from '@solidjs/router'
 import * as api from '../api.ts'
 import type { BoardRow, ItemPage, ItemRef } from '../api.ts'
-import { load } from '../store.ts'
+import { load, workspaceZone } from '../store.ts'
 import { CLOSED, answer, pageInput, refState, rowState, state } from '../state.ts'
-import { ago, cap, claimHolder, clock, day } from '../format.ts'
+import { ago, cap, claimHolder, clock, day, plural } from '../format.ts'
 import { CheckIcon } from '../icons.tsx'
 import { pathCrumbs } from '../nav.ts'
 import { withoutCancelled } from '../plan.ts'
+import { dateChips } from '../dates.ts'
 import { CancelledToggle, CopyRef, Dot, Pill } from '../ui.tsx'
 import { EventLine } from './Activity.tsx'
 import { PromptActions } from './Prompts.tsx'
@@ -57,6 +58,15 @@ export default function Detail(props: Props) {
     return list.filter((x): x is [string, string] => Array.isArray(x))
   }
 
+  /** due (overdue in the stop colour while open), not_before while ahead, late, and how often the due slipped. */
+  const dates = () => {
+    const chips = dateChips({ ...p(), status: p().item.status }, workspaceZone(), p().asOf)
+    const slips = p().slips ?? 0
+    return slips > 0
+      ? [...chips, { k: 'slips' as const, text: `slipped ${slips} ${plural(slips, 'time')}`, title: 'Times the due was moved later' }]
+      : chips
+  }
+
   const tabs = (): [Tab, string, number | null][] => [
     ['overview', 'Overview', null],
     ['evidence', 'Evidence', p().reports.length + p().verifications.length],
@@ -92,6 +102,13 @@ export default function Detail(props: Props) {
             {([k, v]) => (
               <span class="chip" title={v}>
                 {k} <b>{v}</b>
+              </span>
+            )}
+          </For>
+          <For each={dates()}>
+            {(chip) => (
+              <span class={`chip date ${chip.k}`} title={chip.title}>
+                <b>{chip.text}</b>
               </span>
             )}
           </For>

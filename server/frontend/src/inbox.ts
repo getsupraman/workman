@@ -8,6 +8,7 @@ const INBOX_KINDS: Record<string, Kind> = {
   blocked: { label: 'Blocked', dot: 'stop', many: (n) => `${n} blocked` },
   blocker_finding: { label: 'Blocker finding', dot: 'stop', many: (n) => `${n} ${plural(n, 'blocker finding')} open` },
   question: { label: 'Question', dot: 'stop', many: (n) => `${n} open ${plural(n, 'question')}` },
+  overdue: { label: 'Overdue', dot: 'stop', many: (n) => `${n} overdue` },
   expired_claim: { label: 'Claim expired', dot: 'stop', many: (n) => `${n} ${plural(n, 'claim')} expired` },
   stale_in_progress: { label: 'Stalled', dot: 'stop', many: (n) => `${n} stalled` },
   assumption_due: { label: 'Assumption due', dot: 'claimed', many: (n) => `${n} with assumptions due` },
@@ -38,6 +39,7 @@ export const INBOX_FILTERS = [
   ['all', 'All'],
   ['question', 'Questions'],
   ['blocked', 'Blocked'],
+  ['overdue', 'Overdue'],
 ] as const
 
 export type InboxFilter = (typeof INBOX_FILTERS)[number][0]

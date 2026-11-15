@@ -22,6 +22,14 @@ export const InboxIcon = () => (
   </svg>
 )
 
+export const AgendaIcon = () => (
+  <svg viewBox="0 0 24 24" {...stroke} aria-hidden="true">
+    <rect x="3.5" y="5" width="17" height="15.5" rx="2" />
+    <path d="M3.5 10h17" />
+    <path d="M8 3v4M16 3v4" />
+  </svg>
+)
+
 export const ActivityIcon = () => (
   <svg viewBox="0 0 24 24" {...stroke} aria-hidden="true">
     <circle cx="12" cy="12" r="9" />

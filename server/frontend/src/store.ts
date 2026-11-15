@@ -3,6 +3,7 @@ import * as api from './api.ts'
 import type { SessionTenant } from './connect.ts'
 import { boardsRead } from './boards.ts'
 import { onFrames } from './live.ts'
+import { DEFAULT_ZONE, zonedDay } from './dates.ts'
 
 /**
  * The workspace as the shell reads it: the overview, the inbox, and every run's board (the
@@ -70,11 +71,35 @@ async function loadInbox(): Promise<void> {
   }
 }
 
+/**
+ * The workspace's time zone (IANA), in which a date-only due is a whole day and an instant is shown
+ * (doc 13 "Dates"). Every member may read the agenda, which names it; only an admin may read the
+ * workspace's settings, so the zone comes from there. `undefined` until it has answered.
+ */
+const [zone, setZone] = createSignal<string>()
+
+/** The zone dates are drawn in: the workspace's once known, UTC before. */
+export const workspaceZone = (): string => zone() ?? DEFAULT_ZONE
+
+/** Any read that names the zone (the Agenda's, a settings write) keeps it current. */
+export const noteZone = (value: string | null | undefined): void => {
+  if (value) setZone(value)
+}
+
+async function loadZone(): Promise<void> {
+  try {
+    noteZone((await api.agenda(zonedDay(Date.now(), DEFAULT_ZONE))).zone)
+  } catch {
+    // A server without the agenda: dates read in UTC, as the server's own default.
+  }
+}
+
 /** Opens the store and keeps it current until the owner is disposed. */
 export function startStore(): void {
   void loadOverview('all')
   void loadInbox()
   void refreshAccount()
+  void loadZone()
 
   onCleanup(
     onFrames((frames) => {

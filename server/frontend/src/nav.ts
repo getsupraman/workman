@@ -1,4 +1,5 @@
 import type { ItemRef } from './api.ts'
+import { DEFAULT_ZONE, agendaUntil } from './dates.ts'
 
 /**
  * Every link to an item goes through here, so every link has a page behind it: a run opens its
@@ -15,6 +16,9 @@ export const runHref = (run: string) => `/runs/${run}`
 
 /** Needs you, with an item open beside the list or none. */
 export const inboxHref = (item?: string) => (item ? `/inbox/${item}` : '/inbox')
+
+/** The Agenda, with an item open beside it or none. */
+export const agendaHref = (item?: string) => (item ? `/agenda/${item}` : '/agenda')
 
 /** What a copy button puts on the clipboard: the server's full path, never a ref composed here. */
 export const copyValue = (item: Pick<ItemRef, 'fullRef'>): string => item.fullRef
@@ -86,6 +90,10 @@ export function routeReads(href: string): string[] {
   if (parts.length === 0) return ['/api/v1/overview']
   if (parts[0] === 'inbox' && parts.length === 1) return ['/api/v1/inbox']
   if (parts[0] === 'inbox' && parts.length === 2) return ['/api/v1/inbox', `/api/v1/items/${parts[1]}`]
+  if (parts[0] === 'agenda' && parts.length <= 2) {
+    const read = `/api/v1/agenda?until=${agendaUntil(Date.now(), DEFAULT_ZONE)}`
+    return parts.length === 1 ? [read] : [read, `/api/v1/items/${parts[1]}`]
+  }
   if (parts[0] === 'activity' && parts.length === 1) return ['/api/v1/journal?limit=1']
   if (parts[0] === 'sessions' && parts.length === 1) return ['/api/v1/sessions']
   if (parts[0] === 'runs' && parts.length === 2) return [`/api/v1/runs/${parts[1]}/board`, `/api/v1/items/${parts[1]}`]
