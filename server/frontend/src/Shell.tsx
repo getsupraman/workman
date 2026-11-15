@@ -159,88 +159,90 @@ export default function Shell(props: ParentProps) {
       <aside class="side" id="side" ref={side}>
         <AccountHeader open={acct()} setOpen={setAcct} close={closeAcct} button={(el) => (acctButton = el)} />
 
-        <A href="/" class="brand">
-          <Brand ground="dark" />
-        </A>
+        <div class="side-body">
+          <A href="/" class="brand">
+            <Brand ground="dark" />
+          </A>
 
-        <button
-          type="button"
-          class="side-find"
-          aria-haspopup="dialog"
-          aria-keyshortcuts="Control+P Meta+P /"
-          onClick={openPalette}
-        >
-          <SearchIcon />
-          <span class="side-find-t">Search refs, items, commands</span>
-          <kbd>{chordLabel(navigator.userAgent)}</kbd>
-        </button>
+          <button
+            type="button"
+            class="side-find"
+            aria-haspopup="dialog"
+            aria-keyshortcuts="Control+P Meta+P /"
+            onClick={openPalette}
+          >
+            <SearchIcon />
+            <span class="side-find-t">Search refs, items, commands</span>
+            <kbd>{chordLabel(navigator.userAgent)}</kbd>
+          </button>
 
-        <nav class="nav">
-          <A href="/" class={on('/') ? 'on' : ''}>
-            <OverviewIcon />
-            Overview
-          </A>
-          <A href="/inbox" class={on('/inbox') || location.pathname.startsWith('/inbox/') ? 'on' : ''}>
-            <InboxIcon />
-            Needs you
-            <Show when={needsYouCount(inbox())}>{(n) => <span class="badge">{n()}</span>}</Show>
-          </A>
-          <A href="/agenda" class={on('/agenda') || location.pathname.startsWith('/agenda/') ? 'on' : ''}>
-            <AgendaIcon />
-            Agenda
-          </A>
-          <A href="/activity" class={on('/activity') ? 'on' : ''}>
-            <ActivityIcon />
-            Activity
-          </A>
-          <A href="/sessions" class={on('/sessions') ? 'on' : ''}>
-            <SessionsIcon />
-            Sessions
-          </A>
-          <Show when={account()?.user.administers}>
-            <A href={ADMIN} class={location.pathname.startsWith(ADMIN) ? 'on' : ''}>
-              <AdminIcon />
-              Admin
+          <nav class="nav">
+            <A href="/" class={on('/') ? 'on' : ''}>
+              <OverviewIcon />
+              Overview
             </A>
-          </Show>
-        </nav>
+            <A href="/inbox" class={on('/inbox') || location.pathname.startsWith('/inbox/') ? 'on' : ''}>
+              <InboxIcon />
+              Needs you
+              <Show when={needsYouCount(inbox())}>{(n) => <span class="badge">{n()}</span>}</Show>
+            </A>
+            <A href="/agenda" class={on('/agenda') || location.pathname.startsWith('/agenda/') ? 'on' : ''}>
+              <AgendaIcon />
+              Agenda
+            </A>
+            <A href="/activity" class={on('/activity') ? 'on' : ''}>
+              <ActivityIcon />
+              Activity
+            </A>
+            <A href="/sessions" class={on('/sessions') ? 'on' : ''}>
+              <SessionsIcon />
+              Sessions
+            </A>
+            <Show when={account()?.user.administers}>
+              <A href={ADMIN} class={location.pathname.startsWith(ADMIN) ? 'on' : ''}>
+                <AdminIcon />
+                Admin
+              </A>
+            </Show>
+          </nav>
 
-        <div class="side-h">Projects</div>
-        <input
-          class="side-search"
-          type="search"
-          placeholder="Find a project"
-          aria-label="Find a project by name or ref"
-          value={query()}
-          onInput={(e) => setQuery(e.currentTarget.value)}
-        />
-        <Show when={groups()}>
-          {(g) => {
-            return (
-              <>
-                <SideGroup label="Active" projects={g().active} path={location.pathname} />
-                <SideGroup label="Quiet" projects={g().quiet} path={location.pathname} />
-                <Show when={g().archived.length > 0}>
-                  <button
-                    type="button"
-                    class="side-toggle"
-                    aria-expanded={archivedShown()}
-                    onClick={() => setArchivedOpen(!archivedOpen())}
-                  >
-                    <span class="caret">{archivedShown() ? '▾' : '▸'}</span>
-                    Archived ({g().archived.length})
-                  </button>
-                  <Show when={archivedShown()}>
-                    <SideGroup projects={g().archived} path={location.pathname} />
+          <div class="side-h">Projects</div>
+          <input
+            class="side-search"
+            type="search"
+            placeholder="Find a project"
+            aria-label="Find a project by name or ref"
+            value={query()}
+            onInput={(e) => setQuery(e.currentTarget.value)}
+          />
+          <Show when={groups()}>
+            {(g) => {
+              return (
+                <>
+                  <SideGroup label="Active" projects={g().active} path={location.pathname} />
+                  <SideGroup label="Quiet" projects={g().quiet} path={location.pathname} />
+                  <Show when={g().archived.length > 0}>
+                    <button
+                      type="button"
+                      class="side-toggle"
+                      aria-expanded={archivedShown()}
+                      onClick={() => setArchivedOpen(!archivedOpen())}
+                    >
+                      <span class="caret">{archivedShown() ? '▾' : '▸'}</span>
+                      Archived ({g().archived.length})
+                    </button>
+                    <Show when={archivedShown()}>
+                      <SideGroup projects={g().archived} path={location.pathname} />
+                    </Show>
                   </Show>
-                </Show>
-                <Show when={searching() && g().active.length + g().quiet.length + g().archived.length === 0}>
-                  <div class="side-none">No project matches “{query().trim()}”.</div>
-                </Show>
-              </>
-            )
-          }}
-        </Show>
+                  <Show when={searching() && g().active.length + g().quiet.length + g().archived.length === 0}>
+                    <div class="side-none">No project matches “{query().trim()}”.</div>
+                  </Show>
+                </>
+              )
+            }}
+          </Show>
+        </div>
       </aside>
 
       <main class="main" ref={main} inert={menu() || undefined}>
