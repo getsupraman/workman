@@ -144,6 +144,16 @@ public sealed class CalendarFeedTests(PostgresFixture fixture)
         Assert.Contains($"{ProjectWorld.TitleOnlyInP2}", p2);
         Assert.DoesNotContain(world.P2TaskId.ToString(), feed2.Raw, StringComparison.Ordinal);
 
+        // An archived project drops out of the calendar as out of every list; restoring it brings its item back.
+        Assert.Equal(HttpStatusCode.OK, (await Archive(two, world.P2Id, "archive")).StatusCode);
+        var archived = await IcsAsync(server, url2);
+        Assert.Single(archived.Events);
+        Assert.DoesNotContain(world.OnlyInP2Id.ToString(), archived.Raw, StringComparison.Ordinal);
+        Assert.Equal(HttpStatusCode.OK, (await Archive(two, world.P2Id, "unarchive")).StatusCode);
+        var restored = await IcsAsync(server, url2);
+        Assert.Equal(2, restored.Events.Count);
+        Assert.Contains(restored.Events, e => e.Contains($"UID:{world.OnlyInP2Id}@", StringComparison.Ordinal));
+
         // Access is read when asked: out of P2, its event is gone from the same URL.
         await using (var owner = await fixture.DataSource.OpenConnectionAsync(Ct))
         {
@@ -243,6 +253,13 @@ public sealed class CalendarFeedTests(PostgresFixture fixture)
     private static Task<HttpResponseMessage> Send(HttpClient cookie, HttpMethod method)
     {
         var request = new HttpRequestMessage(method, Feed);
+        request.Headers.Add("X-Workman-Write", "1");
+        return cookie.SendAsync(request, Ct);
+    }
+
+    private static Task<HttpResponseMessage> Archive(HttpClient cookie, Guid project, string action)
+    {
+        var request = new HttpRequestMessage(HttpMethod.Post, $"/api/projects/{project}/{action}");
         request.Headers.Add("X-Workman-Write", "1");
         return cookie.SendAsync(request, Ct);
     }

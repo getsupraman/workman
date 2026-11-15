@@ -167,7 +167,8 @@ tenant/user path as a cookie request (doc 02 §15b). A project the user cannot s
 they leave drops out on the next poll. An unknown, replaced or revoked token, a disabled user, and a user no longer in
 the workspace all get the same bare `404`, with no body.
 
-One `VEVENT` per item with a `due` whose status is `open`, `ready`, `in_progress`, `blocked` or `review`, soonest first:
+One `VEVENT` per item with a `due` whose status is `open`, `ready`, `in_progress`, `blocked` or `review`, soonest first,
+leaving out the items of an archived project (doc 02 "Archived projects"), as every default list does:
 
 | Property | Value |
 |---|---|
