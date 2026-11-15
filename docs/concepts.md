@@ -142,7 +142,7 @@ and gets three lists: **OVERDUE**, **DUE BY** the end of `until`, and **ACTIONAB
 (its `not_before` came, or its last blocker closed). That replaces an external todo list. The same data
 is `GET /api/v1/agenda`. → [01-mcp-surface.md](01-mcp-surface.md), [10-read-api.md](10-read-api.md)
 
-**The calendar feed.** On the dashboard's Account page, create a calendar feed and subscribe to its URL
+**The calendar feed.** On the dashboard's Agenda page, below the agenda, create a calendar feed and subscribe to its URL
 (`https://workman.example/api/calendar/<token>.ics`) in a calendar app: every open item with a due, in
 the projects you can see, as an all-day or a timed event. The URL is shown once and is the secret;
 replace or revoke it there. → [10-read-api.md](10-read-api.md)

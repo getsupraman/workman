@@ -1,14 +1,215 @@
 import { For, Show, createSignal } from 'solid-js'
+import { A } from '@solidjs/router'
 import * as api from '../api.ts'
 import { account, load } from '../store.ts'
 import { PASSWORD_MIN, type PasswordChange, passwordMessage, passwordProblem } from '../admin.ts'
-import { type ConnectedApp, appLine, revokeWarning } from '../apps.ts'
+import { type AppGroup, type ConnectedApp, connectionLine, feedStatus, groupApps, groupLine, revokeWarning } from '../apps.ts'
+import { headerFacts } from '../account.ts'
 import { type IconState, iconStep, initials } from '../connect.ts'
-import { Confirm, Known, OnceLink } from '../ui.tsx'
+import { Confirm, Known } from '../ui.tsx'
 import { day } from '../format.ts'
+import { agendaHref } from '../nav.ts'
 
-/** `/account` (doc 13): who is signed in, the apps that hold their access, and the password change. */
+/** `/account` (doc 13): one even column — who is signed in, the apps holding their access, the calendar URL's status, the password. */
 export default function Account() {
+  return (
+    <div class="page">
+      <div class="account-col">
+        <Profile />
+        <ConnectedApps />
+        <FeedStatus />
+        <Security />
+      </div>
+    </div>
+  )
+}
+
+/** The large initials avatar, the sign-in name, the workspace with the role, and Sign out. */
+function Profile() {
+  const facts = () => {
+    const a = account()
+    return a ? headerFacts(a.user.name, a.tenants) : null
+  }
+
+  return (
+    <div class="panel account-profile">
+      <span class="account-av" aria-hidden="true">
+        {facts()?.initials ?? '?'}
+      </span>
+      <div class="account-who">
+        <h1>{facts()?.name ?? 'Account'}</h1>
+        <div class="account-where">
+          <Show when={facts()?.workspace}>{(ws) => <span>{ws()}</span>}</Show>
+          <Show when={facts()?.role}>{(role) => <span class="account-role">{role()}</span>}</Show>
+          <Show when={account()?.user.systemAdmin}>
+            <span class="account-role">System administrator</span>
+          </Show>
+        </div>
+      </div>
+      <button type="button" class="proj-act" onClick={() => void api.signOut()}>
+        Sign out
+      </button>
+    </div>
+  )
+}
+
+/** The user's OAuth approvals in this workspace, one row per app (most recently used first). */
+function ConnectedApps() {
+  const [tick, setTick] = createSignal(0)
+  const page = load(() => String(tick()), () => api.connectedApps(), { live: false })
+  const reload = () => setTick((n) => n + 1)
+
+  return (
+    <div class="panel account-apps">
+      <div class="panel-h">
+        <h2>Connected apps</h2>
+      </div>
+      <Show when={page.error()}>{(e) => <div class="failure">{e()}</div>}</Show>
+      <Known value={page.data()}>
+        {(p) => (
+          <For each={groupApps(p().apps)} fallback={<div class="empty">No apps hold access to this workspace.</div>}>
+            {(group) => <AppGroupRow group={group} asOf={p().asOf} onRevoked={reload} />}
+          </For>
+        )}
+      </Known>
+    </div>
+  )
+}
+
+/** Revoking one connection: ask first, then end it and reload the list. */
+function useRevoke(app: () => ConnectedApp, onRevoked: () => void) {
+  const [confirming, setConfirming] = createSignal(false)
+  const [busy, setBusy] = createSignal(false)
+  const [error, setError] = createSignal<string>()
+
+  const revoke = async () => {
+    setBusy(true)
+    setError(undefined)
+    try {
+      await api.revokeApp(app().id)
+      setConfirming(false)
+      onRevoked()
+    } catch (failure) {
+      setError(failure instanceof Error ? failure.message : String(failure))
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return { app, confirming, setConfirming, busy, error, revoke }
+}
+
+type Revoking = ReturnType<typeof useRevoke>
+
+function RevokeButton(props: { r: Revoking }) {
+  return (
+    <button type="button" class="proj-act" disabled={props.r.busy() || props.r.confirming()} onClick={() => props.r.setConfirming(true)}>
+      Revoke
+    </button>
+  )
+}
+
+function RevokeConfirm(props: { r: Revoking }) {
+  return (
+    <>
+      <Show when={props.r.confirming()}>
+        <Confirm
+          label={`Revoke ${props.r.app().name}?`}
+          action="Revoke"
+          busy={props.r.busy()}
+          onConfirm={() => void props.r.revoke()}
+          onCancel={() => props.r.setConfirming(false)}
+          style={{ 'margin-top': '8px' }}
+        >
+          Revoke <strong>{props.r.app().name}</strong>? {revokeWarning(props.r.app())}
+        </Confirm>
+      </Show>
+      <Show when={props.r.error()}>{(message) => <div class="failure confirm-err">Couldn't revoke it: {message()}</div>}</Show>
+    </>
+  )
+}
+
+/** One app: its line and scope chips; one connection is revoked on the row, several expand to a line each. */
+function AppGroupRow(props: { group: AppGroup; asOf: string; onRevoked: () => void }) {
+  const [open, setOpen] = createSignal(false)
+  const single = () => props.group.connections.length === 1
+  const only = useRevoke(() => props.group.connections[0]!, () => props.onRevoked())
+  const listId = () => `app-conns-${props.group.connections[0]!.id}`
+
+  return (
+    <div class="app-group">
+      <div class="row">
+        <AppIcon clientId={props.group.clientId} name={props.group.name} />
+        <div>
+          <div class="row-t">{props.group.name}</div>
+          <div class="row-m">{groupLine(props.group, props.asOf)}</div>
+          <Show when={props.group.scopes.length > 0}>
+            <div class="app-scopes">
+              <For each={props.group.scopes}>{(scope) => <span class="app-scope">{scope}</span>}</For>
+            </div>
+          </Show>
+          <Show when={single()}>
+            <RevokeConfirm r={only} />
+          </Show>
+        </div>
+        <Show
+          when={single()}
+          fallback={
+            <button type="button" class="proj-act" aria-expanded={open()} aria-controls={listId()} onClick={() => setOpen(!open())}>
+              {open() ? 'Hide' : 'Show'} {props.group.connections.length} connections
+            </button>
+          }
+        >
+          <RevokeButton r={only} />
+        </Show>
+      </div>
+      <Show when={!single() && open()}>
+        <div class="app-conns" id={listId()}>
+          <For each={props.group.connections}>{(app) => <ConnectionRow app={app} asOf={props.asOf} onRevoked={props.onRevoked} />}</For>
+        </div>
+      </Show>
+    </div>
+  )
+}
+
+function ConnectionRow(props: { app: ConnectedApp; asOf: string; onRevoked: () => void }) {
+  const r = useRevoke(() => props.app, () => props.onRevoked())
+
+  return (
+    <div class="app-conn">
+      <div>
+        <div class="row-m">{connectionLine(props.app, props.asOf)}</div>
+        <RevokeConfirm r={r} />
+      </div>
+      <RevokeButton r={r} />
+    </div>
+  )
+}
+
+/** Whether the user has a calendar URL; creating, replacing and revoking it live on the Agenda page. */
+function FeedStatus() {
+  const feed = load(() => 'feed', () => api.calendarFeed(), { live: false })
+
+  return (
+    <div class="panel">
+      <div class="panel-h">
+        <h2>Calendar feed</h2>
+      </div>
+      <div class="account-line">
+        <Show when={feed.error()} fallback={<span>{feed.data() ? feedStatus(feed.data()!, day) : 'Loading…'}</span>}>
+          {(e) => <span class="failure">{e()}</span>}
+        </Show>
+        <A href={agendaHref()} class="linkish">
+          Manage on the Agenda page
+        </A>
+      </div>
+    </div>
+  )
+}
+
+/** The password, its form behind a button; the rules and messages are the form's own. */
+function Security() {
+  const [editing, setEditing] = createSignal(false)
   const [current, setCurrent] = createSignal('')
   const [next, setNext] = createSignal('')
   const [repeat, setRepeat] = createSignal('')
@@ -19,6 +220,18 @@ export default function Account() {
   const problem = () =>
     current() === '' ? 'Type your current password.' : (passwordProblem(next()) ?? (next() === repeat() ? null : 'The two new passwords differ.'))
 
+  const clear = () => {
+    setCurrent('')
+    setNext('')
+    setRepeat('')
+    setTried(false)
+  }
+  const cancel = () => {
+    clear()
+    setResult(undefined)
+    setEditing(false)
+  }
+
   const submit = async (event: SubmitEvent) => {
     event.preventDefault()
     setTried(true)
@@ -28,12 +241,7 @@ export default function Account() {
     try {
       const outcome = await api.changePassword(current(), next())
       setResult(outcome)
-      if (outcome.k === 'ok') {
-        setCurrent('')
-        setNext('')
-        setRepeat('')
-        setTried(false)
-      }
+      if (outcome.k === 'ok') clear()
     } catch (failure) {
       if (!(failure instanceof api.Unauthorized)) {
         setResult({ k: 'refused', error: failure instanceof Error ? failure.message : String(failure) })
@@ -44,220 +252,45 @@ export default function Account() {
   }
 
   return (
-    <div class="page">
-      <div class="page-h">
-        <div>
-          <h1>Account</h1>
-          <div class="sub">
-            <Show when={account()} fallback="Signed in.">
-              {(a) => (
-                <>
-                  Signed in as <strong>{a().user.name}</strong>
-                  {a().user.systemAdmin ? ', a system administrator' : ''}
-                  {a().tenants.find((t) => t.current) ? `, in ${a().tenants.find((t) => t.current)!.slug}` : ''}.
-                </>
-              )}
-            </Show>
-          </div>
-        </div>
+    <div class="panel">
+      <div class="panel-h">
+        <h2>Security</h2>
       </div>
-
-      <ConnectedApps />
-
-      <CalendarFeed />
-
-      <form class="panel account-form" onSubmit={(event) => void submit(event)}>
-        <div class="panel-h">
-          <h2>Change password</h2>
-        </div>
-        <div class="admin-form">
-          <label for="pw-current">Current password</label>
-          <input id="pw-current" type="password" autocomplete="current-password" value={current()} onInput={(e) => setCurrent(e.currentTarget.value)} />
-          <label for="pw-next">New password</label>
-          <input id="pw-next" type="password" autocomplete="new-password" value={next()} onInput={(e) => setNext(e.currentTarget.value)} />
-          <label for="pw-repeat">New password, again</label>
-          <input id="pw-repeat" type="password" autocomplete="new-password" value={repeat()} onInput={(e) => setRepeat(e.currentTarget.value)} />
-          <p class="admin-hint">
-            At least {PASSWORD_MIN} characters. Changing it signs out your other sessions; this one stays, and so do the
-            apps you connected with OAuth.
-          </p>
-          <button type="submit" class="proj-act primary" disabled={busy()}>
-            {busy() ? 'Changing…' : 'Change password'}
+      <div class="account-line">
+        <span>Password</span>
+        <Show when={!editing()}>
+          <button type="button" class="proj-act" onClick={() => setEditing(true)}>
+            Change password
           </button>
-          <Show when={tried() && problem()}>{(text) => <div class="failure confirm-err">{text()}</div>}</Show>
-          <Show when={result()}>
-            {(r) => <div class={r().k === 'ok' ? 'done-note' : 'failure confirm-err'}>{passwordMessage(r())}</div>}
-          </Show>
-        </div>
-      </form>
-    </div>
-  )
-}
-
-/** The user's OAuth approvals in this workspace, most recently used first, each with Revoke. */
-function ConnectedApps() {
-  const [tick, setTick] = createSignal(0)
-  const page = load(() => String(tick()), () => api.connectedApps(), { live: false })
-
-  return (
-    <div class="panel account-apps">
-      <div class="panel-h">
-        <h2>Connected apps</h2>
-      </div>
-      <Show when={page.error()}>{(e) => <div class="failure">{e()}</div>}</Show>
-      <Known value={page.data()}>
-        {(p) => (
-          <For each={p().apps} fallback={<div class="empty">No apps hold access to this workspace.</div>}>
-            {(app) => <AppRow app={app} asOf={p().asOf} onRevoked={() => setTick((n) => n + 1)} />}
-          </For>
-        )}
-      </Known>
-    </div>
-  )
-}
-
-function AppRow(props: { app: ConnectedApp; asOf: string; onRevoked: () => void }) {
-  const [confirming, setConfirming] = createSignal(false)
-  const [busy, setBusy] = createSignal(false)
-  const [error, setError] = createSignal<string>()
-
-  const revoke = async () => {
-    setBusy(true)
-    setError(undefined)
-    try {
-      await api.revokeApp(props.app.id)
-      setConfirming(false)
-      props.onRevoked()
-    } catch (failure) {
-      setError(failure instanceof Error ? failure.message : String(failure))
-    } finally {
-      setBusy(false)
-    }
-  }
-
-  return (
-    <div class="row">
-      <AppIcon clientId={props.app.clientId} name={props.app.name} />
-      <div>
-        <div class="row-t">{props.app.name}</div>
-        <div class="row-m">{appLine(props.app, props.asOf)}</div>
-        <Show when={confirming()}>
-          <Confirm
-            label={`Revoke ${props.app.name}?`}
-            action="Revoke"
-            busy={busy()}
-            onConfirm={() => void revoke()}
-            onCancel={() => setConfirming(false)}
-            style={{ 'margin-top': '8px' }}
-          >
-            Revoke <strong>{props.app.name}</strong>? {revokeWarning(props.app)}
-          </Confirm>
         </Show>
-        <Show when={error()}>{(message) => <div class="failure confirm-err">Couldn't revoke it: {message()}</div>}</Show>
       </div>
-      <button type="button" class="proj-act" disabled={busy() || confirming()} onClick={() => setConfirming(true)}>
-        Revoke
-      </button>
-    </div>
-  )
-}
-
-/**
- * The user's calendar feed (doc 13): whether one exists and since when; Create shows the URL once, with
- * Copy, because the server keeps only its hash; Replace makes a new one and ends the old; Revoke asks first.
- */
-function CalendarFeed() {
-  const [tick, setTick] = createSignal(0)
-  const feed = load(() => String(tick()), () => api.calendarFeed(), { live: false })
-  const [created, setCreated] = createSignal<api.CreatedFeed>()
-  const [confirming, setConfirming] = createSignal<'replace' | 'revoke'>()
-  const [busy, setBusy] = createSignal(false)
-  const [error, setError] = createSignal<string>()
-
-  const act = async (write: () => Promise<void>) => {
-    setBusy(true)
-    setError(undefined)
-    try {
-      await write()
-      setConfirming(undefined)
-      setTick((n) => n + 1)
-    } catch (failure) {
-      if (!(failure instanceof api.Unauthorized)) setError(failure instanceof Error ? failure.message : String(failure))
-    } finally {
-      setBusy(false)
-    }
-  }
-  const create = () =>
-    act(async () => {
-      setCreated(await api.createCalendarFeed())
-    })
-  const revoke = () =>
-    act(async () => {
-      setCreated(undefined)
-      await api.revokeCalendarFeed()
-    })
-
-  return (
-    <div class="panel account-feed">
-      <div class="panel-h">
-        <h2>Calendar feed</h2>
-      </div>
-      <Show when={feed.error()}>{(e) => <div class="failure">{e()}</div>}</Show>
-      <Known value={feed.data()}>
-        {(f) => (
-          <div class="feed-row">
-            <Show
-              when={f().exists}
-              fallback={
-                <>
-                  <button type="button" class="proj-act primary" disabled={busy()} onClick={() => void create()}>
-                    {busy() ? 'Creating…' : 'Create calendar URL'}
-                  </button>
-                  <p>
-                    A private URL your calendar app subscribes to: the due dates of the open items you can see in this
-                    workspace, one event each. You have none yet.
-                  </p>
-                </>
-              }
-            >
-              <span>
-                You have a calendar URL{f().createdAt ? `, created ${day(f().createdAt!)}` : ''}.
-              </span>
-              <button type="button" class="proj-act" disabled={busy() || confirming() !== undefined} onClick={() => setConfirming('replace')}>
-                Replace
+      <Show when={editing()}>
+        <form class="account-form" onSubmit={(event) => void submit(event)}>
+          <div class="admin-form">
+            <label for="pw-current">Current password</label>
+            <input id="pw-current" type="password" autocomplete="current-password" value={current()} onInput={(e) => setCurrent(e.currentTarget.value)} />
+            <label for="pw-next">New password</label>
+            <input id="pw-next" type="password" autocomplete="new-password" value={next()} onInput={(e) => setNext(e.currentTarget.value)} />
+            <label for="pw-repeat">New password, again</label>
+            <input id="pw-repeat" type="password" autocomplete="new-password" value={repeat()} onInput={(e) => setRepeat(e.currentTarget.value)} />
+            <p class="admin-hint">
+              At least {PASSWORD_MIN} characters. Changing it signs out your other sessions; this one stays, and so do the
+              apps you connected with OAuth.
+            </p>
+            <div class="account-acts">
+              <button type="submit" class="proj-act primary" disabled={busy()}>
+                {busy() ? 'Changing…' : 'Change password'}
               </button>
-              <button type="button" class="proj-act" disabled={busy() || confirming() !== undefined} onClick={() => setConfirming('revoke')}>
-                Revoke
+              <button type="button" class="proj-act" disabled={busy()} onClick={cancel}>
+                Cancel
               </button>
-              <p>It is shown only when it is made. Lost it? Replace it: the new URL works and the old one stops.</p>
+            </div>
+            <Show when={tried() && problem()}>{(text) => <div class="failure confirm-err">{text()}</div>}</Show>
+            <Show when={result()}>
+              {(r) => <div class={r().k === 'ok' ? 'done-note' : 'failure confirm-err'}>{passwordMessage(r())}</div>}
             </Show>
-            <Show when={confirming()}>
-              {(what) => (
-                <Confirm
-                  label={what() === 'replace' ? 'Replace the calendar URL?' : 'Revoke the calendar URL?'}
-                  action={what() === 'replace' ? 'Replace' : 'Revoke'}
-                  busy={busy()}
-                  onConfirm={() => void (what() === 'replace' ? create() : revoke())}
-                  onCancel={() => setConfirming(undefined)}
-                  style={{ 'flex-basis': '100%' }}
-                >
-                  {what() === 'replace'
-                    ? 'Make a new URL? The one your calendar app holds stops working at once; subscribe again with the new one.'
-                    : 'Revoke the URL? Your calendar app stops getting the dates at its next refresh.'}
-                </Confirm>
-              )}
-            </Show>
-            <Show when={error()}>{(message) => <div class="failure confirm-err">{message()}</div>}</Show>
           </div>
-        )}
-      </Known>
-      <Show when={created()}>
-        {(c) => (
-          <OnceLink url={c().url} onDismiss={() => setCreated(undefined)}>
-            Copy it now and subscribe to it in your calendar app: it is shown once, and the server keeps only a hash of it.
-            The URL is a secret — anyone who has it can read the due dates you can see, until you replace or revoke it.
-          </OnceLink>
-        )}
+        </form>
       </Show>
     </div>
   )

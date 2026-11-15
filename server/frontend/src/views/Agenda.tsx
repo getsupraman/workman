@@ -13,6 +13,7 @@ import { CopyRef, Dot, Known } from '../ui.tsx'
 import { SplitView } from '../split-view.tsx'
 import { agendaBack } from '../back.ts'
 import Detail, { asTab, type Tab } from './Detail.tsx'
+import CalendarFeed from './CalendarFeed.tsx'
 
 /** `/agenda`, `/agenda/{item}` (doc 13): what is overdue, due today and in the next 14 days, and what became actionable this morning. */
 export default function Agenda() {
@@ -118,6 +119,10 @@ export default function Agenda() {
               </div>
             )}
           </Known>
+
+          <div class="agenda-feed">
+            <CalendarFeed />
+          </div>
         </div>
       }
       side={

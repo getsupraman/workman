@@ -18,7 +18,7 @@ import { arrange, chordLabel, commands, entryHref, isPaletteChord, isSlash, matc
 import { HANDLE, LIST_MIN, PANEL_MIN, PANEL_SHARE, WIDTH_KEY, clampWidth, docks, panelWidth, rememberWidth, rememberedWidth } from '../src/split.ts'
 import { MEMBERS_ANCHOR, memberLine, membersHref, projectOnPath, shareMarker } from '../src/sharing.ts'
 import { PHONE_QUERY, closesOnMove, pageName } from '../src/menu.ts'
-import { appLine, revokeWarning, sessionsLabel } from '../src/apps.ts'
+import { appLine, connectionLine, feedStatus, groupApps, groupLine, revokeWarning, sessionsLabel } from '../src/apps.ts'
 import { BOARDS_MAX, boardsRead } from '../src/boards.ts'
 import { asInboxFilter, cardFacts, choreRow, decisionRow, filterInbox, forController, groupHousekeeping, inboxOrder, keepSelected, needsYou, needsYouCount, rowProject, withInboxFilter } from '../src/inbox.ts'
 import { expiresIn, isLastAdmin, isLinkPath, joinStep, joinToken, nameProblem, passwordMessage, passwordProblem, resetStep, resetToken, roleLabel, showSwitcher, slugFrom, slugProblem } from '../src/admin.ts'
@@ -677,6 +677,31 @@ check('no creation date', appLine(app({ createdAt: null }), asOf), 'mcp offline_
 check('revoke, no sessions', revokeWarning(app({ sessions: 0 })), 'Claude Code will need to sign in again.')
 check('revoke, one session', revokeWarning(app({})), 'Claude Code will need to sign in again, and its agent session stops.')
 check('revoke, three sessions', revokeWarning(app({ sessions: 3 })), 'Claude Code will need to sign in again, and its 3 agent sessions stop.')
+
+console.log('── connected apps: one row per app, however many connections ─────────────────')
+{
+  // Every sign-in registers its own OAuth client: same name, different client ids.
+  const a1 = app({ id: 's1', clientId: 'dyn-1', name: 'Supraman', scopes: ['mcp'], createdAt: '2026-10-20T12:00:00Z', lastUsedAt: '2026-10-29T12:00:00Z', sessions: 1 })
+  const a2 = app({ id: 's2', clientId: 'dyn-2', name: ' supraman ', scopes: ['mcp', 'offline_access'], createdAt: '2026-10-28T12:00:00Z', lastUsedAt: '2026-10-30T11:00:00Z', sessions: 2 })
+  const cc = app({ id: 'c1', clientId: 'dyn-3', name: 'Claude Code', lastUsedAt: '2026-10-30T11:55:00Z', sessions: 0 })
+  const idle = app({ id: 'n1', clientId: 'dyn-4', name: 'Never used', lastUsedAt: null, sessions: 0 })
+  const groups = groupApps([a1, idle, cc, a2])
+  check('group: two connections of one name are one app, whatever their client ids', groups.map((g) => [g.name, g.connections.length]), [['Claude Code', 1], ['supraman', 2], ['Never used', 1]])
+  const sup = groups[1]
+  check('group: the latest use is the newest of its connections, not the first listed', sup.lastUsedAt, '2026-10-30T11:00:00Z')
+  check('group: sessions add up', sup.sessions, 3)
+  check('group: scopes are the union, in the order first seen', sup.scopes, ['mcp', 'offline_access'])
+  check('group: connections latest used first; name and icon from the latest', [sup.connections.map((c) => c.id), sup.clientId], [['s2', 's1'], 'dyn-2'])
+  check('group: ordered by last use, never-used last', groups.map((g) => g.key), ['claude code', 'supraman', 'never used'])
+  check('group: no apps, no groups', groupApps([]), [])
+  check('group line: count, latest use, sessions', groupLine(sup, asOf), '2 connections · last used 60m ago · 3 agent sessions')
+  check('group line: one never-used connection', groupLine(groups[2], asOf), '1 connection · not used yet · 0 agent sessions')
+  check('connection line: connected, last used, sessions', connectionLine(a1, asOf), 'connected 10d ago · last used 24h ago · 1 agent session')
+  check('connection line: no creation date', connectionLine(app({ createdAt: null }), asOf), 'last used 5m ago · 1 agent session')
+  const d = (iso) => iso.slice(0, 10)
+  check('feed status: one exists', feedStatus({ exists: true, createdAt: '2026-11-02T09:00:00Z' }, d), 'You have a calendar URL, created 2026-11-02.')
+  check('feed status: none yet', feedStatus({ exists: false, createdAt: null }, d), 'No calendar URL yet.')
+}
 
 console.log('── boards: one read per refresh, never one per run ─────────────────────────')
 const withRuns = (count, archived = false) => ({
