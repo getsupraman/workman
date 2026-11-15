@@ -178,13 +178,15 @@ public sealed class WorkWriteTools(
         RepoArg? unbind = null,
         [Description("With repo: move those keys here from the project that holds them, for every user.")]
         bool take = false,
+        [Description("YYYY-MM-DD or ISO date-time; \"\" clears.")] string? due = null,
+        [Description("As due.")] string? not_before = null,
         CancellationToken cancellationToken = default)
         => await WriteAsync(
             "work_update",
             @ref,
             id => writer.UpdateAsync(
                 id, caller.Actor, @ref,
-                new UpdateArgs(title, intent, verify_cmd, risk_tags, priority, criteria, expected_revision, repo, archived, unbind, take),
+                new UpdateArgs(title, intent, verify_cmd, risk_tags, priority, criteria, expected_revision, repo, archived, unbind, take, due, not_before),
                 cancellationToken),
             cancellationToken);
 

@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.DataProtection.KeyManagement;
 using Microsoft.AspNetCore.DataProtection.Repositories;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using ModelContextProtocol.Protocol;
 using Npgsql;
 using Workman.Api.App;
@@ -241,9 +242,11 @@ public static class ApiHost
         builder.Services.AddSingleton(sp => new WorkmanQueries(sp.GetRequiredService<NpgsqlDataSource>()));
         builder.Services.AddSingleton(sp => new BoardQueries(sp.GetRequiredService<NpgsqlDataSource>()));
         builder.Services.AddSingleton(sp => new ApiQueries(sp.GetRequiredService<NpgsqlDataSource>()));
+        builder.Services.TryAddSingleton(TimeProvider.System);
         builder.Services.AddSingleton(sp => new BoardReader(
             sp.GetRequiredService<WorkmanQueries>(),
-            sp.GetRequiredService<BoardQueries>()));
+            sp.GetRequiredService<BoardQueries>(),
+            sp.GetRequiredService<TimeProvider>()));
 
         var stream = new StreamOptions();
         builder.Configuration.GetSection(StreamOptions.Section).Bind(stream);

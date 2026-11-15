@@ -69,7 +69,7 @@ only structure:
 CREATE TABLE workspace (                          -- one row today; the seam if multi-user ever lands
   id           uuid PRIMARY KEY,
   slug         text NOT NULL UNIQUE DEFAULT 'default',
-  settings     jsonb NOT NULL DEFAULT '{}',       -- claim_ttl, ref policy, render widths
+  settings     jsonb NOT NULL DEFAULT '{}',       -- claim_ttl, timezone (IANA), ref policy, render widths
   created_at   timestamptz NOT NULL DEFAULT now()
 );
 ```
@@ -379,6 +379,65 @@ CREATE INDEX item_risk_idx      ON item USING gin (risk_tags);
   schema, migration, published contract, shared identity rule, equivalence claim, money*) becomes a
   tagged column, so "which upcoming work needs a review agent" is a query rather than a re-read.
 - **`ON DELETE RESTRICT` on `parent_id`.** Nothing in this system deletes; it cancels or supersedes.
+
+### Dates — `due` and `not_before`
+
+Any item may carry `due` (must be done by) and `not_before` (not actionable before). Each is **either a
+calendar day or an instant**, never both:
+
+```sql
+ALTER TABLE item
+  ADD COLUMN due_on        date NULL,          -- a whole day, in the workspace's time zone
+  ADD COLUMN due_at        timestamptz NULL,   -- an instant
+  ADD COLUMN not_before_on date NULL,
+  ADD COLUMN not_before_at timestamptz NULL,
+  ADD CONSTRAINT item_due_one_form        CHECK (due_on IS NULL OR due_at IS NULL),
+  ADD CONSTRAINT item_not_before_one_form CHECK (not_before_on IS NULL OR not_before_at IS NULL);
+CREATE INDEX item_due_idx ON item (workspace_id, due_on, due_at)
+       WHERE status IN ('open','ready','in_progress','blocked','review')
+         AND (due_on IS NOT NULL OR due_at IS NOT NULL);
+```
+
+The columns, their checks and the index are raw SQL in the `ItemDates` migration and **not in the EF model**:
+nothing reads or writes them through EF, and a mapped property would make every EF insert of an `item` name
+them, including the migration tests' inserts into a database migrated only part of the way.
+
+**Why a `date` column and not an instant computed at write.** A date-only `due` means that whole
+day in the workspace's time zone (C242). Turned into an instant when written, it would freeze the zone
+of that moment, and a later change of `workspace.settings.timezone` would leave every stored day
+meaning the wrong 24 hours. Stored as a day, it is read in the zone **at query time**, so changing the
+zone re-reads every date and rewrites nothing. An ISO date-time with an offset is an instant and is
+stored as one (`timestamptz`); a date-time without an offset names no instant and is refused.
+
+**The time zone** is `workspace.settings.timezone`, an IANA name, default `UTC`. A workspace admin sets
+it with `PATCH /api/admin/tenants/{id}/settings {"timezone": "Europe/Rome"}` (`GET` reads it); a name
+Postgres does not know (`pg_timezone_names`) is refused, and the canonical spelling is stored.
+
+**One evaluation, in SQL.** Raw SQL in the `ItemDates` migration, not in the model snapshot:
+
+| Function | Means |
+|---|---|
+| `timezone_of(ws uuid)` | `settings->>'timezone'`, else `UTC` |
+| `item_due_end(i item)` | the instant the due has passed: `due_at`, or the start of the day after `due_on` in the zone |
+| `item_not_before_start(i item)` | the instant the item becomes actionable: `not_before_at`, or the start of `not_before_on` in the zone |
+| `date_value_end/start(d, at, zone)`, `date_text_end(text, zone)` | the same for loose values and for the journal's text form |
+
+So *overdue* is `item_due_end(i) <= now` and *not yet actionable* is `item_not_before_start(i) > now`,
+`now` coming from the caller's injected clock (`TimeProvider`), never from `DateTime.UtcNow`
+(C242). Every reader — work_get today, `work_agenda` and `work_next` next — asks these functions
+rather than repeating the arithmetic (`DateValue.DueEndSql` names them for C#).
+
+**Rules.** `not_before` after `due` is refused (a `not_before` on the due day itself is fine); so is a
+value that is neither `YYYY-MM-DD` nor an ISO date-time with `Z` or an offset. On `work_update` a
+`null` argument leaves a date alone and an empty string clears it, as for every other field.
+
+**History.** A change journals `dates_changed {field, from, to}` (each the printed form, or null);
+creation does not — the `created` event carries the dates it was created with. The **slip count** is
+the number of `dates_changed` on `due` whose `to` ends later than its `from`; setting a first due,
+clearing it or moving it earlier is no slip. An item is **late** when it was closed `done` at or after
+the end of its due. `work_get` prints a `dates` line (the zone beside a day; `overdue` / `not yet
+actionable` on an open item), and `slipped N×` / `late` when they apply; an item that never had a date
+prints exactly as before.
 
 ### Done-criteria as rows, not a checkbox list
 
@@ -854,7 +913,7 @@ CREATE INDEX event_item_seq_idx ON event (item_id, seq DESC);
 Event kinds: `created`, `moved`, `linked`, `status_changed`, `forced_transition`, `claimed`,
 `claim_expired`, `briefed`, `reported`, `verified`, `judged`, `committed`, `assumption_opened`,
 `assumption_resolved`, `finding_raised`, `finding_closed`, `note_added`, `note_consumed`,
-`constraint_added`, `replanned`, `escalated`, `incident`, `imported`.
+`constraint_added`, `replanned`, `escalated`, `incident`, `imported`, `dates_changed` (§3 "Dates").
 
 Append-only; never updated. `event.seq` is the cursor for the web UI's SSE stream and for
 `work_history(since_seq)` — which is how a compacted orchestrator asks *"what happened while I was

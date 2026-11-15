@@ -10,8 +10,11 @@ namespace Workman.Core.Board;
 /// <c>Workman.Core</c> because the rendering is domain logic: the eight MCP tools are a thin
 /// transport over these methods, and the shapes are unit-tested without a web host.
 /// </summary>
-public sealed partial class BoardReader(WorkmanQueries queries, BoardQueries board)
+/// <param name="clock">"Now" for everything a date is judged against (C242); the system clock when none is given.</param>
+public sealed partial class BoardReader(WorkmanQueries queries, BoardQueries board, TimeProvider? clock = null)
 {
+    private readonly TimeProvider _clock = clock ?? TimeProvider.System;
+
     /// <summary>An <c>in_progress</c> item untouched for this long is a parked agent, not a busy one.</summary>
     private const int StaleHours = 4;
 

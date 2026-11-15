@@ -257,6 +257,8 @@ public sealed partial class BoardReader
         var repos = (projects.Count == 0 ? [] : await board.ProjectReposAsync(projects, cancellationToken))
             .ToLookup(r => r.ProjectId);
         var imports = (await board.ImportsAsync(ids, cancellationToken)).ToLookup(r => r.ItemId);
+        var dates = (await board.DatesAsync(ids, cancellationToken)).ToDictionary(r => r.ItemId);
+        var now = _clock.GetUtcNow();
 
         var lines = new List<string>(problems);
 
@@ -283,6 +285,11 @@ public sealed partial class BoardReader
             if (item.Intent is { Length: > 0 })
             {
                 lines.AddRange(BriefRenderer.Wrap("  intent    ", item.Intent, 12));
+            }
+
+            if (dates.TryGetValue(item.Id, out var dated))
+            {
+                lines.AddRange(DateLines(dated, Transitions.IsTerminal(item.Status), now));
             }
 
             foreach (var repo in repos[item.Id])
@@ -366,6 +373,47 @@ public sealed partial class BoardReader
               + $"or work_brief(scope:\"{next}\", for:\"worker\") to hand it over.");
 
         return string.Join("\n", lines);
+    }
+
+    /// <summary>
+    /// deadlines/2: the dates as written (a day carries the zone it is read in), whether an open item is overdue or not
+    /// yet actionable now, the due's slips and a late close. Nothing at all for an item without dates.
+    /// </summary>
+    private static IEnumerable<string> DateLines(ItemDatesRow dates, bool closed, DateTimeOffset now)
+    {
+        var set = new List<string>();
+        if (dates.Due is { } due)
+        {
+            set.Add($"due {due}" + (dates.DueIsDay ? $" ({dates.Zone})" : string.Empty)
+                    + (!closed && dates.DueEnd is { } end && end <= now ? ", overdue" : string.Empty));
+        }
+
+        if (dates.NotBefore is { } notBefore)
+        {
+            set.Add($"not_before {notBefore}" + (dates.NotBeforeIsDay ? $" ({dates.Zone})" : string.Empty)
+                    + (!closed && dates.NotBeforeStart is { } start && start > now ? ", not yet actionable" : string.Empty));
+        }
+
+        var history = new List<string>();
+        if (dates.Slips > 0)
+        {
+            history.Add($"slipped {dates.Slips}× (due moved later)");
+        }
+
+        if (dates.Late)
+        {
+            history.Add($"late — closed {dates.ClosedAt!.Value.UtcDateTime:yyyy-MM-dd HH:mm} UTC, after its due");
+        }
+
+        if (set.Count > 0)
+        {
+            yield return $"  dates     {string.Join(" · ", set)}";
+        }
+
+        if (history.Count > 0)
+        {
+            yield return $"  {(set.Count > 0 ? "         " : "dates    ")} {string.Join(" · ", history)}";
+        }
     }
 
     public Task<string> SearchAsync(

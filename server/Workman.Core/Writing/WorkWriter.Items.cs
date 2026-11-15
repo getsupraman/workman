@@ -20,7 +20,16 @@ public sealed partial class WorkWriter
         string[]? RiskTags = null,
         short Priority = 0,
         string? Severity = null,
-        string? Source = null);
+        string? Source = null)
+    {
+        public DateOnly? DueOn { get; init; }
+
+        public DateTimeOffset? DueAt { get; init; }
+
+        public DateOnly? NotBeforeOn { get; init; }
+
+        public DateTimeOffset? NotBeforeAt { get; init; }
+    }
 
     /// <summary>
     /// doc 07 §4. There is no <c>deferred</c> status, on purpose: <c>deferred</c> as a state is
@@ -213,9 +222,11 @@ public sealed partial class WorkWriter
         const string sql =
             """
             INSERT INTO item (id, workspace_id, parent_id, kind, ref, seq, title, intent,
-                              verify_cmd, risk_tags, priority, severity, source)
+                              verify_cmd, risk_tags, priority, severity, source,
+                              due_on, due_at, not_before_on, not_before_at)
             VALUES (@id, @workspace, @parent, @kind, @ref, @seq, @title, @intent,
-                    @verify, @risk, @priority, @severity, @source);
+                    @verify, @risk, @priority, @severity, @source,
+                    @due_on::date, @due_at::timestamptz, @nb_on::date, @nb_at::timestamptz);
             """;
 
         await using var command = new NpgsqlCommand(sql, connection, transaction);
@@ -232,6 +243,10 @@ public sealed partial class WorkWriter
         Bind(command, "priority", row.Priority);
         Bind(command, "severity", row.Severity);
         Bind(command, "source", row.Source);
+        Bind(command, "due_on", row.DueOn);
+        Bind(command, "due_at", row.DueAt);
+        Bind(command, "nb_on", row.NotBeforeOn);
+        Bind(command, "nb_at", row.NotBeforeAt);
 
         await command.ExecuteNonQueryAsync(cancellationToken);
     }

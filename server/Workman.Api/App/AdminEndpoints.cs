@@ -108,6 +108,43 @@ public static class AdminEndpoints
             };
         });
 
+        reads.MapGet("/tenants/{id:guid}/settings", async (Guid id, HttpContext context, [FromServices] AdminStore admins) =>
+            await TenantRefusalAsync(context, admins, id) is { } refused
+                ? refused
+                : Results.Ok(new TenantSettingsView(await admins.TimezoneAsync(id, context.RequestAborted))));
+
+        // deadlines/2: the zone a date-only due or not_before is read in. Every date is evaluated at read time, so a
+        // change here re-reads every date in the workspace; nothing stored is rewritten.
+        writes.MapPatch("/tenants/{id:guid}/settings", async (
+            Guid id,
+            TenantSettingsRequest request,
+            HttpContext context,
+            [FromServices] AdminStore admins) =>
+        {
+            if (await TenantRefusalAsync(context, admins, id) is { } refused)
+            {
+                return refused;
+            }
+
+            var asked = request.Timezone?.Trim();
+            if (string.IsNullOrEmpty(asked))
+            {
+                return Error(
+                    StatusCodes.Status400BadRequest,
+                    "Name the time zone as an IANA name, e.g. {\"timezone\": \"Europe/Rome\"} or {\"timezone\": \"UTC\"}.");
+            }
+
+            if (await admins.KnownZoneAsync(asked, context.RequestAborted) is not { } zone)
+            {
+                return Error(
+                    StatusCodes.Status400BadRequest,
+                    $"{asked} is not an IANA time zone this server knows; use a name such as Europe/Rome, America/New_York or UTC.");
+            }
+
+            await admins.SetTimezoneAsync(id, zone, context.RequestAborted);
+            return Results.Ok(new TenantSettingsView(zone));
+        });
+
         reads.MapGet("/tenants/{id:guid}/invites", async (
             Guid id,
             HttpContext context,

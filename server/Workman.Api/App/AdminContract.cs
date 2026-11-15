@@ -57,6 +57,11 @@ public sealed record CreateTenantRequest(string? Slug);
 
 public sealed record RoleRequest(string? Role);
 
+/// <summary><c>/api/admin/tenants/{id}/settings</c>: the workspace's time zone (IANA), in which a date-only due is read.</summary>
+public sealed record TenantSettingsView(string Timezone);
+
+public sealed record TenantSettingsRequest(string? Timezone);
+
 public sealed record AcceptInviteRequest(string? Name, string? Password);
 
 public sealed record ResetRequest(string? Password);

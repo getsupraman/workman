@@ -126,6 +126,47 @@ public sealed class AdminStore(NpgsqlDataSource dataSource)
             cancellationToken: cancellationToken));
     }
 
+    /// <summary>The workspace's time zone as every date read sees it (<c>timezone_of</c>, default UTC).</summary>
+    public async Task<string> TimezoneAsync(Guid tenant, CancellationToken cancellationToken)
+    {
+        await using var connection = await _connections.OwnerBypassAsync(Bypass.Administration, cancellationToken);
+        return await connection.ExecuteScalarAsync<string>(new CommandDefinition(
+            "SELECT timezone_of(@tenant);",
+            new { tenant },
+            cancellationToken: cancellationToken)) ?? "UTC";
+    }
+
+    /// <summary>
+    /// The zone's canonical name as Postgres knows it — the runtime that reads every date — or null for a name it
+    /// does not know. Case is forgiven; the canonical spelling is what is stored.
+    /// </summary>
+    public async Task<string?> KnownZoneAsync(string name, CancellationToken cancellationToken)
+    {
+        await using var connection = await _connections.OwnerBypassAsync(Bypass.Administration, cancellationToken);
+        return await connection.QueryFirstOrDefaultAsync<string>(new CommandDefinition(
+            """
+            SELECT name FROM pg_timezone_names
+            WHERE  lower(name) = lower(@name)
+            ORDER  BY name = @name DESC, name
+            LIMIT  1;
+            """,
+            new { name },
+            cancellationToken: cancellationToken));
+    }
+
+    public async Task SetTimezoneAsync(Guid tenant, string zone, CancellationToken cancellationToken)
+    {
+        await using var connection = await _connections.OwnerBypassAsync(Bypass.Administration, cancellationToken);
+        await connection.ExecuteAsync(new CommandDefinition(
+            """
+            UPDATE workspace
+               SET settings = jsonb_set(coalesce(settings, '{}'::jsonb), '{timezone}', to_jsonb(@zone::text))
+             WHERE id = @tenant;
+            """,
+            new { tenant, zone },
+            cancellationToken: cancellationToken));
+    }
+
     /// <summary>The new workspace, or null when the slug is taken. The slug is already judged (<see cref="AccountRules"/>).</summary>
     public async Task<AdminTenant?> CreateTenantAsync(string slug, CancellationToken cancellationToken)
     {

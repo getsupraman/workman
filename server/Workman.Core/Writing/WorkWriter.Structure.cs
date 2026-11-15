@@ -26,7 +26,9 @@ public sealed record NewItemArg(
     [property: JsonPropertyName("criteria")] string[]? Criteria = null,
     [property: JsonPropertyName("risk_tags")] string[]? RiskTags = null,
     [property: JsonPropertyName("priority")] int? Priority = null,
-    [property: JsonPropertyName("repo")] RepoArg? Repo = null);
+    [property: JsonPropertyName("repo")] RepoArg? Repo = null,
+    [property: JsonPropertyName("due")] string? Due = null,
+    [property: JsonPropertyName("not_before")] string? NotBefore = null);
 
 /// <summary>One criterion as <c>work_update</c> addresses it: <c>c2</c>, checked, with its evidence.</summary>
 public sealed record CriterionArg(
@@ -46,7 +48,9 @@ public sealed record UpdateArgs(
     RepoArg? Repo = null,
     bool? Archived = null,
     RepoArg? Unbind = null,
-    bool Take = false);
+    bool Take = false,
+    string? Due = null,
+    string? NotBefore = null);
 
 public sealed partial class WorkWriter
 {
@@ -122,6 +126,21 @@ public sealed partial class WorkWriter
             if (shortfall is not null)
             {
                 return WriteResult.No(shortfall);
+            }
+
+            var dateCall = $"work_create(items:[{{kind:\"{kind}\", title:\"{Glyph.Row(wanted.Title, 40)}\"}}])";
+            var dateExample = $"work_create(items:[{{kind:\"{kind}\", title:\"…\", …, ";
+            var (due, notBefore, undated) = ParseDates(dateCall, dateExample, wanted.Due, wanted.NotBefore, "}])");
+            if (undated is not null)
+            {
+                return WriteResult.No(undated);
+            }
+
+            var disordered = await DateOrderRefusalAsync(
+                connection, transaction, workspaceId, due.Value, notBefore.Value, dateCall, dateExample, "}])", cancellationToken);
+            if (disordered is not null)
+            {
+                return WriteResult.No(disordered);
             }
 
             if (!Blank(wanted.Ref) && wanted.Ref!.Contains('/'))
@@ -219,7 +238,13 @@ public sealed partial class WorkWriter
                 wanted.Intent,
                 wanted.VerifyCmd,
                 wanted.RiskTags,
-                (short)Math.Clamp(wanted.Priority ?? 0, -9, 9));
+                (short)Math.Clamp(wanted.Priority ?? 0, -9, 9))
+            {
+                DueOn = due.Value?.Day,
+                DueAt = due.Value?.At,
+                NotBeforeOn = notBefore.Value?.Day,
+                NotBeforeAt = notBefore.Value?.At,
+            };
 
             // A top-level project the server numbers can meet a project-N it cannot see, one whose members the caller
             // is not among (doc 02 §15b): that number is taken, so it takes the next instead of refusing a ref the
@@ -279,9 +304,12 @@ public sealed partial class WorkWriter
             await EventAsync(
                 connection, transaction, workspaceId, row2.Id, actor, "created",
                 $"{reference} ({kind}) created under {parent?.Ref ?? "—"}: {Glyph.Flat(wanted.Title)}",
-                repo.Count > 0
-                    ? (object)new { kind, parent = parent?.Ref, title = wanted.Title, repo = repo.Select(k => k.Key).ToArray() }
-                    : new { kind, parent = parent?.Ref, title = wanted.Title },
+                WithDates(
+                    repo.Count > 0
+                        ? new { kind, parent = parent?.Ref, title = wanted.Title, repo = repo.Select(k => k.Key).ToArray() }
+                        : new { kind, parent = parent?.Ref, title = wanted.Title },
+                    due.Value,
+                    notBefore.Value),
                 cancellationToken);
 
             var tail = $"{Glyph.Pad(Glyph.Kind(kind), 6)}  " + Glyph.Row(wanted.Title, 60);
@@ -355,6 +383,13 @@ public sealed partial class WorkWriter
                 $"work_update(ref:\"{reference}\", repo:{{remote:\"…\", root:\"…\"}}, take:true)"));
         }
 
+        var dateExample = $"work_update(ref:\"{reference}\", ";
+        var (dueChange, notBeforeChange, undated) = ParseDates($"work_update({scope.Ref})", dateExample, args.Due, args.NotBefore, ")");
+        if (undated is not null)
+        {
+            return WriteResult.No(undated);
+        }
+
         var patching = Fields(args).Length > 0 || args.RiskTags is not null || args.Criteria is { Length: > 0 }
             || repo.Count > 0 || unbind.Count > 0;
 
@@ -380,6 +415,22 @@ public sealed partial class WorkWriter
                 "someone else wrote to this item since you read it",
                 $"work_get(refs:[\"{item.Ref}\"]) to see it as it stands, then retry with "
                 + $"expected_revision:{item.Revision}"));
+        }
+
+        var (dueBefore, notBeforeBefore) = await DatesAsync(connection, transaction, item.Id, cancellationToken);
+        var disordered = await DateOrderRefusalAsync(
+            connection,
+            transaction,
+            item.WorkspaceId,
+            dueChange.Set ? dueChange.Value : dueBefore,
+            notBeforeChange.Set ? notBeforeChange.Value : notBeforeBefore,
+            $"work_update({item.Ref})",
+            dateExample,
+            ")",
+            cancellationToken);
+        if (disordered is not null)
+        {
+            return WriteResult.No(disordered);
         }
 
         var unwritable = await CriteriaRefusalAsync(
@@ -441,6 +492,10 @@ public sealed partial class WorkWriter
                        verify_cmd = coalesce(@verify, verify_cmd),
                        risk_tags  = coalesce(@risk, risk_tags),
                        priority   = coalesce(@priority, priority),
+                       due_on        = CASE WHEN @due_set THEN @due_on::date ELSE due_on END,
+                       due_at        = CASE WHEN @due_set THEN @due_at::timestamptz ELSE due_at END,
+                       not_before_on = CASE WHEN @nb_set THEN @nb_on::date ELSE not_before_on END,
+                       not_before_at = CASE WHEN @nb_set THEN @nb_at::timestamptz ELSE not_before_at END,
                        revision   = revision + 1
                  WHERE id = @id;
                 """;
@@ -453,6 +508,12 @@ public sealed partial class WorkWriter
                 Bind(command, "verify", Blank(args.VerifyCmd) ? null : args.VerifyCmd);
                 Bind(command, "risk", args.RiskTags);
                 Bind(command, "priority", args.Priority is { } p ? (short)Math.Clamp(p, -9, 9) : null);
+                Bind(command, "due_set", dueChange.Set);
+                Bind(command, "due_on", dueChange.Value?.Day);
+                Bind(command, "due_at", dueChange.Value?.At);
+                Bind(command, "nb_set", notBeforeChange.Set);
+                Bind(command, "nb_on", notBeforeChange.Value?.Day);
+                Bind(command, "nb_at", notBeforeChange.Value?.At);
                 await command.ExecuteNonQueryAsync(cancellationToken);
             }
 
@@ -473,6 +534,11 @@ public sealed partial class WorkWriter
                 repo.Count > 0
                     ? (object)new { fields = Fields(args), criteria = touched, repo = bound.Select(k => k.Key).ToArray() }
                     : new { fields = Fields(args), criteria = touched },
+                cancellationToken);
+
+            await JournalDatesAsync(
+                connection, transaction, item.WorkspaceId, item.Id, item.Ref, actor,
+                [("due", dueBefore, dueChange), ("not_before", notBeforeBefore, notBeforeChange)],
                 cancellationToken);
         }
 
@@ -1168,6 +1234,8 @@ public sealed partial class WorkWriter
         if (!Blank(args.VerifyCmd)) fields.Add("verify_cmd");
         if (args.RiskTags is { Length: > 0 }) fields.Add("risk_tags");
         if (args.Priority is not null) fields.Add("priority");
+        if (args.Due is not null) fields.Add("due");
+        if (args.NotBefore is not null) fields.Add("not_before");
         return [.. fields];
     }
 
