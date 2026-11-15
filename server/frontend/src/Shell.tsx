@@ -1,11 +1,11 @@
 import { For, Show, createEffect, createMemo, createSignal, on as onChange, onCleanup, onMount, type ParentProps } from 'solid-js'
 import { A, useLocation, useNavigate } from '@solidjs/router'
-import { account, boards, failure, inbox, overview } from './store.ts'
+import { account, bars, failure, inbox, overview } from './store.ts'
 import { needsYouCount } from './inbox.ts'
 import { link } from './live.ts'
 import { setTheme, themeChoice } from './theme.ts'
 import { THEME_CHOICES, headerFacts, liveLabel, menuStep } from './account.ts'
-import { countTitle, counted, tally } from './state.ts'
+import { barTally, countTitle, counted } from './state.ts'
 import { ACCOUNT, ADMIN, projectHref, runHref } from './nav.ts'
 import { clock, short } from './format.ts'
 import { ProjectName, TipLayer, tipFor } from './ui.tsx'
@@ -487,9 +487,9 @@ function SideGroup(props: { label?: string; projects: ProjectOverview[]; path: s
 
 function RunLink(props: { run: RunOverview; current: boolean }) {
   const counts = () => {
-    const board = boards()[props.run.item.id]
-    if (board === undefined) return null
-    return tally(board.rows)
+    const bar = bars()[props.run.item.id]
+    if (bar === undefined) return null
+    return barTally(bar.leaves)
   }
   const width = (k: 'proven' | 'claimed' | 'doing' | 'stop') => {
     const t = counts()

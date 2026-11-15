@@ -1,8 +1,8 @@
 import { For, Index, Show, createSignal } from 'solid-js'
 import { A } from '@solidjs/router'
 import { setArchived, type Claim, type ProjectOverview, type RunOverview } from '../api.ts'
-import { account, boards, inbox, overview, refreshOverview } from '../store.ts'
-import { CLOSED, countTitle, counted, refState, tally } from '../state.ts'
+import { account, bars, inbox, overview, refreshOverview } from '../store.ts'
+import { CLOSED, barTally, countTitle, counted, refState } from '../state.ts'
 import { backlogHref, inboxHref, itemHref, projectHref, runHref } from '../nav.ts'
 import { forController, honestyCells, needsYou, needsYouCount, openTasks } from '../inbox.ts'
 import { byActivity } from '../projects.ts'
@@ -304,27 +304,26 @@ function ArchiveControl(props: { project: ProjectOverview }) {
 }
 
 function RunStrip(props: { run: RunOverview }) {
-  const board = () => boards()[props.run.item.id]
+  const bar = () => bars()[props.run.item.id]
   const t = () => {
-    const b = board()
-    return b ? tally(b.rows) : undefined
+    const b = bar()
+    return b ? barTally(b.leaves) : undefined
   }
   const closed = () => CLOSED.has(props.run.item.status)
 
   const meta = () => {
-    const b = board()
-    const holding = b?.rows.find((r) => r.claim !== null && !CLOSED.has(r.item.status))
-    if (holding?.claim) {
+    const holding = bar()?.holder
+    if (holding) {
       return (
         <>
-          <span class="who">{claimHolder(holding.claim)}</span> is on {holding.item.qualifiedRef}{' '}
-          <CopyRef item={holding.item} />
+          <span class="who">{claimHolder({ heldBySession: holding.session, session: null, role: holding.role })}</span> is on{' '}
+          {holding.item.qualifiedRef} <CopyRef item={holding.item} />
         </>
       )
     }
     const status = props.run.item.status
     if (status === 'done') {
-      const closedAt = b?.rows[0]?.closedAt
+      const closedAt = bar()?.closedAt
       return closedAt ? `Closed ${day(closedAt)}` : 'Closed'
     }
     if (status === 'cancelled' || status === 'superseded') return refState(props.run.item).label

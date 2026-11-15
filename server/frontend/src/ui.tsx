@@ -1,7 +1,7 @@
 import { For, Show, createSignal, onCleanup, type Accessor, type JSX } from 'solid-js'
 import { A } from '@solidjs/router'
-import type { BoardRow, ItemRef } from './api.ts'
-import { rowState, type State, type StateKey } from './state.ts'
+import type { ItemRef } from './api.ts'
+import type { Seg, State, StateKey } from './state.ts'
 import { UNKNOWN, projectName, projectRefIfDifferent } from './format.ts'
 import { copyValue } from './nav.ts'
 import { CopyIcon } from './icons.tsx'
@@ -184,13 +184,10 @@ export function TipLayer() {
 }
 
 /** One segment per leaf, in board order. Gone leaves are already out of `leaves`. */
-export const Segs = (props: { leaves: BoardRow[]; style?: JSX.CSSProperties }) => (
+export const Segs = (props: { leaves: Seg[]; style?: JSX.CSSProperties }) => (
   <div class="segs" style={props.style}>
     <For each={props.leaves} fallback={<span class="strip-m">No tasks yet</span>}>
-      {(leaf) => {
-        const s = rowState(leaf)
-        return <i class={s.k} title={`${leaf.item.qualifiedRef} · ${leaf.item.title} — ${s.label}`} />
-      }}
+      {(leaf) => <i class={leaf.state.k} title={`${leaf.qualifiedRef} · ${leaf.title} — ${leaf.state.label}`} />}
     </For>
   </div>
 )

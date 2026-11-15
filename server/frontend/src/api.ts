@@ -164,6 +164,31 @@ export type Boards = {
   boards: Board[]
 }
 
+/** One counted item of a `/bars` run, with the inputs `state()` takes; gone ones included, as `tally()` counts them. */
+export type BarLeaf = {
+  id: string
+  qualifiedRef: string
+  title: string
+  kind: string
+  status: string
+  resolution: string | null
+  claimExpired: boolean
+  /** The latest verification passed and was not the worker's own. */
+  proof: boolean
+  /** The qualified refs of the open items that block it. */
+  waitingOn: string[]
+}
+
+/** What a run's bar draws: its leaves in board order, the first row holding a claim, and the run's close. */
+export type RunBars = {
+  run: string
+  closedAt: string | null
+  holder: { item: ItemRef; session: string | null; role: string } | null
+  leaves: BarLeaf[]
+}
+
+export type Bars = { asOf: string; seq: number; runs: RunBars[] }
+
 export type Report = {
   attempt: number
   session: Session | null
@@ -383,6 +408,10 @@ export const board = (run: string) => json<Board>(`/api/v1/runs/${id(run)}/board
 /** Every unarchived run's board without `runs`; with it, those runs' boards, an unknown id left out. */
 export const boards = (runs?: string[]) =>
   json<Boards>(runs ? `/api/v1/boards?runs=${runs.map(id).join(',')}` : '/api/v1/boards')
+
+/** The bars of every unarchived run without `runs`; with it, those runs', an unknown id left out (as `boards`). */
+export const bars = (runs?: string[]) =>
+  json<Bars>(runs ? `/api/v1/bars?runs=${runs.map(id).join(',')}` : '/api/v1/bars')
 
 export const item = (item: string) => json<ItemPage>(`/api/v1/items/${id(item)}`)
 

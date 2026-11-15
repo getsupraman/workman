@@ -1,11 +1,11 @@
 import type { Overview } from './api.ts'
 
-/** `/api/v1/boards` refuses more ids than this; past it, one read of every run is the same single call. */
+/** `/api/v1/bars` (as `/boards`) refuses more ids than this; past it, one read of every run is the same single call. */
 export const BOARDS_MAX = 200
 
 /**
- * The one boards read a refresh makes: `'all'` for every run, those ids, or `null` for none. Named runs are re-read,
- * and so is any run the overview lists whose board is not held yet. An archived project's bars are not drawn until it
+ * The one bars read a refresh makes: `'all'` for every run, those ids, or `null` for none. Named runs are re-read,
+ * and so is any run the overview lists whose bars are not held yet. An archived project's bars are not drawn until it
  * is shown, which falls back to the rollup.
  */
 export function boardsRead(next: Overview, runs: 'all' | string[], held: Record<string, unknown>): 'all' | string[] | null {

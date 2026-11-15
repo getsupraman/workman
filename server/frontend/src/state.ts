@@ -1,4 +1,4 @@
-import type { BoardRow, ItemPage, ItemRef, Rollup } from './api.ts'
+import type { BarLeaf, BoardRow, ItemPage, ItemRef, Rollup } from './api.ts'
 
 /** doc 10's Rollup leaves: the kinds that are a unit of work rather than a container of it. */
 export const LEAF = new Set(['task', 'followup', 'subtask', 'spike', 'question', 'incident'])
@@ -90,7 +90,10 @@ export function answer(page: ItemPage): string | null {
 export const refState = (ref: ItemRef): State =>
   state({ kind: ref.kind, status: ref.status, resolution: null, claimExpired: false, proof: null, waitingOn: [] })
 
-export type Tally = Record<StateKey, number> & { total: number; done: number; cancelled: number; leaves: BoardRow[] }
+/** One drawn segment of a bar: its colour and its tip, `<qualifiedRef> · <title> — <label>`. */
+export type Seg = { qualifiedRef: string; title: string; state: State }
+
+export type Tally = Record<StateKey, number> & { total: number; done: number; cancelled: number; leaves: Seg[] }
 
 /** A leaf, or a phase or feature with nothing below it: `rows` is pre-order, so a child is the next row. */
 const counts = (rows: BoardRow[], i: number): boolean => {
@@ -99,24 +102,47 @@ const counts = (rows: BoardRow[], i: number): boolean => {
   return EMPTY_COUNTED.has(row.item.kind) && !row.hasChildren && !((rows[i + 1]?.depth ?? -1) > row.depth)
 }
 
-/** The segmented bar's numbers: every counted item under `rows`, gone ones counted but never drawn. */
-export function tally(rows: BoardRow[]): Tally {
+/** The numbers over counted items in order, each with its status and the segment it draws. */
+function tallyOf(counted: { status: string; seg: Seg }[]): Tally {
   const t: Tally = { gone: 0, stop: 0, doing: 0, proven: 0, claimed: 0, wait: 0, idle: 0, total: 0, done: 0, cancelled: 0, leaves: [] }
 
-  for (let i = 0; i < rows.length; i++) {
-    if (!counts(rows, i)) continue
-    const row = rows[i]!
-    const k = rowState(row).k
+  for (const { status, seg } of counted) {
+    const k = seg.state.k
     t[k] += 1
-    if (row.item.status === 'cancelled') t.cancelled += 1
+    if (status === 'cancelled') t.cancelled += 1
     if (k === 'gone') continue
     t.total += 1
-    t.leaves.push(row)
+    t.leaves.push(seg)
   }
 
   t.done = t.proven + t.claimed
   return t
 }
+
+/** The segmented bar's numbers: every counted item under `rows`, gone ones counted but never drawn. */
+export function tally(rows: BoardRow[]): Tally {
+  const counted: { status: string; seg: Seg }[] = []
+  for (let i = 0; i < rows.length; i++) {
+    if (!counts(rows, i)) continue
+    const row = rows[i]!
+    counted.push({ status: row.item.status, seg: { qualifiedRef: row.item.qualifiedRef, title: row.item.title, state: rowState(row) } })
+  }
+  return tallyOf(counted)
+}
+
+/** A `/bars` leaf as `state()` reads it: the server sends the inputs, the colour is decided here. */
+export const barInput = (leaf: BarLeaf): StateInput => ({
+  kind: leaf.kind,
+  status: leaf.status,
+  resolution: leaf.resolution,
+  claimExpired: leaf.claimExpired,
+  proof: leaf.proof,
+  waitingOn: leaf.waitingOn,
+})
+
+/** `tally()` over a run's `/bars` leaves, which the server already kept to the counted ones, in board order. */
+export const barTally = (leaves: BarLeaf[]): Tally =>
+  tallyOf(leaves.map((leaf) => ({ status: leaf.status, seg: { qualifiedRef: leaf.qualifiedRef, title: leaf.title, state: state(barInput(leaf)) } })))
 
 /** Findings are never in an "X of Y"; the header names the open ones beside it. Empty when none. */
 export const findingsOpen = (n: number): string => (n > 0 ? `${n} finding${n === 1 ? '' : 's'} open.` : '')

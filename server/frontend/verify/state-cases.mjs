@@ -5,7 +5,7 @@
  *
  *   node verify/state-cases.mjs
  */
-import { CLOSED, LEAF, answer, countTitle, counted, findingsOpen, independent, progress, state, tally } from '../src/state.ts'
+import { CLOSED, LEAF, answer, barInput, barTally, countTitle, counted, findingsOpen, independent, progress, state, tally } from '../src/state.ts'
 import { DEFAULT_FILTER, FILTERS, asFilter, cancelledLines, plan, planOrder, planQuery, runPageHref, withoutCancelled } from '../src/plan.ts'
 import { readFileSync } from 'node:fs'
 import { KEYS, KEYS_COMMAND, isHelpKey, keysTable } from '../src/keys.ts'
@@ -1121,6 +1121,37 @@ console.log('\n── the Agenda calendar (src/calendar.ts, account-calendar/5) 
   rememberWidth(500, fake)
   check('width: the item width stays where it was', [rememberedWidth(fake), rememberedWidth(fake, CALENDAR_WIDTH_KEY)], [500, 700])
 }
+
+console.log('\n── barTally(): /bars leaves draw what tally() drew from the board ──────────')
+{
+  // The server's mapping of a counted board row to a /bars leaf: the state inputs, never a colour.
+  const toLeaf = (r) => ({
+    id: r.item.id,
+    qualifiedRef: r.item.qualifiedRef,
+    title: r.item.title,
+    kind: r.item.kind,
+    status: r.item.status,
+    resolution: r.resolution,
+    claimExpired: r.claim?.expired === true,
+    proof: independent(r.verification),
+    waitingOn: r.blockedBy.map((b) => b.qualifiedRef),
+  })
+  const leaves = rows.filter((r) => LEAF.has(r.item.kind)).map(toLeaf)
+  check('same counts, same segments, same tips as tally(rows)', barTally(leaves), tally(rows))
+  check('a gone leaf is counted, never drawn', [barTally(leaves).gone, barTally(leaves).leaves.some((s) => s.state.k === 'gone')], [2, false])
+  check('the tip parts of a segment', barTally(leaves).leaves[0], { qualifiedRef: leaves[0].qualifiedRef, title: 'loose', state: { k: 'idle', label: 'Open' } })
+  const waiting = leaves.find((l) => l.waitingOn.length > 0)
+  check('waitingOn names the blocker as the board did', state(barInput(waiting)).label, `Waiting on ${waiting.waitingOn[0]}`)
+  check('a claim that lapsed is stop, as on the board', state(barInput({ ...leaves[0], claimExpired: true })), { k: 'stop', label: 'Claim expired' })
+  check('an empty bars run is an empty bar', barTally([]), tally([]))
+
+  // No page load reads every board: the shell's store reads /bars, only a run page reads a board.
+  const read = (path) => readFileSync(new URL(path, import.meta.url), 'utf8')
+  const sources = ['../src/store.ts', '../src/Shell.tsx', '../src/views/Overview.tsx'].map(read)
+  check('store, sidebar and Overview never call api.boards()', sources.map((src) => /\bboards\(/.test(src.replace(/boardsRead\(/g, ''))), [false, false, false])
+  check('the store reads api.bars()', /api\.bars\(/.test(sources[0]), true)
+}
+
 
 console.log(failures === 0 ? '\nAll checks passed.' : `\n${failures} check(s) failed.`)
 if (failures > 0) process.exitCode = 1

@@ -5,6 +5,26 @@ All notable changes to the Workman server and the `workman` plugin are recorded 
 [Semantic Versioning](https://semver.org/). The server's version is `serverInfo.version`; the plugin's is
 `plugin/.claude-plugin/plugin.json`.
 
+## [Unreleased]
+
+Server only (read API and dashboard). No migration; the plugin is unchanged.
+
+### Changed
+
+- **The dashboard opens fast on a large workspace:** the sidebar and the Overview no longer read every run's full
+  board to draw their bars; they read the new `/api/v1/bars`, and a live update re-reads only the runs it touched.
+  The bars, counts, tips and the "who is on what" line look exactly as before.
+- **`/api/v1/boards`, `/api/v1/overview` and `/api/v1/inbox` cost the same however many runs and items a workspace
+  holds:** they no longer run a query per run or per item. On a workspace of 150 runs and 2,400 items, `/boards`
+  went from about 33,000 SQL commands to 35, `/overview` from about 14,400 to 309, and `/inbox` from about 11,900 to
+  203.
+
+### Added
+
+- **`GET /api/v1/bars`** (optional `runs=`): per run, the items its bar counts with what decides each one's
+  colour, the first item someone holds a claim on, and when the run closed. A fixed number of SQL commands for any
+  number of runs. See [docs/10-read-api.md](docs/10-read-api.md).
+
 ## [3.2.1] — 2026-11-15
 
 Server only (dashboard). No migration; the plugin stays 3.1.0.

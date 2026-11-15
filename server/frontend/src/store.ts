@@ -6,16 +6,17 @@ import { onFrames } from './live.ts'
 import { DEFAULT_ZONE, zonedDay } from './dates.ts'
 
 /**
- * The workspace as the shell reads it: the overview, the inbox, and every run's board (the
- * overview's segmented bars draw one segment per leaf, which only a board carries). `undefined`
- * means not asked yet — never "none" — so no panel can say "nothing" before it knows.
+ * The workspace as the shell reads it: the overview, the inbox, and every run's bars (the sidebar's
+ * and the overview's segmented bars draw one segment per leaf, which `/bars` carries without the
+ * board behind it). `undefined` means not asked yet — never "none" — so no panel can say "nothing"
+ * before it knows.
  */
 const [overview, setOverview] = createSignal<api.Overview>()
 const [inbox, setInbox] = createSignal<api.Inbox>()
-const [boards, setBoards] = createSignal<Record<string, api.Board>>({})
+const [bars, setBars] = createSignal<Record<string, api.RunBars>>({})
 const [failure, setFailure] = createSignal<string>()
 
-export { overview, inbox, boards, failure }
+export { overview, inbox, bars, failure }
 
 /** Bumped once per burst of frames: the page-level reads (an item, the journal) key on it. */
 const [version, setVersion] = createSignal(0)
@@ -31,10 +32,10 @@ async function loadOverview(runs: 'all' | string[]): Promise<void> {
     setOverview(next)
     setFailure(undefined)
 
-    const read = boardsRead(next, runs, boards())
+    const read = boardsRead(next, runs, bars())
     if (read === null) return
-    const fresh = await api.boards(read === 'all' ? undefined : read)
-    setBoards((all) => ({ ...all, ...Object.fromEntries(fresh.boards.map((b) => [b.run.id, b])) }))
+    const fresh = await api.bars(read === 'all' ? undefined : read)
+    setBars((all) => ({ ...all, ...Object.fromEntries(fresh.runs.map((b) => [b.run, b])) }))
   } catch (error) {
     note(error)
   }
