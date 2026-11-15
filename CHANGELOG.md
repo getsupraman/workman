@@ -5,9 +5,9 @@ All notable changes to the Workman server and the `workman` plugin are recorded 
 [Semantic Versioning](https://semver.org/). The server's version is `serverInfo.version`; the plugin's is
 `plugin/.claude-plugin/plugin.json`.
 
-## [Unreleased]
+## [3.2.2] — 2026-11-16
 
-Server only (read API and dashboard). No migration; the plugin is unchanged.
+Server only (read API and dashboard). No migration; the plugin stays 3.1.0.
 
 ### Changed
 
@@ -24,6 +24,11 @@ Server only (read API and dashboard). No migration; the plugin is unchanged.
 - **`GET /api/v1/bars`** (optional `runs=`): per run, the items its bar counts with what decides each one's
   colour, the first item someone holds a claim on, and when the run closed. A fixed number of SQL commands for any
   number of runs. See [docs/10-read-api.md](docs/10-read-api.md).
+
+### Fixed
+
+- **The Agenda calendar's week columns and month rows were short on a tall screen:** they now fill the panel's
+  height.
 
 ## [3.2.1] — 2026-11-15
 
