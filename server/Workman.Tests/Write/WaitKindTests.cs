@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using Workman.Core.Board;
 using Workman.Core.Domain;
 using Workman.Core.Queries;
 using Workman.Core.Writing;
@@ -164,6 +165,43 @@ public sealed class WaitKindTests(PostgresFixture fixture)
         Assert.Contains(frontier, r => r.Id == world.TaskId);
         Assert.DoesNotContain(frontier, r => r.Kind == "wait");
         Assert.Contains("1.1", await world.Reader.NextAsync(await world.ScopeAsync("run-a"), 10, null, Ct), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task WaitKind_the_agenda_keeps_a_wait_under_overdue_and_due_by_but_never_under_actionable_since()
+    {
+        var world = await WriteSeed.CreateAsync(fixture);
+        var overdue = await WriteSeed.ChildAsync(world, world.PhaseId, "W1", kind: "wait");
+        var dueBy = await WriteSeed.ChildAsync(world, world.PhaseId, "W2", kind: "wait", status: ItemStatus.Ready);
+        var task = await WriteSeed.ChildAsync(world, world.PhaseId, "1.2");
+
+        await using (var db = fixture.NewContext())
+        {
+            await db.Database.ExecuteSqlRawAsync(
+                "UPDATE item SET opened_at = '2026-01-01T00:00:00Z' WHERE workspace_id = {0};", [world.WorkspaceId], Ct);
+            await db.Database.ExecuteSqlRawAsync(
+                "UPDATE item SET opened_at = '2026-11-19T10:00:00Z' WHERE id IN ({0}, {1}, {2});", [overdue, dueBy, task], Ct);
+            await db.Database.ExecuteSqlRawAsync("UPDATE item SET due_on = DATE '2026-11-19' WHERE id = {0};", [overdue], Ct);
+            await db.Database.ExecuteSqlRawAsync("UPDATE item SET due_on = DATE '2026-11-22' WHERE id = {0};", [dueBy], Ct);
+        }
+
+        var reader = new BoardReader(
+            new WorkmanQueries(fixture.DataSource), new BoardQueries(fixture.DataSource), new FixedClock(new DateTimeOffset(2026, 11, 20, 12, 0, 0, TimeSpan.Zero)));
+        var agenda = await reader.AgendaOfAsync(
+            await world.ScopeAsync("run-a"),
+            DateValue.Parse("2026-11-22").Value!.Value,
+            DateValue.Parse("2026-11-18T00:00:00Z").Value,
+            Ct);
+
+        Assert.Contains(agenda.Overdue, r => r.Ref == "W1");
+        Assert.Contains(agenda.DueBy, r => r.Ref == "W2");
+        Assert.Contains(agenda.Actionable, r => r.Ref == "1.2");
+        Assert.DoesNotContain(agenda.Actionable, r => r.Ref is "W1" or "W2");
+    }
+
+    private sealed class FixedClock(DateTimeOffset now) : TimeProvider
+    {
+        public override DateTimeOffset GetUtcNow() => now;
     }
 
     [Fact]

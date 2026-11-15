@@ -139,6 +139,7 @@ public sealed partial class BoardQueries
                    coalesce(j.due_end <= @now, false) AS "IsOverdue",
                    coalesce(j.due_end > @now AND j.due_end <= @untilEnd, false) AS "IsDueBy",
                    (j.status IN ('open','ready')
+                    AND j.kind <> 'wait'
                     AND cardinality(j.blockers) = 0
                     AND NOT EXISTS (SELECT 1 FROM item c WHERE c.parent_id = j.id
                                       AND c.status NOT IN ('done','cancelled','superseded'))
