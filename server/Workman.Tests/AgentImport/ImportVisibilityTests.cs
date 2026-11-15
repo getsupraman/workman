@@ -94,10 +94,10 @@ public sealed class ImportVisibilityTests(PostgresFixture fixture)
         var tools = await client.ListToolsAsync(cancellationToken: Ct);
         var import = Assert.Single(tools, t => t.Name == "work_import");
 
-        // A ratchet, by the budget test's measure (chars / 4): 538 for the tool, 7174 for the granted list (6918 before deadlines/4, 6849 before deadlines/2).
+        // A ratchet, by the budget test's measure (chars / 4): 538 for the tool, 7175 for the granted list (7174 before work_create named the wait kind, deadlines/3; 6918 before deadlines/4, 6849 before deadlines/2).
         var cost = (JsonSerializer.Serialize(import.ProtocolTool).Length + 3) / 4;
         var total = (JsonSerializer.Serialize(tools.Where(t => t.Name.StartsWith("work_", StringComparison.Ordinal)).Select(t => t.ProtocolTool)).Length + 3) / 4;
-        Assert.True(cost <= 540 && total <= 7174, $"work_import costs {cost} tokens in tools/list; the granted session's work_* list {total}");
+        Assert.True(cost <= 540 && total <= 7175, $"work_import costs {cost} tokens in tools/list; the granted session's work_* list {total}");
 
         var text = await ReadServer.CallAsync(client, "work_import", new Dictionary<string, object?>
         {
