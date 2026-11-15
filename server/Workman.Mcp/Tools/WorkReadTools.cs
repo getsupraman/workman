@@ -252,7 +252,7 @@ public sealed class WorkReadTools(
     }
 
     [Authorize(Policy = WorkmanPolicies.Orchestrator)]
-    [McpServerTool(Name = "work_threads",Title = "Close out: everything unclosed that is not a task", ReadOnly = true)]
+    [McpServerTool(Name = "work_threads", Title = "Close out: everything unclosed that is not a task", ReadOnly = true)]
     [Description("""
         Everything unclosed that is not a task: open assumptions, findings, follow-ups, unconsumed
         notes, items in_progress with no live claim, and dependencies waiting on work that will
