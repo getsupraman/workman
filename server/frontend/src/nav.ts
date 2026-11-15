@@ -48,6 +48,15 @@ export function boardHref(run: string, onBoard: (id: string) => boolean, item: P
   return itemHref(item, null)
 }
 
+/**
+ * A plan row's link on a run page: the row already selected leads back to the run's own details,
+ * any other row selects itself (`boardHref`).
+ */
+export function rowToggleHref(run: string, selected: string | undefined, onBoard: (id: string) => boolean, item: Pick<ItemRef, 'id' | 'kind'>): string {
+  if (selected !== undefined && item.id === selected) return runHref(run)
+  return boardHref(run, onBoard, item)
+}
+
 export const backlogHref = (project: string) => `/projects/${project}/backlog`
 
 export const projectHref = (project: string) => `/projects/${project}`

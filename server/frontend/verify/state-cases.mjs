@@ -6,12 +6,12 @@
  *   node verify/state-cases.mjs
  */
 import { CLOSED, LEAF, answer, countTitle, counted, findingsOpen, independent, progress, state, tally } from '../src/state.ts'
-import { DEFAULT_FILTER, FILTERS, asFilter, cancelledLines, plan, planOrder, planQuery, withoutCancelled } from '../src/plan.ts'
+import { DEFAULT_FILTER, FILTERS, asFilter, cancelledLines, plan, planOrder, planQuery, runPageHref, withoutCancelled } from '../src/plan.ts'
 import { readFileSync } from 'node:fs'
 import { KEYS, KEYS_COMMAND, isHelpKey, keysTable } from '../src/keys.ts'
 import { activityDays, activityOrder, backlogOrder, projectOrder, projectRuns } from '../src/lists.ts'
-import { listMove, openRuns, runMove, runOnPath, sideProjects, sideRuns, step, typingIn } from '../src/listnav.ts'
-import { boardHref, copyValue, inboxHref, itemHref, pathCrumbs, routeReads } from '../src/nav.ts'
+import { isClearKey, listMove, openRuns, runMove, runOnPath, sideProjects, sideRuns, step, typingIn } from '../src/listnav.ts'
+import { boardHref, copyValue, inboxHref, itemHref, pathCrumbs, routeReads, rowToggleHref } from '../src/nav.ts'
 import { appIconHref, consentForm, consentStep, consentView, hiddenFields, iconStep, initials, isConnectPath, returnTarget, scopeLines, signInHref, signInStart, signInStep } from '../src/connect.ts'
 import { formerName, isReleased, releasable, tokenLabel } from '../src/sessions.ts'
 import { arrange, chordLabel, commands, entryHref, isPaletteChord, isSlash, matchCommands } from '../src/palette.ts'
@@ -274,6 +274,13 @@ check('run page: its own item', boardHref('R', onBoard, { id: 'T', kind: 'task' 
 check('run page: the run itself', boardHref('R', onBoard, run), '/runs/R')
 check('run page: a blocker in another run', boardHref('R', onBoard, { id: 'X', kind: 'task' }), '/items/X')
 check('run page: another run', boardHref('R', onBoard, { id: 'S', kind: 'run' }), '/runs/S')
+check('the Run link: the run with filter, tab and cancelled kept', runPageHref('R', 'all', 'evidence', true), '/runs/R?filter=all&tab=evidence&cancelled=show')
+check('the Run link on defaults is the bare run', runPageHref('R', 'open', 'overview'), '/runs/R')
+check('the Run link has a page behind it', routeReads(runPageHref('R', 'attention', 'notes')), ['/api/v1/runs/R/board', '/api/v1/items/R'])
+check('toggle: the selected row leads back to the run', rowToggleHref('R', 'T', onBoard, { id: 'T', kind: 'task' }), '/runs/R')
+check('toggle: another row selects itself', rowToggleHref('R', 'U', onBoard, { id: 'T', kind: 'task' }), '/runs/R/T')
+check('toggle: nothing selected, a row selects itself', rowToggleHref('R', undefined, onBoard, { id: 'T', kind: 'task' }), '/runs/R/T')
+check('toggle: a row off the board still leaves', rowToggleHref('R', 'T', onBoard, { id: 'X', kind: 'task' }), '/items/X')
 check('reads for /', routeReads('/'), ['/api/v1/overview'])
 check('reads for /runs/R/T', routeReads('/runs/R/T?tab=evidence'), ['/api/v1/runs/R/board', '/api/v1/items/T'])
 check('reads for /items/P', routeReads('/items/P'), ['/api/v1/items/P'])
@@ -422,6 +429,11 @@ check('focus in a text field: the key is typed', listMove(k({}), true, false), n
 check('the palette or a modal open: nothing moves', listMove(k({}), false, true), null)
 check('any modifier held: nothing moves', ['ctrlKey', 'metaKey', 'altKey', 'shiftKey'].map((m) => listMove(k({ [m]: true }), false, false)), [null, null, null, null])
 check('a key a handler already took is left alone', listMove(k({ defaultPrevented: true }), false, false), null)
+check('Escape clears a docked selection', isClearKey(k({ key: 'Escape' }), false, false), true)
+check('Escape in a text field belongs to the field', isClearKey(k({ key: 'Escape' }), true, false), false)
+check('Escape with the palette, key help or menu open: theirs', isClearKey(k({ key: 'Escape' }), false, true), false)
+check('Escape a handler already took is left alone', isClearKey(k({ key: 'Escape', defaultPrevented: true }), false, false), false)
+check('Escape with a modifier, or another key: nothing', [isClearKey(k({ key: 'Escape', shiftKey: true }), false, false), isClearKey(k({}), false, false)], [false, false])
 check('typing: input, textarea, select', ['INPUT', 'TEXTAREA', 'SELECT'].map((tagName) => typingIn({ tagName })), [true, true, true])
 check('typing: contenteditable', typingIn({ tagName: 'DIV', isContentEditable: true }), true)
 check('not typing: a link, the body, no target', [typingIn({ tagName: 'A' }), typingIn({ tagName: 'BODY' }), typingIn(null)], [false, false, false])

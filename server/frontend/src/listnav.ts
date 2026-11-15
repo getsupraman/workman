@@ -63,6 +63,13 @@ export function listMove(e: Key & { defaultPrevented?: boolean }, typing: boolea
 }
 
 /**
+ * Escape that clears a docked panel's selection: plain, outside a field, with no modal open and not
+ * taken first (the palette, the key help and the phone menu close on their own Escape).
+ */
+export const isClearKey = (e: Key & { defaultPrevented?: boolean }, typing: boolean, modal: boolean): boolean =>
+  e.key === 'Escape' && !typing && !modal && !e.defaultPrevented && plain(e)
+
+/**
  * Alt+ArrowDown / Alt+ArrowUp (Option on macOS): the next or previous run. Alt alone — Alt+ArrowLeft
  * and Alt+ArrowRight stay the browser's back and forward.
  */

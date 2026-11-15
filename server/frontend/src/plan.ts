@@ -1,6 +1,6 @@
 import type { Board, BoardRow } from './api.ts'
 import { CLOSED, rowState, tally, type Tally } from './state.ts'
-import { SHOW_CANCELLED } from './nav.ts'
+import { SHOW_CANCELLED, runHref } from './nav.ts'
 
 export type Filter = 'all' | 'open' | 'attention'
 
@@ -24,6 +24,10 @@ export function planQuery(filter: Filter, tab: string, cancelled = false): strin
   if (cancelled) q.set('cancelled', SHOW_CANCELLED)
   return q.size > 0 ? `?${q}` : ''
 }
+
+/** The run page with nothing selected, its filter, tab and cancelled kept: the filter bar's Run link and Escape. */
+export const runPageHref = (run: string, filter: Filter, tab: string, cancelled = false): string =>
+  `${runHref(run)}${planQuery(filter, tab, cancelled)}`
 
 function keep(filter: Filter, row: BoardRow, cancelled: boolean): boolean {
   if (row.item.status === 'cancelled' && !cancelled) return false

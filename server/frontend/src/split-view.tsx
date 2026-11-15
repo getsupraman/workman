@@ -1,4 +1,6 @@
 import { Show, createEffect, createSignal, onCleanup, onMount, type JSX } from 'solid-js'
+import { useDocumentKeys } from './listkeys.ts'
+import { isClearKey } from './listnav.ts'
 import { NUDGE, PANEL_MIN, SHEET_MAX, clampWidth, docks, maxWidth, panelWidth, rememberWidth, rememberedWidth } from './split.ts'
 
 /**
@@ -11,7 +13,7 @@ export function SplitView(props: {
   side: JSX.Element
   /** The sheet's title row. */
   title: string
-  /** Undocked, the sheet shows only while this holds (an item is selected). */
+  /** Undocked, the sheet shows only while this holds (an item is selected); docked, Escape clears it. */
   open: boolean
   onClose: () => void
   /** Changes when the panel shows something else, which starts it at the top. */
@@ -53,6 +55,13 @@ export function SplitView(props: {
     }
     window.addEventListener('keydown', key)
     onCleanup(() => window.removeEventListener('keydown', key))
+  })
+
+  // Docked there is no Close: Escape clears the selection, after the palette, key help and menu.
+  useDocumentKeys((e, typing, modal) => {
+    if (!docked() || !props.open || !isClearKey(e, typing, modal)) return false
+    props.onClose()
+    return true
   })
 
   // The panel is on the right, so dragging left grows it.

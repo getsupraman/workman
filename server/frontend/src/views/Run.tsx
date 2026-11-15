@@ -4,10 +4,10 @@ import * as api from '../api.ts'
 import type { Board, BoardRow, ItemRef } from '../api.ts'
 import { load } from '../store.ts'
 import { CLOSED, findingsOpen, progress, rowState, tally } from '../state.ts'
-import { FILTERS, asFilter, cancelledLines, plan, planOrder, planQuery as query, type Filter } from '../plan.ts'
+import { FILTERS, asFilter, cancelledLines, plan, planOrder, planQuery as query, runPageHref, type Filter } from '../plan.ts'
 import { step } from '../listnav.ts'
 import { reveal, useListKeys } from '../listkeys.ts'
-import { SHOW_CANCELLED, boardHref, runHref } from '../nav.ts'
+import { SHOW_CANCELLED, boardHref, rowToggleHref, runHref } from '../nav.ts'
 import { UNKNOWN, claimHolder, short } from '../format.ts'
 import { CancelledToggle, CopyRef, Dot, ProjectName, Segs } from '../ui.tsx'
 import { SplitView } from '../split-view.tsx'
@@ -26,13 +26,18 @@ export default function Run() {
   const page = load(selected, api.item)
 
   const rows = () => new Map((board.data()?.rows ?? []).map((r) => [r.item.id, r]))
+  const onBoard = (id: string) => rows().has(id)
 
   /** Inside this run the board keeps its place; anything else goes through `/items/{id}`. */
-  const href = (item: Pick<ItemRef, 'id' | 'kind'>, tabFor: Tab = tab(), cancelledFor = cancelled()) => {
-    const to = boardHref(params.run, (id) => rows().has(id), item)
+  const keepPlace = (to: string, tabFor: Tab = tab(), cancelledFor = cancelled()) => {
     const here = runHref(params.run)
     return to === here || to.startsWith(`${here}/`) ? `${to}${query(filter(), tabFor, cancelledFor)}` : to
   }
+  const href = (item: Pick<ItemRef, 'id' | 'kind'>, tabFor: Tab = tab(), cancelledFor = cancelled()) =>
+    keepPlace(boardHref(params.run, onBoard, item), tabFor, cancelledFor)
+  /** A plan row: the selected one leads back to the run's details. */
+  const rowHref = (item: ItemRef) => keepPlace(rowToggleHref(params.run, params.item, onBoard, item))
+  const runPage = () => runPageHref(params.run, filter(), tab(), cancelled())
 
   const here = () => (params.item ? `${runHref(params.run)}/${params.item}` : runHref(params.run))
 
@@ -41,7 +46,7 @@ export default function Run() {
   const planToggle = () => `${here()}${planShown() ? query(filter(), tab(), false) : query('all', tab(), true)}`
 
   const navigate = useNavigate()
-  const close = () => navigate(`${runHref(params.run)}${query(filter(), tab(), cancelled())}`, { scroll: false })
+  const close = () => navigate(runPage(), { scroll: false })
   // ArrowUp/ArrowDown, Home/End walk the plan as it is drawn: the panel follows the selection.
   let keyed = false
   useListKeys((m) => {
@@ -116,9 +121,14 @@ export default function Run() {
                         )}
                       </For>
                       <CancelledToggle count={cancelledLines(b())} shown={planShown()} href={planToggle()} class="end" />
+                      <Show when={params.item !== undefined}>
+                        <A href={runPage()} class="to-run" title="Back to the run's details" noScroll>
+                          Run
+                        </A>
+                      </Show>
                     </nav>
                     <div class="plan-list">
-                      <PlanList board={b()} filter={filter()} cancelled={cancelled()} selected={selected()} href={href} />
+                      <PlanList board={b()} filter={filter()} cancelled={cancelled()} selected={selected()} href={rowHref} />
                     </div>
                   </div>
                 </div>

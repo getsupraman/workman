@@ -15,6 +15,7 @@ export const KEYS: readonly KeyHelp[] = [
   { keys: 'Enter', where: 'a focused row', does: 'opens it' },
   { keys: 'Alt+↓ / Alt+↑ (⌥ on macOS)', where: 'any page', does: 'opens the next / previous run in the sidebar' },
   { keys: 'Esc', where: 'palette, dialog, phone menu, detail sheet', does: 'closes it' },
+  { keys: 'Esc', where: 'run page, Needs you, with the panel docked', does: 'clears the selection; the run page shows the run again' },
   { keys: '?', where: 'any page', does: 'shows these keys' },
 ]
 
