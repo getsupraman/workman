@@ -126,6 +126,47 @@ public sealed class WaitKindTests(PostgresFixture fixture)
     }
 
     [Fact]
+    public async Task WaitKind_an_open_wait_is_never_on_the_frontier_and_closing_it_brings_up_the_task_it_blocked()
+    {
+        var world = await WriteSeed.CreateAsync(fixture);
+        var undated = await WriteSeed.ChildAsync(world, world.PhaseId, "W1", kind: "wait");
+        var overdue = await WriteSeed.ChildAsync(world, world.PhaseId, "W2", kind: "wait", status: ItemStatus.Ready);
+        await using (var db = fixture.NewContext())
+        {
+            await db.Database.ExecuteSqlRawAsync(
+                "UPDATE item SET due_on = DATE '2020-01-01', priority = 100 WHERE id = {0};", [overdue], Ct);
+        }
+
+        await WriteSeed.LinkAsync(world, undated, world.TaskId, LinkType.Blocks);
+        await WriteSeed.LinkAsync(world, overdue, world.TaskId, LinkType.Blocks);
+
+        var queries = new WorkmanQueries(fixture.DataSource);
+        var frontier = await queries.ReadyFrontierAsync(world.RunId, Ct);
+        Assert.DoesNotContain(frontier, r => r.Kind == "wait");
+        Assert.DoesNotContain(frontier, r => r.Id == world.TaskId);
+
+        var next = await world.Reader.NextAsync(await world.ScopeAsync("run-a"), 10, null, Ct);
+        Assert.DoesNotContain("W1", next, StringComparison.Ordinal);
+        Assert.DoesNotContain("W2", next, StringComparison.Ordinal);
+
+        var brief = await world.Reader.BriefAsync(await world.ScopeAsync("run-a"), "resume", Ct);
+        Assert.DoesNotContain("work_status(ref:\"W1\", to:\"in_progress\")", brief, StringComparison.Ordinal);
+        Assert.DoesNotContain("work_status(ref:\"W2\", to:\"in_progress\")", brief, StringComparison.Ordinal);
+
+        foreach (var wait in new[] { "W1", "W2" })
+        {
+            var closed = await world.Writer.StatusAsync(
+                world.WorkspaceId, wait, "done", WriteSeed.Orchestrator, new StatusArgs(Reason: Arrived), Ct);
+            Assert.False(closed.Refused, closed.Text);
+        }
+
+        frontier = await queries.ReadyFrontierAsync(world.RunId, Ct);
+        Assert.Contains(frontier, r => r.Id == world.TaskId);
+        Assert.DoesNotContain(frontier, r => r.Kind == "wait");
+        Assert.Contains("1.1", await world.Reader.NextAsync(await world.ScopeAsync("run-a"), 10, null, Ct), StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task WaitKind_an_item_blocked_by_an_open_wait_shows_waiting_on_in_the_tree_and_its_worker_brief()
     {
         var world = await WriteSeed.CreateAsync(fixture);

@@ -98,6 +98,7 @@ public sealed class WorkmanQueries(NpgsqlDataSource dataSource)
     /// The ready frontier as of <paramref name="now"/> (the caller's injected clock, C242; null for the
     /// database's): an item whose not_before has not started is left out, and an overdue item, then one due
     /// today in the workspace's zone, ranks ahead of priority. Undated items keep their order among themselves.
+    /// A wait is never on it (deadlines/3): nobody picks up a client's email; it shows as "waiting on" instead.
     /// </summary>
     public async Task<IReadOnlyList<ReadyItem>> ReadyFrontierAsync(
         Guid scopeItemId,
@@ -121,6 +122,7 @@ public sealed class WorkmanQueries(NpgsqlDataSource dataSource)
              JOIN   scope s ON s.id = i.id
              {DocumentPath}
              WHERE  i.status IN ('open','ready')
+               AND  i.kind <> 'wait'
                AND  NOT EXISTS (
                      SELECT 1 FROM item_link l JOIN item b ON b.id = l.from_item_id
                      WHERE l.to_item_id = i.id AND l.type = 'blocks'

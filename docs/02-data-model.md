@@ -273,7 +273,9 @@ a commit. `done` is reachable from any open status, as for a `finding`, and any 
 orchestrator with `work_status(…, "done", reason:)`, a worker with `work_report(…, status:"done",
 verify:)` (doc 01 §4). What arrived is journalled as an `observation` note on the wait. While a wait is
 open, `work_tree` and the worker brief print `waiting on <ref> <title>` (and its due) under each item it
-blocks. A wait is not a leaf of the rollup: it counts in no "X of Y".
+blocks. A wait is not a leaf of the rollup: it counts in no "X of Y", and it is never on the ready
+frontier (§4): no agent picks it up from `work_next`. It surfaces in `work_agenda` by its chase date and
+in attention once overdue; closing it releases what it blocks like any closed blocker.
 
 **Root = project.** The kind with an empty `allowed_parent_kinds` is a root, and only `project` has one;
 every other kind needs a parent of a kind its list names. A root that is no project would sit outside
@@ -503,6 +505,7 @@ SELECT i.ref, i.kind, i.title, i.verify_cmd, i.risk_tags
 FROM   item i
 JOIN   scope s ON s.id = i.id
 WHERE  i.status IN ('open','ready')
+  AND  i.kind <> 'wait'                      -- a wait is not work anyone picks up (deadlines/3)
   AND  NOT EXISTS (                          -- nothing unfinished blocks it
         SELECT 1 FROM item_link l JOIN item b ON b.id = l.from_item_id
         WHERE l.to_item_id = i.id AND l.type = 'blocks'
