@@ -65,23 +65,31 @@ public sealed partial class BoardQueries
         if (lookups.Count > 0)
         {
             foreach (var hit in await ListAsync<FormMatch>(
-                         $"""
-                          SELECT w.id AS "WorkspaceId", f.n::int AS "Lookup", i.id AS "Id"
-                          FROM   unnest(@workspaces) AS w(id)
-                          CROSS  JOIN unnest(@projects, @qualifiers, @leaves) WITH ORDINALITY AS f(project, qualifier, leaf, n)
-                          JOIN   item i ON i.workspace_id = w.id AND lower(i.ref) = lower(f.leaf)
-                          LEFT JOIN item s ON s.id = i.ref_scope_id AND s.id <> i.id
-                          LEFT JOIN item p ON p.id = i.parent_id
-                          JOIN   item_kind k ON k.key = i.kind
-                          WHERE  (f.qualifier IS NULL
-                                  OR lower(coalesce(s.ref, i.ref)) = lower(f.qualifier)
-                                  OR (i.ref_scope_id = i.id AND lower(p.ref) = lower(f.qualifier)))
-                            AND  (f.project IS NULL
-                                  OR EXISTS (SELECT 1 FROM item pj
-                                             WHERE  pj.id = ANY(i.ancestors)
-                                               AND  pj.kind = 'project'
-                                               AND  lower(pj.ref) = lower(f.project)));
-                          """,
+                         // ResolveAsync's predicate, with each candidate's qualifiers read once rather than once per
+                         // form: the forms of 2,000 items share a handful of leaves, each carried by ~150 items.
+                         """
+                         WITH f AS (
+                           SELECT * FROM unnest(@projects, @qualifiers, @leaves) WITH ORDINALITY AS f(project, qualifier, leaf, n)
+                         ), c AS MATERIALIZED (
+                           SELECT i.id, i.workspace_id,
+                                  lower(i.ref)                                       AS leaf,
+                                  lower(coalesce(s.ref, i.ref))                      AS scoped,
+                                  CASE WHEN i.ref_scope_id = i.id THEN lower(p.ref) END AS parent,
+                                  ARRAY(SELECT lower(pj.ref) FROM item pj
+                                        WHERE  pj.id = ANY(i.ancestors) AND pj.kind = 'project') AS projects
+                           FROM   item i
+                           LEFT JOIN item s ON s.id = i.ref_scope_id AND s.id <> i.id
+                           LEFT JOIN item p ON p.id = i.parent_id
+                           JOIN   item_kind k ON k.key = i.kind
+                           WHERE  i.workspace_id = ANY(@workspaces)
+                             AND  lower(i.ref) = ANY(@leaves)
+                         )
+                         SELECT c.workspace_id AS "WorkspaceId", f.n::int AS "Lookup", c.id AS "Id"
+                         FROM   f
+                         JOIN   c ON c.leaf = f.leaf
+                         WHERE  (f.qualifier IS NULL OR c.scoped = f.qualifier OR c.parent = f.qualifier)
+                           AND  (f.project IS NULL OR f.project = ANY(c.projects));
+                         """,
                          new
                          {
                              workspaces = workspaces.ToArray(),

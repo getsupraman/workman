@@ -129,7 +129,7 @@ public static partial class ApiV1
     {
         var rooted = (await api.BoardsAsync(roots, cancellationToken)).ToLookup(r => r.Root, r => r.Row);
         var trees = roots
-            .Select(root => (Root: root, RunId: book.RunId(root)!.Value, Rows: (IReadOnlyList<BoardRow>)[.. rooted[root]]))
+            .Select(root => (Root: root, RunId: book.RunId(root)!.Value, Rows: (IReadOnlyList<BoardRow>)rooted[root].ToList()))
             .ToList();
 
         var ids = trees.SelectMany(t => t.Rows).Select(r => r.Id).Distinct().ToList();

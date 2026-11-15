@@ -148,7 +148,8 @@ public sealed class V1BarsTests(PostgresFixture fixture)
         // The first request of a host pays for its own start-up; count the second.
         await SqlCommands.GetAsync(reader, "/api/v1/sessions");
         var counted = await SqlCommands.GetAsync(reader, path);
-        SqlCommands.Log(SqlCommands.Summary(counted));
+        SqlCommands.Log($"{path}, {world.RunIds.Count} runs: {counted.Commands} commands, {counted.Elapsed.TotalMilliseconds:0} ms");
+        SqlCommands.Log(SqlCommands.Slowest(counted));
         return counted.Commands;
     }
 
