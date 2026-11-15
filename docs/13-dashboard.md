@@ -35,7 +35,7 @@ returns focus where it was. One input filters two groups:
   title: go to Overview, Needs you, Activity, Sessions; go to Admin for a user who administers a
   workspace and to Users for a system administrator (from `GET /api/session/me`); open each project
   and its backlog (from `overview`); *Switch to workspace &lt;slug&gt;* for each other workspace the user
-  may enter; toggle the theme; *Keyboard shortcuts*, which opens the **?** dialog. An empty input shows the commands alone.
+  may enter; go to the Agenda; toggle the theme; *Keyboard shortcuts*, which opens the **?** dialog. An empty input shows the commands alone.
 - **Items**, from `GET /api/v1/search` (doc 10), 150 ms after the last keystroke; an answer for an
   input no longer typed is dropped. A row shows the item's `fullRef`, title, kind and state pill and
   its project; Enter opens it through `itemHref`. When the input is some item's exact ref, Items
@@ -189,8 +189,8 @@ whole day in the workspace's time zone, or an instant in UTC. The rules live in 
 - **Needs you** has the server's `overdue` rows (`audience: human`): one per open item whose due has
   passed, kind *Overdue*, the stop dot, under its own *Overdue* filter.
 
-The command palette has no *Go to Agenda* command: its command list is pinned by the existing verify
-cases, so the Agenda is reached from the sidebar and by URL.
+The command palette's *Go to Agenda* opens the page (also found by *due*, *deadlines*, *overdue*,
+*calendar*).
 
 A claim holder is shown as the session name with the role beside it — `aw-m4-2b · controller` — when
 the claim has a session (v1 `Claim.heldBySession`), else by the role alone. The same text in the

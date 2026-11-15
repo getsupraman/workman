@@ -528,6 +528,7 @@ const labels = (cs) => cs.map((c) => c.label)
 check('every command, in order', labels(all), [
   'Go to Overview', 'Go to Needs you', 'Go to Activity', 'Go to Sessions',
   'Open project Workman', 'Open Workman backlog', 'Open project Autowork', 'Open Autowork backlog',
+  'Go to Agenda',
   'Toggle theme',
 ])
 check('a project and its backlog link through nav', all.slice(4, 6).map((c) => c.href), ['/projects/p1', '/projects/p1/backlog'])
@@ -597,7 +598,7 @@ check('a member gets no admin command', withAccount({ administers: false, system
 check('an admin of several gets Admin and each switch', withAccount({ administers: true, systemAdmin: false, tenants: reachable }), [
   'Go to Overview', 'Go to Needs you', 'Go to Activity', 'Go to Sessions', 'Go to Admin',
   'Open project Workman', 'Open Workman backlog', 'Open project Autowork', 'Open Autowork backlog',
-  'Switch to workspace team-two', 'Toggle theme',
+  'Switch to workspace team-two', 'Go to Agenda', 'Toggle theme',
 ])
 const sys = commands(projects, { administers: true, systemAdmin: true, tenants: reachable })
 check('a system administrator also gets Users', labels(sys).slice(4, 6), ['Go to Admin', 'Go to Users'])
@@ -911,6 +912,7 @@ console.log('\n── dates: chip text, the Due filter, the Agenda across the zo
 
   check('agenda: its href and reads', [agendaHref(), agendaHref('I'), routeReads('/agenda/I?tab=notes')[1], routeReads('/agenda')[0].startsWith('/api/v1/agenda?until=')], ['/agenda', '/agenda/I', '/api/v1/items/I', true])
   check('the top bar names the Agenda', [pageName('/agenda', sidebar), pageName('/agenda/I', sidebar)], ['Agenda', 'Agenda'])
+  check('the palette goes to the Agenda, also by "due"', [matchCommands(commands([]), 'agenda').map((c) => c.href), matchCommands(commands([]), 'due').map((c) => c.label)], [['/agenda'], ['Go to Agenda']])
   check('the keys table names the Agenda for ↓ / ↑ and Esc', ['↓ / ↑', 'Esc'].every((key) => KEYS.some((k) => k.keys === key && k.where.includes('Agenda'))), true)
 
   // Needs you: overdue rows, their kind and filter.

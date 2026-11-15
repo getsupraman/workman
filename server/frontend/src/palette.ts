@@ -55,6 +55,7 @@ export function commands(projects: Pick<ProjectOverview, 'item'>[], account?: Pa
         action: 'tenant',
         tenant: t.id,
       })),
+    { ...page('agenda', 'Go to Agenda', '/agenda'), keywords: 'due dates deadlines overdue calendar' },
     { id: 'theme', label: 'Toggle theme', keywords: 'dark light', href: null, action: 'theme' },
   ]
 }
