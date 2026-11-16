@@ -9,7 +9,7 @@ namespace Workman.Tests.App.V1;
 internal sealed record BarsWorld(string Slug, Guid WorkspaceId, IReadOnlyList<Guid> RunIds, int Items);
 
 /// <summary>
-/// A workspace the size of a busy production one, in bulk SQL: ten projects whose runs share their refs (<c>m1</c>,
+/// A workspace the size of a busy production one, in bulk SQL: ten projects (or <c>projectCount</c>) whose runs share their refs (<c>m1</c>,
 /// <c>1.1</c>, …) so every ref has to be qualified, and under each run every state a bar draws — verified, done by a
 /// worker's word, done with nothing, in progress, a lapsed claim, blocked, waiting on a sibling and on another run,
 /// cancelled, moved, an empty phase, a sub-task, a finding. Sixteen items a run: 150 runs is 2,400 items.
@@ -20,7 +20,7 @@ internal static class BarsSeed
 
     private sealed record Row(Guid Id, Guid? Parent, string Kind, string Ref, decimal Seq, string Title, string Status, string? Resolution, int Level);
 
-    public static async Task<BarsWorld> CreateAsync(PostgresFixture fixture, int runCount)
+    public static async Task<BarsWorld> CreateAsync(PostgresFixture fixture, int runCount, int projectCount = Projects)
     {
         var workspace = Guid.CreateVersion7();
         var slug = $"bars-{workspace:n}";
@@ -39,14 +39,14 @@ internal static class BarsSeed
             return row;
         }
 
-        var projects = Enumerable.Range(0, Projects).Select(p => Add(null, "project", $"bp{p}-{workspace:n}"[..12], p + 1, "in_progress")).ToList();
+        var projects = Enumerable.Range(0, projectCount).Select(p => Add(null, "project", $"bp{p}-{workspace:n}"[..12], p + 1, "in_progress")).ToList();
 
         Row? previousWaitedOn = null;
         for (var r = 0; r < runCount; r++)
         {
-            var project = projects[r % Projects];
+            var project = projects[r % projectCount];
             var closedRun = r % 3 == 2;
-            var run = Add(project.Id, "run", $"m{(r / Projects) + 1}", (r / Projects) + 1, closedRun ? "done" : "in_progress", closedRun ? "accepted" : null, 1);
+            var run = Add(project.Id, "run", $"m{(r / projectCount) + 1}", (r / projectCount) + 1, closedRun ? "done" : "in_progress", closedRun ? "accepted" : null, 1);
             runs.Add((run.Id, project.Id, run.Ref));
 
             var one = Add(run.Id, "phase", "1", 1, "in_progress", level: 2);
