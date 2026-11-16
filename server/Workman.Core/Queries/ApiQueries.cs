@@ -639,23 +639,30 @@ public sealed partial class ApiQueries(NpgsqlDataSource dataSource)
     public async Task<IReadOnlyList<WaitingRow>> BlockedOnAPersonAsync(
         Guid scopeId,
         CancellationToken cancellationToken = default)
+        => [.. (await BlockedOnAPersonAsync([scopeId], cancellationToken))[scopeId]];
+
+    /// <summary><see cref="BlockedOnAPersonAsync(Guid, CancellationToken)"/> for many scopes in one command.</summary>
+    public async Task<ILookup<Guid, WaitingRow>> BlockedOnAPersonAsync(
+        IReadOnlyCollection<Guid> scopeIds,
+        CancellationToken cancellationToken = default)
     {
         const string sql =
             $"""
              SELECT i.id AS "Id",
                     coalesce((SELECT max(e.at) FROM event e
                               WHERE e.item_id = i.id AND e.kind IN ('status','forced_transition')),
-                             i.started_at, i.opened_at) AS "Since"
+                             i.started_at, i.opened_at) AS "Since",
+                    {Scoped.Column}
              FROM   item i
+             {Scoped.JoinItem}
              WHERE  i.status = 'blocked'
-               AND  {InScope}
                AND  NOT EXISTS (SELECT 1 FROM item_link l JOIN item b ON b.id = l.from_item_id
                                 WHERE l.to_item_id = i.id AND l.type = 'blocks'
                                   AND b.status NOT IN {Closed})
              ORDER  BY i.seq, i.id;
              """;
 
-        return await ListAsync<WaitingRow>(sql, new { scope = scopeId }, cancellationToken);
+        return await Scoped.ListAsync<WaitingRow>(_connections, sql, new { scopes = Scoped.Ids(scopeIds) }, cancellationToken);
     }
 
     public async Task<IReadOnlyList<InboxFactRow>> InboxFactsAsync(
@@ -698,16 +705,23 @@ public sealed partial class ApiQueries(NpgsqlDataSource dataSource)
     public async Task<IReadOnlyList<WaitingRow>> OpenQuestionsAsync(
         Guid scopeId,
         CancellationToken cancellationToken = default)
+        => [.. (await OpenQuestionsAsync([scopeId], cancellationToken))[scopeId]];
+
+    /// <summary><see cref="OpenQuestionsAsync(Guid, CancellationToken)"/> for many scopes in one command.</summary>
+    public async Task<ILookup<Guid, WaitingRow>> OpenQuestionsAsync(
+        IReadOnlyCollection<Guid> scopeIds,
+        CancellationToken cancellationToken = default)
     {
         const string sql =
             $"""
-             SELECT i.id AS "Id", i.opened_at AS "Since"
+             SELECT i.id AS "Id", i.opened_at AS "Since", {Scoped.Column}
              FROM   item i
-             WHERE  i.kind = 'question' AND i.status NOT IN {Closed} AND {InScope}
+             {Scoped.JoinItem}
+             WHERE  i.kind = 'question' AND i.status NOT IN {Closed}
              ORDER  BY i.seq, i.id;
              """;
 
-        return await ListAsync<WaitingRow>(sql, new { scope = scopeId }, cancellationToken);
+        return await Scoped.ListAsync<WaitingRow>(_connections, sql, new { scopes = Scoped.Ids(scopeIds) }, cancellationToken);
     }
 
     /// <summary>

@@ -37,16 +37,29 @@ public sealed partial class BoardQueries
         DateTimeOffset now,
         int days,
         CancellationToken cancellationToken = default)
+        => [.. (await DueSoonAsync([scopeItemId], homeScopeId, now, days, cancellationToken))[scopeItemId]];
+
+    /// <summary>
+    /// <see cref="DueSoonAsync(Guid, Guid?, DateTimeOffset, int, CancellationToken)"/> for many scopes in one
+    /// command, each ref printed against the one <paramref name="homeScopeId"/>.
+    /// </summary>
+    public async Task<ILookup<Guid, DueSoonRow>> DueSoonAsync(
+        IReadOnlyCollection<Guid> scopeItemIds,
+        Guid? homeScopeId,
+        DateTimeOffset now,
+        int days,
+        CancellationToken cancellationToken = default)
     {
         const string sql =
-            """
+            $"""
             WITH dated AS (
               SELECT i.id, i.ref, i.ref_scope_id, i.title, i.due_on, i.due_at,
                      item_due_end(i) AS due_end,
-                     timezone_of(i.workspace_id) AS zone
+                     timezone_of(i.workspace_id) AS zone,
+                     sc.id AS scope_id
               FROM   item i
-              WHERE  (i.id = @scope OR i.ancestors @> ARRAY[@scope]::uuid[])
-                AND  i.status NOT IN ('done','cancelled','superseded')
+              {Scoped.JoinItem}
+              WHERE  i.status NOT IN ('done','cancelled','superseded')
                 AND  (i.due_on IS NOT NULL OR i.due_at IS NOT NULL)
             ),
             dayed AS (
@@ -72,16 +85,17 @@ public sealed partial class BoardQueries
                          LEFT   JOIN item bs ON bs.id = b.ref_scope_id AND bs.id <> b.id
                          WHERE  l.to_item_id = d.id AND l.type = 'blocks'
                            AND  b.status NOT IN ('done','cancelled','superseded')
-                         ORDER  BY b.seq) AS "Blockers"
+                         ORDER  BY b.seq) AS "Blockers",
+                   d.scope_id AS "ForScope"
             FROM   dayed d
             LEFT   JOIN item rs ON rs.id = d.ref_scope_id AND rs.id <> d.id
             WHERE  d.due_end <= @now OR d.days_left <= @days
             ORDER  BY d.due_end, d.ref;
             """;
 
-        return await ListAsync<DueSoonRow>(
+        return await ScopedAsync<DueSoonRow>(
             sql,
-            new { scope = scopeItemId, home = homeScopeId, now, days },
+            new { scopes = Scoped.Ids(scopeItemIds), home = homeScopeId, now, days },
             cancellationToken);
     }
 

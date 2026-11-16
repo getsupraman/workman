@@ -75,42 +75,47 @@ public static partial class ApiV1
     {
         var waiting = new List<Waiting>();
 
+        // Each source reads every scope in one command, through the query the attention block runs for one scope. Rows
+        // are taken scope by scope, as one call per scope added them, so the first per kind and item still wins.
+        IEnumerable<T> Every<T>(ILookup<Guid, T> scoped) => scopes.SelectMany(s => scoped[s]);
+
+        foreach (var row in Every(await api.BlockedOnAPersonAsync(scopes, cancellationToken)))
+        {
+            waiting.Add(new Waiting(
+                "blocked", row.Id, "blocked, and nothing open blocks it — it waits on a decision",
+                row.Since, q => $"work_status(ref:\"{q}\", to:\"in_progress\")"));
+        }
+
+        foreach (var blocker in Every(await board.BlockerFindingsAsync(scopes, cancellationToken)))
+        {
+            var against = blocker.TargetRef is { Length: > 0 } target ? $" against {target}" : string.Empty;
+            waiting.Add(new Waiting(
+                "blocker_finding", blocker.FindingId, $"BLOCKER finding open{against}: {blocker.FindingTitle}",
+                DateTimeOffset.MinValue, q => $"work_status(ref:\"{q}\", to:\"done\")"));
+        }
+
+        foreach (var question in Every(await api.OpenQuestionsAsync(scopes, cancellationToken)))
+        {
+            waiting.Add(new Waiting(
+                "question", question.Id, "open question",
+                question.Since, q => $"work_status(ref:\"{q}\", to:\"done\")"));
+        }
+
+        foreach (var claim in Every(await board.ExpiredClaimsAsync(scopes, cancellationToken)))
+        {
+            var (on, tree) = claim.Tree is { } t ? ($" on tree \"{t}\"", $", tree:\"{t}\"") : (string.Empty, string.Empty);
+            waiting.Add(new Waiting(
+                "expired_claim", claim.ItemId, $"claim by {claim.AgentName}{on} expired",
+                claim.ExpiresAt, q => $"work_status(ref:\"{q}\", to:\"in_progress\"{tree})",
+                Actor: claim.AgentName, Tree: claim.Tree));
+        }
+
+        // Due when the revisit item closed or revisit_at passed (BoardReader.Due): one row per scope item, and an
+        // assumption that meets both is still counted once.
+        var assumptions = await board.AssumptionsAsync(snapshot.WorkspaceId, scopes, true, cancellationToken);
         foreach (var scope in scopes)
         {
-            foreach (var row in await api.BlockedOnAPersonAsync(scope, cancellationToken))
-            {
-                waiting.Add(new Waiting(
-                    "blocked", row.Id, "blocked, and nothing open blocks it — it waits on a decision",
-                    row.Since, q => $"work_status(ref:\"{q}\", to:\"in_progress\")"));
-            }
-
-            foreach (var blocker in await board.BlockerFindingsAsync(scope, cancellationToken))
-            {
-                var against = blocker.TargetRef is { Length: > 0 } target ? $" against {target}" : string.Empty;
-                waiting.Add(new Waiting(
-                    "blocker_finding", blocker.FindingId, $"BLOCKER finding open{against}: {blocker.FindingTitle}",
-                    DateTimeOffset.MinValue, q => $"work_status(ref:\"{q}\", to:\"done\")"));
-            }
-
-            foreach (var question in await api.OpenQuestionsAsync(scope, cancellationToken))
-            {
-                waiting.Add(new Waiting(
-                    "question", question.Id, "open question",
-                    question.Since, q => $"work_status(ref:\"{q}\", to:\"done\")"));
-            }
-
-            foreach (var claim in await board.ExpiredClaimsAsync(scope, cancellationToken))
-            {
-                var (on, tree) = claim.Tree is { } t ? ($" on tree \"{t}\"", $", tree:\"{t}\"") : (string.Empty, string.Empty);
-                waiting.Add(new Waiting(
-                    "expired_claim", claim.ItemId, $"claim by {claim.AgentName}{on} expired",
-                    claim.ExpiresAt, q => $"work_status(ref:\"{q}\", to:\"in_progress\"{tree})",
-                    Actor: claim.AgentName, Tree: claim.Tree));
-            }
-
-            // Due when the revisit item closed or revisit_at passed (BoardReader.Due): one row per scope item, and an
-            // assumption that meets both is still counted once.
-            var due = (await board.AssumptionsAsync(snapshot.WorkspaceId, scope, true, cancellationToken))
+            var due = assumptions[scope]
                 .Where(a => a.ScopeItemId is not null && BoardReader.Due(a, now))
                 .GroupBy(a => a.ScopeItemId!.Value);
 
@@ -126,36 +131,39 @@ public static partial class ApiV1
                     Detail: OneLine(first.Statement, count > 1 ? $" (+{count - 1} more)" : string.Empty),
                     Count: count));
             }
+        }
 
-            // deadlines: an open item past its due waits on whoever set the date — a person decides to finish it or
-            // move it. The window is 0: only what is overdue now, not what is merely due soon.
-            foreach (var overdue in (await board.DueSoonAsync(scope, null, now, 0, cancellationToken)).Where(d => d.Overdue))
-            {
-                waiting.Add(new Waiting(
-                    "overdue", overdue.Id, $"overdue: was due {overdue.Due}",
-                    overdue.DueEnd, q => $"work_update(ref:\"{q}\", due:\"…\") or finish it",
-                    Detail: OneLine($"due {overdue.Due}")));
-            }
+        // deadlines: an open item past its due waits on whoever set the date — a person decides to finish it or
+        // move it. The window is 0: only what is overdue now, not what is merely due soon.
+        foreach (var overdue in Every(await board.DueSoonAsync(scopes, null, now, 0, cancellationToken)).Where(d => d.Overdue))
+        {
+            waiting.Add(new Waiting(
+                "overdue", overdue.Id, $"overdue: was due {overdue.Due}",
+                overdue.DueEnd, q => $"work_update(ref:\"{q}\", due:\"…\") or finish it",
+                Detail: OneLine($"due {overdue.Due}")));
+        }
 
-            foreach (var unverified in await board.DoneUnverifiedAsync(scope, cancellationToken))
-            {
-                waiting.Add(new Waiting(
-                    "done_unverified", unverified.Id, "done with no orchestrator verification",
-                    unverified.ClosedAt ?? DateTimeOffset.MinValue,
-                    q => $"work_verify(ref:\"{q}\", result_line:\"…\", run_by:\"orchestrator\")"));
-            }
+        foreach (var unverified in Every(await board.DoneUnverifiedAsync(scopes, cancellationToken)))
+        {
+            waiting.Add(new Waiting(
+                "done_unverified", unverified.Id, "done with no orchestrator verification",
+                unverified.ClosedAt ?? DateTimeOffset.MinValue,
+                q => $"work_verify(ref:\"{q}\", result_line:\"…\", run_by:\"orchestrator\")"));
+        }
 
-            foreach (var stale in await board.StaleInProgressAsync(scope, StaleHours, cancellationToken))
-            {
-                waiting.Add(new Waiting(
-                    "stale_in_progress", stale.Id, "in_progress with no live claim",
-                    stale.StartedAt, q => $"work_status(ref:\"{q}\", to:\"in_progress\")"));
-            }
+        foreach (var stale in Every(await board.StaleInProgressAsync(scopes, StaleHours, cancellationToken)))
+        {
+            waiting.Add(new Waiting(
+                "stale_in_progress", stale.Id, "in_progress with no live claim",
+                stale.StartedAt, q => $"work_status(ref:\"{q}\", to:\"in_progress\")"));
+        }
 
-            var notes = await board.UnconsumedNotesAsync(
-                snapshot.WorkspaceId, scope, cancellationToken, openAddresseesOnly: true);
+        var notes = await board.UnconsumedNotesAsync(
+            snapshot.WorkspaceId, scopes, cancellationToken, openAddresseesOnly: true);
 
-            foreach (var addressed in notes.Where(n => n.ToItemId is not null).GroupBy(n => n.ToItemId!.Value))
+        foreach (var scope in scopes)
+        {
+            foreach (var addressed in notes[scope].Where(n => n.ToItemId is not null).GroupBy(n => n.ToItemId!.Value))
             {
                 waiting.Add(new Waiting(
                     "unconsumed_note", addressed.Key, $"{addressed.Count()} note(s) addressed to it unconsumed",

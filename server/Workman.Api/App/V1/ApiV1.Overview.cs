@@ -28,15 +28,12 @@ public static partial class ApiV1
         var inbox = await InboxRowsAsync(snapshot, scopes, book, board, api, webBase: null, clock.GetUtcNow(), cancellationToken);
         var inboxByRun = inbox.Where(r => r.Run is not null).GroupBy(r => r.Run!.Id).ToDictionary(g => g.Key, g => g.Count());
 
-        // The honesty strip, summed over projects exactly as work_audit counts it.
-        int doneUnverified = 0, forced = 0, ungated = 0, followupsOpen = 0;
-        foreach (var scope in scopes)
-        {
-            doneUnverified += (await board.DoneUnverifiedAsync(scope, cancellationToken)).Count;
-            forced += (await board.ForcedTransitionsAsync(scope, cancellationToken)).Count;
-            ungated += (await board.UngatedPhasesAsync(scope, cancellationToken)).Count;
-            followupsOpen += await board.OpenFollowupsAsync(scope, cancellationToken);
-        }
+        // The honesty strip, summed over projects exactly as work_audit counts it: each source reads every project in
+        // one command, through the query the per-project call runs.
+        var doneUnverified = (await board.DoneUnverifiedAsync(scopes, cancellationToken)).Sum(g => g.Count());
+        var forced = (await board.ForcedTransitionsAsync(scopes, cancellationToken)).Sum(g => g.Count());
+        var ungated = (await board.UngatedPhasesAsync(scopes, cancellationToken)).Sum(g => g.Count());
+        var followupsOpen = (await board.OpenFollowupsAsync(scopes, cancellationToken)).Values.Sum();
 
         var verified = (await api.LastVerificationsAsync(allRuns, cancellationToken)).ToDictionary(v => v.ScopeId);
         var repos = (await board.ProjectReposAsync(scopes, cancellationToken)).ToLookup(r => r.ProjectId);

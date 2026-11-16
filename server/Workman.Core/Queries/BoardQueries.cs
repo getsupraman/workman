@@ -439,41 +439,78 @@ public sealed partial class BoardQueries(NpgsqlDataSource dataSource)
         bool openOnly,
         CancellationToken cancellationToken = default)
     {
-        const string sql =
-            $$"""
-            SELECT a.ref            AS "Ref",
-                   CASE WHEN s.ref IS NULL THEN a.ref ELSE s.ref || '/' || a.ref END
-                                    AS "QualifiedRef",
-                   a.statement      AS "Statement",
-                   a.evidence       AS "Evidence",
-                   a.evidence_note  AS "EvidenceNote",
-                   a.reversal       AS "Reversal",
-                   a.state          AS "State",
-                   r.ref            AS "RevisitRef",
-                   r.status         AS "RevisitStatus",
-                   r.closed_at      AS "RevisitClosedAt",
-                   a.scope_item_id  AS "ScopeItemId",
-                   {{CallableAssumptionSql}}
-                                    AS "Callable",
-                   a.revisit_at     AS "RevisitAt"
-            FROM   assumption a
-            LEFT   JOIN item s ON s.id = a.ref_scope_id
-            LEFT   JOIN item r ON r.id = a.revisit_item_id
-            WHERE  a.workspace_id = @workspace
-              AND  (NOT @openOnly OR a.state = 'open')
-              AND  (@scope IS NULL
-                    OR a.scope_item_id = @scope
-                    OR EXISTS (SELECT 1 FROM item i
-                               WHERE i.id = a.scope_item_id
-                                 AND i.ancestors @> ARRAY[@scope]::uuid[]))
-            ORDER BY a.ref;
-            """;
+        if (scopeItemId is { } scope)
+        {
+            return [.. (await AssumptionsAsync(workspaceId, [scope], openOnly, cancellationToken))[scope]];
+        }
 
-        return await ListAsync<AssumptionRow>(
+        const string sql =
+            $"""
+             SELECT {AssumptionColumns}
+             FROM   assumption a
+             {AssumptionJoins}
+             ORDER BY a.ref;
+             """;
+
+        return await ListAsync<AssumptionRow>(sql, new { workspace = workspaceId, openOnly }, cancellationToken);
+    }
+
+    /// <summary>
+    /// <see cref="AssumptionsAsync(Guid, Guid?, bool, CancellationToken)"/> for many scopes in one command: an
+    /// assumption scoped to the scope or to anything beneath it.
+    /// </summary>
+    public async Task<ILookup<Guid, AssumptionRow>> AssumptionsAsync(
+        Guid workspaceId,
+        IReadOnlyCollection<Guid> scopeItemIds,
+        bool openOnly,
+        CancellationToken cancellationToken = default)
+    {
+        const string sql =
+            $"""
+             SELECT {AssumptionColumns},
+                    {Scoped.Column}
+             FROM   assumption a
+             JOIN   {Scoped.Scopes}
+                    ON (a.scope_item_id = sc.id
+                        OR EXISTS (SELECT 1 FROM item i
+                                   WHERE i.id = a.scope_item_id
+                                     AND i.ancestors @> ARRAY[sc.id]::uuid[]))
+             {AssumptionJoins}
+             ORDER BY a.ref;
+             """;
+
+        return await ScopedAsync<AssumptionRow>(
             sql,
-            new { workspace = workspaceId, scope = scopeItemId, openOnly },
+            new { workspace = workspaceId, scopes = Scoped.Ids(scopeItemIds), openOnly },
             cancellationToken);
     }
+
+    private const string AssumptionColumns =
+        $$"""
+        a.ref            AS "Ref",
+               CASE WHEN s.ref IS NULL THEN a.ref ELSE s.ref || '/' || a.ref END
+                                AS "QualifiedRef",
+               a.statement      AS "Statement",
+               a.evidence       AS "Evidence",
+               a.evidence_note  AS "EvidenceNote",
+               a.reversal       AS "Reversal",
+               a.state          AS "State",
+               r.ref            AS "RevisitRef",
+               r.status         AS "RevisitStatus",
+               r.closed_at      AS "RevisitClosedAt",
+               a.scope_item_id  AS "ScopeItemId",
+               {{CallableAssumptionSql}}
+                                AS "Callable",
+               a.revisit_at     AS "RevisitAt"
+        """;
+
+    private const string AssumptionJoins =
+        """
+        LEFT   JOIN item s ON s.id = a.ref_scope_id
+        LEFT   JOIN item r ON r.id = a.revisit_item_id
+        WHERE  a.workspace_id = @workspace
+          AND  (NOT @openOnly OR a.state = 'open')
+        """;
 
     /// <summary>
     /// FINDINGS-live F-L3: every imported note of a run shares one <c>created_at</c>, so ordering on
@@ -492,50 +529,95 @@ public sealed partial class BoardQueries(NpgsqlDataSource dataSource)
         CancellationToken cancellationToken = default,
         bool openAddresseesOnly = false)
     {
+        if (scopeItemId is { } scope)
+        {
+            return [.. (await UnconsumedNotesAsync(workspaceId, [scope], cancellationToken, openAddresseesOnly))[scope]];
+        }
+
         const string sql =
-            """
-            SELECT n.kind  AS "Kind",
-                   n.body  AS "Body",
-                   t.ref   AS "ToRef",
-                   CASE WHEN ts.ref IS NULL THEN t.ref ELSE ts.ref || '/' || t.ref END
-                          AS "ToQualifiedRef",
-                   f.ref   AS "FromRef",
-                   n.id    AS "Id",
-                   n.to_item_id AS "ToItemId",
-                   n.created_at AS "CreatedAt"
-            FROM   note n
-            LEFT   JOIN item t  ON t.id  = n.to_item_id
-            LEFT   JOIN item ts ON ts.id = t.ref_scope_id AND ts.id <> t.id
-            LEFT   JOIN item f  ON f.id  = n.from_item_id
-            WHERE  n.workspace_id = @workspace
-              AND  n.consumed_at IS NULL
-              AND  (NOT @openOnly
-                    OR n.to_item_id IS NULL
-                    OR t.status NOT IN ('done','cancelled','superseded'))
-              AND  (@scope IS NULL
-                    OR n.to_item_id = @scope
-                    OR n.from_item_id = @scope
-                    OR EXISTS (SELECT 1 FROM item i
-                               WHERE i.id IN (n.to_item_id, n.from_item_id)
-                                 AND i.ancestors @> ARRAY[@scope]::uuid[]))
-            ORDER BY (n.to_item_id IS NOT NULL) DESC,
-                     CASE n.kind
-                       WHEN 'correction'      THEN 0
-                       WHEN 'incident'        THEN 1
-                       WHEN 'carry_forward'   THEN 2
-                       WHEN 'do_not_rederive' THEN 3
-                       WHEN 'decision'        THEN 4
-                       WHEN 'environment'     THEN 5
-                       ELSE 6 END,
-                     n.created_at DESC,
-                     n.id DESC;
-            """;
+            $"""
+             SELECT {NoteColumns}
+             FROM   note n
+             {NoteJoins}
+             {NoteOrder};
+             """;
 
         return await ListAsync<NoteRow>(
             sql,
-            new { workspace = workspaceId, scope = scopeItemId, openOnly = openAddresseesOnly },
+            new { workspace = workspaceId, openOnly = openAddresseesOnly },
             cancellationToken);
     }
+
+    /// <summary>
+    /// <see cref="UnconsumedNotesAsync(Guid, Guid?, CancellationToken, bool)"/> for many scopes in one command: a
+    /// note to or from the scope or anything beneath it.
+    /// </summary>
+    public async Task<ILookup<Guid, NoteRow>> UnconsumedNotesAsync(
+        Guid workspaceId,
+        IReadOnlyCollection<Guid> scopeItemIds,
+        CancellationToken cancellationToken = default,
+        bool openAddresseesOnly = false)
+    {
+        const string sql =
+            $"""
+             SELECT {NoteColumns},
+                    {Scoped.Column}
+             FROM   note n
+             JOIN   {Scoped.Scopes}
+                    ON (n.to_item_id = sc.id
+                        OR n.from_item_id = sc.id
+                        OR EXISTS (SELECT 1 FROM item i
+                                   WHERE i.id IN (n.to_item_id, n.from_item_id)
+                                     AND i.ancestors @> ARRAY[sc.id]::uuid[]))
+             {NoteJoins}
+             {NoteOrder};
+             """;
+
+        return await ScopedAsync<NoteRow>(
+            sql,
+            new { workspace = workspaceId, scopes = Scoped.Ids(scopeItemIds), openOnly = openAddresseesOnly },
+            cancellationToken);
+    }
+
+    private const string NoteColumns =
+        """
+        n.kind  AS "Kind",
+               n.body  AS "Body",
+               t.ref   AS "ToRef",
+               CASE WHEN ts.ref IS NULL THEN t.ref ELSE ts.ref || '/' || t.ref END
+                      AS "ToQualifiedRef",
+               f.ref   AS "FromRef",
+               n.id    AS "Id",
+               n.to_item_id AS "ToItemId",
+               n.created_at AS "CreatedAt"
+        """;
+
+    private const string NoteJoins =
+        """
+        LEFT   JOIN item t  ON t.id  = n.to_item_id
+        LEFT   JOIN item ts ON ts.id = t.ref_scope_id AND ts.id <> t.id
+        LEFT   JOIN item f  ON f.id  = n.from_item_id
+        WHERE  n.workspace_id = @workspace
+          AND  n.consumed_at IS NULL
+          AND  (NOT @openOnly
+                OR n.to_item_id IS NULL
+                OR t.status NOT IN ('done','cancelled','superseded'))
+        """;
+
+    private const string NoteOrder =
+        """
+        ORDER BY (n.to_item_id IS NOT NULL) DESC,
+                 CASE n.kind
+                   WHEN 'correction'      THEN 0
+                   WHEN 'incident'        THEN 1
+                   WHEN 'carry_forward'   THEN 2
+                   WHEN 'do_not_rederive' THEN 3
+                   WHEN 'decision'        THEN 4
+                   WHEN 'environment'     THEN 5
+                   ELSE 6 END,
+                 n.created_at DESC,
+                 n.id DESC
+        """;
 
     public async Task<VerificationRow?> LastVerificationAsync(
         Guid scopeItemId,
@@ -664,6 +746,12 @@ public sealed partial class BoardQueries(NpgsqlDataSource dataSource)
     public async Task<IReadOnlyList<BlockerRow>> BlockerFindingsAsync(
         Guid scopeItemId,
         CancellationToken cancellationToken = default)
+        => [.. (await BlockerFindingsAsync([scopeItemId], cancellationToken))[scopeItemId]];
+
+    /// <summary><see cref="BlockerFindingsAsync(Guid, CancellationToken)"/> for many scopes in one command.</summary>
+    public async Task<ILookup<Guid, BlockerRow>> BlockerFindingsAsync(
+        IReadOnlyCollection<Guid> scopeItemIds,
+        CancellationToken cancellationToken = default)
     {
         const string sql =
             $"""
@@ -672,18 +760,19 @@ public sealed partial class BoardQueries(NpgsqlDataSource dataSource)
                            AS "QualifiedRef",
                     i.title AS "FindingTitle",
                     t.ref   AS "TargetRef",
-                    i.id    AS "FindingId"
+                    i.id    AS "FindingId",
+                    {Scoped.Column}
              FROM   item i
+             {Scoped.JoinItem}
              LEFT   JOIN item s ON s.id = i.ref_scope_id AND s.id <> i.id
              LEFT   JOIN item t ON t.id = i.parent_id
              WHERE  i.kind = 'finding'
                AND  i.severity = 'blocker'
                AND  i.status NOT IN ('done','cancelled','superseded')
-               AND  {InScope}
              ORDER  BY i.ref;
              """;
 
-        return await ListAsync<BlockerRow>(sql, new { scope = scopeItemId }, cancellationToken);
+        return await ScopedAsync<BlockerRow>(sql, new { scopes = Scoped.Ids(scopeItemIds) }, cancellationToken);
     }
 
     /// <summary>
@@ -723,20 +812,28 @@ public sealed partial class BoardQueries(NpgsqlDataSource dataSource)
     public async Task<IReadOnlyList<ClaimRow>> ExpiredClaimsAsync(
         Guid scopeItemId,
         CancellationToken cancellationToken = default)
+        => [.. (await ExpiredClaimsAsync([scopeItemId], cancellationToken))[scopeItemId]];
+
+    /// <summary><see cref="ExpiredClaimsAsync(Guid, CancellationToken)"/> for many scopes in one command.</summary>
+    public async Task<ILookup<Guid, ClaimRow>> ExpiredClaimsAsync(
+        IReadOnlyCollection<Guid> scopeItemIds,
+        CancellationToken cancellationToken = default)
     {
         const string sql =
             $"""
-             SELECT "ItemRef", "QualifiedRef", "AgentName", "ExpiresAt", "Tree", item_id AS "ItemId" FROM (
-               SELECT DISTINCT ON (c.item_id)
+             SELECT "ItemRef", "QualifiedRef", "AgentName", "ExpiresAt", "Tree", item_id AS "ItemId", "ForScope" FROM (
+               SELECT DISTINCT ON (sc.id, c.item_id)
                       i.ref        AS "ItemRef",
                       CASE WHEN s.ref IS NULL THEN i.ref ELSE s.ref || '/' || i.ref END
                                    AS "QualifiedRef",
                       coalesce(hs.name, c.agent_name) AS "AgentName",
                       c.expires_at AS "ExpiresAt",
                       c.tree       AS "Tree",
-                      c.item_id
+                      c.item_id,
+                      {Scoped.Column}
                FROM   claim c
                JOIN   item i ON i.id = c.item_id
+               {Scoped.JoinItem}
                LEFT   JOIN item s ON s.id = i.ref_scope_id AND s.id <> i.id
                LEFT   JOIN agent_session hs ON hs.id = c.session_id
                WHERE  c.expires_at < now()
@@ -746,13 +843,12 @@ public sealed partial class BoardQueries(NpgsqlDataSource dataSource)
                                   WHERE live.item_id = c.item_id
                                     AND live.released_at IS NULL
                                     AND live.expires_at >= now())
-                 AND  {InScope}
-               ORDER  BY c.item_id, c.expires_at DESC
+               ORDER  BY sc.id, c.item_id, c.expires_at DESC
              ) lapsed
              ORDER  BY "ExpiresAt";
              """;
 
-        return await ListAsync<ClaimRow>(sql, new { scope = scopeItemId }, cancellationToken);
+        return await ScopedAsync<ClaimRow>(sql, new { scopes = Scoped.Ids(scopeItemIds) }, cancellationToken);
     }
 
     /// <summary>
@@ -797,6 +893,13 @@ public sealed partial class BoardQueries(NpgsqlDataSource dataSource)
         Guid scopeItemId,
         int hours,
         CancellationToken cancellationToken = default)
+        => [.. (await StaleInProgressAsync([scopeItemId], hours, cancellationToken))[scopeItemId]];
+
+    /// <summary><see cref="StaleInProgressAsync(Guid, int, CancellationToken)"/> for many scopes in one command.</summary>
+    public async Task<ILookup<Guid, StaleRow>> StaleInProgressAsync(
+        IReadOnlyCollection<Guid> scopeItemIds,
+        int hours,
+        CancellationToken cancellationToken = default)
     {
         const string sql =
             $"""
@@ -804,19 +907,20 @@ public sealed partial class BoardQueries(NpgsqlDataSource dataSource)
                     CASE WHEN s.ref IS NULL THEN i.ref ELSE s.ref || '/' || i.ref END
                                  AS "QualifiedRef",
                     i.started_at AS "StartedAt",
-                    i.id         AS "Id"
+                    i.id         AS "Id",
+                    {Scoped.Column}
              FROM   item i
+             {Scoped.JoinItem}
              LEFT   JOIN item s ON s.id = i.ref_scope_id AND s.id <> i.id
              WHERE  i.status = 'in_progress'
                AND  i.started_at IS NOT NULL
                AND  i.started_at < now() - make_interval(hours => @hours)
                AND  NOT EXISTS (SELECT 1 FROM claim c
                                 WHERE c.item_id = i.id AND c.released_at IS NULL AND c.expires_at >= now())
-               AND  {InScope}
              ORDER  BY i.started_at;
              """;
 
-        return await ListAsync<StaleRow>(sql, new { scope = scopeItemId, hours }, cancellationToken);
+        return await ScopedAsync<StaleRow>(sql, new { scopes = Scoped.Ids(scopeItemIds), hours }, cancellationToken);
     }
 
     /// <summary>
@@ -828,26 +932,33 @@ public sealed partial class BoardQueries(NpgsqlDataSource dataSource)
     public async Task<IReadOnlyList<GateRow>> UngatedPhasesAsync(
         Guid scopeItemId,
         CancellationToken cancellationToken = default)
+        => [.. (await UngatedPhasesAsync([scopeItemId], cancellationToken))[scopeItemId]];
+
+    /// <summary><see cref="UngatedPhasesAsync(Guid, CancellationToken)"/> for many scopes in one command.</summary>
+    public async Task<ILookup<Guid, GateRow>> UngatedPhasesAsync(
+        IReadOnlyCollection<Guid> scopeItemIds,
+        CancellationToken cancellationToken = default)
     {
         const string sql =
             $"""
              SELECT p.ref                 AS "PhaseRef",
                     CASE WHEN s.ref IS NULL THEN p.ref ELSE s.ref || '/' || p.ref END
                                           AS "QualifiedRef",
-                    count(*)::int         AS "TaskCount"
+                    count(*)::int         AS "TaskCount",
+                    {Scoped.Column}
              FROM   item p
+             JOIN   {Scoped.Scopes} ON (p.id = sc.id OR p.ancestors @> ARRAY[sc.id]::uuid[])
              JOIN   item c ON c.ancestors @> ARRAY[p.id]::uuid[] AND c.kind IN ('task','subtask')
              LEFT   JOIN item s ON s.id = p.ref_scope_id AND s.id <> p.id
              WHERE  p.kind = 'phase'
                AND  p.status NOT IN ('done','cancelled','superseded')
-               AND  (p.id = @scope OR p.ancestors @> ARRAY[@scope]::uuid[])
-             GROUP  BY p.id, p.ref, p.seq, s.ref
+             GROUP  BY sc.id, p.id, p.ref, p.seq, s.ref
              HAVING count(*) FILTER (
                       WHERE c.status NOT IN ('done','cancelled','superseded')) = 0
              ORDER  BY p.seq;
              """;
 
-        return await ListAsync<GateRow>(sql, new { scope = scopeItemId }, cancellationToken);
+        return await ScopedAsync<GateRow>(sql, new { scopes = Scoped.Ids(scopeItemIds) }, cancellationToken);
     }
 
     /// <summary>
@@ -862,6 +973,12 @@ public sealed partial class BoardQueries(NpgsqlDataSource dataSource)
     public async Task<IReadOnlyList<UnverifiedRow>> DoneUnverifiedAsync(
         Guid scopeItemId,
         CancellationToken cancellationToken = default)
+        => [.. (await DoneUnverifiedAsync([scopeItemId], cancellationToken))[scopeItemId]];
+
+    /// <summary><see cref="DoneUnverifiedAsync(Guid, CancellationToken)"/> for many scopes in one command.</summary>
+    public async Task<ILookup<Guid, UnverifiedRow>> DoneUnverifiedAsync(
+        IReadOnlyCollection<Guid> scopeItemIds,
+        CancellationToken cancellationToken = default)
     {
         const string sql =
             $"""
@@ -869,20 +986,21 @@ public sealed partial class BoardQueries(NpgsqlDataSource dataSource)
                     CASE WHEN s.ref IS NULL THEN i.ref ELSE s.ref || '/' || i.ref END
                          AS "QualifiedRef",
                     i.id        AS "Id",
-                    i.closed_at AS "ClosedAt"
+                    i.closed_at AS "ClosedAt",
+                    {Scoped.Column}
              FROM   item i
+             {Scoped.JoinItem}
              JOIN   item_kind k ON k.key = i.kind
              LEFT   JOIN item s ON s.id = i.ref_scope_id AND s.id <> i.id
              WHERE  i.status = 'done'
                AND  i.resolution <> 'obsolete'
                AND  k.requires_verify
-               AND  {InScope}
                AND  NOT EXISTS (SELECT 1 FROM verification v
                                 WHERE v.item_id = i.id AND v.passed AND v.run_by = 'orchestrator')
              ORDER  BY i.closed_at DESC NULLS LAST, i.ref;
              """;
 
-        return await ListAsync<UnverifiedRow>(sql, new { scope = scopeItemId }, cancellationToken);
+        return await ScopedAsync<UnverifiedRow>(sql, new { scopes = Scoped.Ids(scopeItemIds) }, cancellationToken);
     }
 
     /// <summary>
@@ -1010,6 +1128,12 @@ public sealed partial class BoardQueries(NpgsqlDataSource dataSource)
     public async Task<IReadOnlyList<AuditRow>> ForcedTransitionsAsync(
         Guid scopeItemId,
         CancellationToken cancellationToken = default)
+        => [.. (await ForcedTransitionsAsync([scopeItemId], cancellationToken))[scopeItemId]];
+
+    /// <summary><see cref="ForcedTransitionsAsync(Guid, CancellationToken)"/> for many scopes in one command.</summary>
+    public async Task<ILookup<Guid, AuditRow>> ForcedTransitionsAsync(
+        IReadOnlyCollection<Guid> scopeItemIds,
+        CancellationToken cancellationToken = default)
     {
         const string sql =
             $"""
@@ -1019,15 +1143,16 @@ public sealed partial class BoardQueries(NpgsqlDataSource dataSource)
                       || coalesce(nullif(e.payload->>'reason', ''), 'no reason recorded') AS "Problem",
                     'work_verify(ref:"' || i.ref || '", result_line:"…", run_by:"orchestrator") to '
                       || 'record the evidence it closed without, or work_note(kind:"decision", '
-                      || 'body:"…") to accept it on the record'                            AS "Route"
+                      || 'body:"…") to accept it on the record'                            AS "Route",
+                    {Scoped.Column}
              FROM   event e
              JOIN   item i ON i.id = e.item_id
+             {Scoped.JoinItem}
              WHERE  e.kind = 'forced_transition'
-               AND  {InScope}
              ORDER  BY e.seq DESC;
              """;
 
-        return await ListAsync<AuditRow>(sql, new { scope = scopeItemId }, cancellationToken);
+        return await ScopedAsync<AuditRow>(sql, new { scopes = Scoped.Ids(scopeItemIds) }, cancellationToken);
     }
 
     /// <summary>doc 01 §5 check #5: a superseded item that open work still points at.</summary>
@@ -1181,17 +1306,25 @@ public sealed partial class BoardQueries(NpgsqlDataSource dataSource)
     public async Task<int> OpenFollowupsAsync(
         Guid scopeItemId,
         CancellationToken cancellationToken = default)
+        => (await OpenFollowupsAsync([scopeItemId], cancellationToken)).GetValueOrDefault(scopeItemId);
+
+    /// <summary><see cref="OpenFollowupsAsync(Guid, CancellationToken)"/> for many scopes in one command; a scope with none is absent.</summary>
+    public async Task<IReadOnlyDictionary<Guid, int>> OpenFollowupsAsync(
+        IReadOnlyCollection<Guid> scopeItemIds,
+        CancellationToken cancellationToken = default)
     {
         const string sql =
             $"""
-             SELECT count(*)::int
+             SELECT sc.id AS "Scope", count(*)::int AS "Count"
              FROM   item i
+             {Scoped.JoinItem}
              WHERE  i.kind = 'followup'
                AND  i.status NOT IN ('done','cancelled','superseded')
-               AND  {InScope};
+             GROUP  BY sc.id;
              """;
 
-        return await SingleAsync<int>(sql, new { scope = scopeItemId }, cancellationToken);
+        return (await ListAsync<ScopeCount>(sql, new { scopes = Scoped.Ids(scopeItemIds) }, cancellationToken))
+            .ToDictionary(c => c.Scope, c => c.Count);
     }
 
     /// <summary>
@@ -1233,6 +1366,9 @@ public sealed partial class BoardQueries(NpgsqlDataSource dataSource)
         return await connection.QuerySingleOrDefaultAsync<T>(
             new CommandDefinition(sql, parameters, cancellationToken: cancellationToken));
     }
+
+    private Task<ILookup<Guid, T>> ScopedAsync<T>(string sql, object parameters, CancellationToken cancellationToken)
+        => Scoped.ListAsync<T>(_connections, sql, parameters, cancellationToken);
 
     private async Task<IReadOnlyList<T>> ListAsync<T>(
         string sql,
