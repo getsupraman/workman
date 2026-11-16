@@ -1,7 +1,9 @@
 import { For, Index, Show, createSignal } from 'solid-js'
 import { A } from '@solidjs/router'
 import { setArchived, type Claim, type ProjectOverview, type RunOverview } from '../api.ts'
-import { account, bars, inbox, overview, refreshOverview } from '../store.ts'
+import * as api from '../api.ts'
+import { account, bars, inbox, load, overview, refreshOverview } from '../store.ts'
+import { promptChunks, promptScopes, promptsByScope } from '../prompts.ts'
 import { CLOSED, barTally, countTitle, counted, refState } from '../state.ts'
 import { backlogHref, inboxHref, itemHref, projectHref, runHref } from '../nav.ts'
 import { forController, honestyCells, needsYou, needsYouCount, openTasks } from '../inbox.ts'
@@ -11,7 +13,7 @@ import { UNKNOWN, ago, claimHolder, clock, day, plural, projectName, projectTagl
 import { membersHref, shareMarker } from '../sharing.ts'
 import { CopyRef, Dot, Known, Legend, ProjectName, Segs } from '../ui.tsx'
 import { InboxRowView } from './Inbox.tsx'
-import { PromptActions } from './Prompts.tsx'
+import { PromptActions, SharedPrompts } from './Prompts.tsx'
 
 const INBOX_SHOWN = 5
 
@@ -19,6 +21,11 @@ export default function Overview() {
   const [showArchived, setShowArchived] = createSignal(false)
   const live = () => (overview()?.projects ?? []).filter((p) => !p.archivedAt).sort(byActivity)
   const archived = () => (overview()?.projects ?? []).filter((p) => p.archivedAt).sort(byActivity)
+  // Every card's prompts in one read (one per PROMPTS_MAX ids), not one per card.
+  const prompts = load(
+    () => promptScopes(overview()),
+    async (key) => promptsByScope(await Promise.all(promptChunks(key).map(api.manyPrompts))),
+  )
 
   const sub = () => {
     const o = overview()
@@ -34,126 +41,128 @@ export default function Overview() {
   }
 
   return (
-    <div class="page">
-      <div class="page-h">
-        <div>
-          <h1>Overview</h1>
-          <div class="sub">{sub()}</div>
-        </div>
-        <Show when={overview()}>{(o) => <div class="stamp">As of {day(o().asOf)}, {clock(o().asOf)}</div>}</Show>
-      </div>
-
-      <div class="stack">
-        <div class="grid-2">
-          <div class="panel">
-            <div class="panel-h">
-              <h2>Needs you</h2>
-              <span class="n">{needsYouCount(inbox()) ?? UNKNOWN}</span>
-              <A class="r" href="/inbox">
-                Open inbox
-              </A>
-            </div>
-            <Known value={inbox()}>
-              {(box) => {
-                const human = () => needsYou(box().rows)
-                const chores = () => forController(box().rows).length
-                return (
-                  <>
-                    <Index each={human().slice(0, INBOX_SHOWN)} fallback={<div class="empty">Nothing needs you.</div>}>
-                      {(row) => <InboxRowView row={row()} asOf={box().asOf} href={inboxHref(row().item.id)} compact />}
-                    </Index>
-                    <Show when={human().length > INBOX_SHOWN}>
-                      <A class="row-more" href="/inbox">
-                        +{human().length - INBOX_SHOWN} more in the inbox
-                      </A>
-                    </Show>
-                    <Show when={chores() > 0}>
-                      <A class="row-more" href="/inbox">
-                        {chores()} housekeeping {plural(chores(), 'item')} for the controller
-                      </A>
-                    </Show>
-                  </>
-                )
-              }}
-            </Known>
+    <SharedPrompts.Provider value={prompts.data}>
+      <div class="page">
+        <div class="page-h">
+          <div>
+            <h1>Overview</h1>
+            <div class="sub">{sub()}</div>
           </div>
+          <Show when={overview()}>{(o) => <div class="stamp">As of {day(o().asOf)}, {clock(o().asOf)}</div>}</Show>
+        </div>
 
-          <div class="stack">
+        <div class="stack">
+          <div class="grid-2">
             <div class="panel">
               <div class="panel-h">
-                <h2>Working now</h2>
-                <span class="n">{overview()?.workingNow.length ?? UNKNOWN}</span>
+                <h2>Needs you</h2>
+                <span class="n">{needsYouCount(inbox()) ?? UNKNOWN}</span>
+                <A class="r" href="/inbox">
+                  Open inbox
+                </A>
               </div>
-              <Known value={overview()}>
-                {(o) => (
-                  <Index each={o().workingNow} fallback={<div class="empty">No agent holds a claim.</div>}>
-                    {(claim) => <ClaimRow claim={claim()} asOf={o().asOf} />}
-                  </Index>
-                )}
+              <Known value={inbox()}>
+                {(box) => {
+                  const human = () => needsYou(box().rows)
+                  const chores = () => forController(box().rows).length
+                  return (
+                    <>
+                      <Index each={human().slice(0, INBOX_SHOWN)} fallback={<div class="empty">Nothing needs you.</div>}>
+                        {(row) => <InboxRowView row={row()} asOf={box().asOf} href={inboxHref(row().item.id)} compact />}
+                      </Index>
+                      <Show when={human().length > INBOX_SHOWN}>
+                        <A class="row-more" href="/inbox">
+                          +{human().length - INBOX_SHOWN} more in the inbox
+                        </A>
+                      </Show>
+                      <Show when={chores() > 0}>
+                        <A class="row-more" href="/inbox">
+                          {chores()} housekeeping {plural(chores(), 'item')} for the controller
+                        </A>
+                      </Show>
+                    </>
+                  )
+                }}
               </Known>
             </div>
 
-            <div class="panel">
-              <div class="counts">
-                <Show
-                  when={overview()}
-                  fallback={
-                    <For each={['closed without independent proof', 'forced closures', 'follow-ups open', 'tasks open']}>
-                      {(label) => (
-                        <div class="count">
-                          <strong>{UNKNOWN}</strong>
-                          <span>{label}</span>
-                        </div>
-                      )}
-                    </For>
-                  }
-                >
+            <div class="stack">
+              <div class="panel">
+                <div class="panel-h">
+                  <h2>Working now</h2>
+                  <span class="n">{overview()?.workingNow.length ?? UNKNOWN}</span>
+                </div>
+                <Known value={overview()}>
                   {(o) => (
-                    <For each={honestyCells(o().honesty, o().projects)}>
-                      {(cell) => (
-                        <div class="count">
-                          <strong class={cell.bad ? 'bad' : ''}>{cell.n}</strong>
-                          <span>{cell.label}</span>
-                        </div>
-                      )}
-                    </For>
+                    <Index each={o().workingNow} fallback={<div class="empty">No agent holds a claim.</div>}>
+                      {(claim) => <ClaimRow claim={claim()} asOf={o().asOf} />}
+                    </Index>
                   )}
-                </Show>
+                </Known>
+              </div>
+
+              <div class="panel">
+                <div class="counts">
+                  <Show
+                    when={overview()}
+                    fallback={
+                      <For each={['closed without independent proof', 'forced closures', 'follow-ups open', 'tasks open']}>
+                        {(label) => (
+                          <div class="count">
+                            <strong>{UNKNOWN}</strong>
+                            <span>{label}</span>
+                          </div>
+                        )}
+                      </For>
+                    }
+                  >
+                    {(o) => (
+                      <For each={honestyCells(o().honesty, o().projects)}>
+                        {(cell) => (
+                          <div class="count">
+                            <strong class={cell.bad ? 'bad' : ''}>{cell.n}</strong>
+                            <span>{cell.label}</span>
+                          </div>
+                        )}
+                      </For>
+                    )}
+                  </Show>
+                </div>
               </div>
             </div>
           </div>
-        </div>
 
-        <Known value={overview()} class="panel empty">
-          {(o) => (
-            <>
-              <Index
-                each={live()}
-                fallback={
-                  <div class="panel empty">
-                    {o().projects.length === 0 ? 'No project has been created yet.' : 'Every project is archived.'}
-                  </div>
-                }
-              >
-                {(project) => <ProjectPanel project={project()} />}
-              </Index>
-              <Show when={archived().length > 0}>
-                <button type="button" class="archived-link" aria-expanded={showArchived()} onClick={() => setShowArchived(!showArchived())}>
-                  {showArchived()
-                    ? `Hide ${archived().length} archived ${plural(archived().length, 'project')}`
-                    : `${archived().length} archived ${plural(archived().length, 'project')}`}
-                </button>
-                <Show when={showArchived()}>
-                  <Index each={archived()}>{(project) => <ProjectPanel project={project()} />}</Index>
+          <Known value={overview()} class="panel empty">
+            {(o) => (
+              <>
+                <Index
+                  each={live()}
+                  fallback={
+                    <div class="panel empty">
+                      {o().projects.length === 0 ? 'No project has been created yet.' : 'Every project is archived.'}
+                    </div>
+                  }
+                >
+                  {(project) => <ProjectPanel project={project()} />}
+                </Index>
+                <Show when={archived().length > 0}>
+                  <button type="button" class="archived-link" aria-expanded={showArchived()} onClick={() => setShowArchived(!showArchived())}>
+                    {showArchived()
+                      ? `Hide ${archived().length} archived ${plural(archived().length, 'project')}`
+                      : `${archived().length} archived ${plural(archived().length, 'project')}`}
+                  </button>
+                  <Show when={showArchived()}>
+                    <Index each={archived()}>{(project) => <ProjectPanel project={project()} />}</Index>
+                  </Show>
                 </Show>
-              </Show>
-            </>
-          )}
-        </Known>
+              </>
+            )}
+          </Known>
 
-        <Legend />
+          <Legend />
+        </div>
       </div>
-    </div>
+    </SharedPrompts.Provider>
   )
 }
 

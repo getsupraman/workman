@@ -20,6 +20,7 @@ import { MEMBERS_ANCHOR, memberLine, membersHref, projectOnPath, shareMarker } f
 import { PHONE_QUERY, closesOnMove, pageName } from '../src/menu.ts'
 import { appLine, connectionLine, feedStatus, groupApps, groupLine, revokeWarning, sessionsLabel } from '../src/apps.ts'
 import { BOARDS_MAX, boardsRead } from '../src/boards.ts'
+import { PROMPTS_MAX, promptChunks, promptScopes, promptsByScope } from '../src/prompts.ts'
 import { asInboxFilter, cardFacts, choreRow, decisionRow, filterInbox, forController, groupHousekeeping, inboxOrder, keepSelected, needsYou, needsYouCount, rowProject, withInboxFilter } from '../src/inbox.ts'
 import { expiresIn, isLastAdmin, isLinkPath, joinStep, joinToken, nameProblem, passwordMessage, passwordProblem, resetStep, resetToken, roleLabel, showSwitcher, slugFrom, slugProblem } from '../src/admin.ts'
 import { addDays, agendaGroups, agendaOrder, agendaRowFacts, agendaUntil, dateChips, dayHeading, dueEnd, zonedDay } from '../src/dates.ts'
@@ -1152,6 +1153,31 @@ console.log('\n── barTally(): /bars leaves draw what tally() drew from the b
   check('the store reads api.bars()', /api\.bars\(/.test(sources[0]), true)
 }
 
+{
+  console.log('\nOverview prompts: one read for every card')
+  const project = (id, archivedAt = null) => ({ item: { id }, archivedAt, runs: [] })
+  check('no overview yet asks nothing', promptScopes(undefined), undefined)
+  check('no project asks nothing', promptScopes({ projects: [] }), undefined)
+  check('every card, archived too, in order', promptScopes({ projects: [project('p2'), project('p1', '2026-11-01T00:00:00Z')] }), 'p2,p1')
+  check('the server limit is the client limit', PROMPTS_MAX, 200)
+  check('a key within the limit is one read', promptChunks('a,b,c').length, 1)
+  const many = Array.from({ length: PROMPTS_MAX * 2 + 1 }, (_, i) => `p${i}`).join(',')
+  check('past the limit, one read per chunk', promptChunks(many).map((c) => c.length), [PROMPTS_MAX, PROMPTS_MAX, 1])
+  const prompt = (key) => ({ key, label: key, count: null, text: key })
+  const read = (scopes) => ({ asOf: '', seq: 0, scopes: scopes.map(([id, keys]) => ({ scope: { id }, prompts: keys.map(prompt) })) })
+  check(
+    'each card gets its own scope\'s prompts',
+    promptsByScope([read([['p1', ['continue']], ['p2', ['status', 'plan']]]), read([['p3', []]])]),
+    { p1: [prompt('continue')], p2: [prompt('status'), prompt('plan')], p3: [] },
+  )
+  check('a scope the read left out has none', promptsByScope([read([['p1', ['continue']]])]).p9, undefined)
+
+  const read2 = (path) => readFileSync(new URL(path, import.meta.url), 'utf8')
+  const overviewSource = read2('../src/views/Overview.tsx')
+  check('Overview never calls api.prompts( per card', /\bapi\.prompts\(/.test(overviewSource), false)
+  check('Overview reads api.manyPrompts once and provides it', [/\bapi\.manyPrompts\b/.test(overviewSource), /<SharedPrompts\.Provider\b/.test(overviewSource)], [true, true])
+  check('a card reads its own scope only without a provider', /shared === undefined \? load\(/.test(read2('../src/views/Prompts.tsx')), true)
+}
 
 console.log(failures === 0 ? '\nAll checks passed.' : `\n${failures} check(s) failed.`)
 if (failures > 0) process.exitCode = 1

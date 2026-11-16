@@ -349,6 +349,9 @@ export type Prompt = { key: string; label: string; count: number | null; text: s
 
 export type Prompts = { asOf: string; seq: number; scope: ItemRef; prompts: Prompt[] }
 
+/** `/api/v1/prompts?scopes=`: each scope asked for and seen, in the order asked, with what `scope=` returns for it. */
+export type ManyPrompts = { asOf: string; seq: number; scopes: { scope: ItemRef; prompts: Prompt[] }[] }
+
 /** `ref`: the query is the item's ref (resolve's rule); `prefix`: its ref starts with it; `text`: full text. */
 export type SearchMatch = 'ref' | 'prefix' | 'text'
 
@@ -436,6 +439,9 @@ export const journal = (limit: number) => json<JournalPage>(`/api/v1/journal?lim
 export const backlog = (project: string) => json<Backlog>(`/api/v1/backlog?project=${id(project)}`)
 
 export const prompts = (scope: string) => json<Prompts>(`/api/v1/prompts?scope=${id(scope)}`)
+
+/** Many scopes' prompts in one read; the server refuses more than `PROMPTS_MAX` ids (`prompts.ts` splits for it). */
+export const manyPrompts = (scopes: string[]) => json<ManyPrompts>(`/api/v1/prompts?scopes=${scopes.map(id).join(',')}`)
 
 export const sessions = () => json<Sessions>('/api/v1/sessions')
 

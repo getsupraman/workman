@@ -1,20 +1,28 @@
-import { For, Show, createEffect, createSignal, on } from 'solid-js'
+import { For, Show, createContext, createEffect, createSignal, on, useContext, type Accessor } from 'solid-js'
 import * as api from '../api.ts'
 import { load } from '../store.ts'
+
+/**
+ * Prompts read for many scopes at once, by scope id (the Overview's one `scopes=` read). A card under a provider
+ * shows what it holds and never reads on its own; elsewhere a card reads its own scope.
+ */
+export const SharedPrompts = createContext<Accessor<Record<string, api.Prompt[]> | undefined>>()
 
 /**
  * The prompt actions that apply to one scope (doc 13). A button opens the whole prompt beside it;
  * Copy puts it on the clipboard for a fresh session. The dashboard never acts on it itself.
  */
 export function PromptActions(props: { scope: string }) {
-  const prompts = load(() => props.scope, api.prompts)
+  const shared = useContext(SharedPrompts)
+  const own = shared === undefined ? load(() => props.scope, api.prompts) : undefined
+  const prompts = () => (shared === undefined ? own?.data()?.prompts : shared()?.[props.scope])
   const [open, setOpen] = createSignal<string>()
-  const shown = () => prompts.data()?.prompts.find((p) => p.key === open())
+  const shown = () => prompts()?.find((p) => p.key === open())
 
   return (
-    <Show when={(prompts.data()?.prompts.length ?? 0) > 0}>
+    <Show when={(prompts()?.length ?? 0) > 0}>
       <div class="prompt-acts" role="group" aria-label="Prompts for a fresh session">
-        <For each={prompts.data()?.prompts}>
+        <For each={prompts()}>
           {(p) => (
             <button
               type="button"
