@@ -543,12 +543,37 @@ public sealed partial class BoardReader
     /// number of rows the agent it starts will see.
     /// </summary>
     public async Task<int> UnclosedCountAsync(ScopeResult.Found scope, CancellationToken cancellationToken = default)
-    {
-        var rows = await ThreadsAsync(scope, [], rows: true, cancellationToken);
-        var stale = (await board.StaleInProgressAsync(scope.Item.Id, StaleHours, cancellationToken)).Select(s => s.Id).ToHashSet();
-        var expired = await board.ExpiredClaimsAsync(scope.Item.Id, cancellationToken);
+        => (await UnclosedCountAsync(scope.WorkspaceId, [scope.Item.Id], cancellationToken)).GetValueOrDefault(scope.Item.Id);
 
-        return rows.Count + expired.Count(c => !stale.Contains(c.ItemId));
+    /// <summary>
+    /// <see cref="UnclosedCountAsync(ScopeResult.Found, CancellationToken)"/> for many scopes, each source read once
+    /// for all of them: one row per row <see cref="ThreadsAsync"/> renders from the same queries, so the count
+    /// needs none of the rendering's own lookups.
+    /// </summary>
+    public async Task<IReadOnlyDictionary<Guid, int>> UnclosedCountAsync(
+        Guid workspaceId,
+        IReadOnlyCollection<Guid> scopeIds,
+        CancellationToken cancellationToken = default)
+    {
+        var assumptions = await board.AssumptionsAsync(workspaceId, scopeIds, true, cancellationToken);
+        var threads = await queries.OpenThreadsUnderAsync(workspaceId, scopeIds, cancellationToken);
+        var notes = await board.UnconsumedNotesAsync(workspaceId, scopeIds, cancellationToken);
+        var deps = await queries.UnclosedDependenciesAsync(scopeIds, cancellationToken);
+        var stale = await board.StaleInProgressAsync(scopeIds, StaleHours, cancellationToken);
+        var expired = await board.ExpiredClaimsAsync(scopeIds, cancellationToken);
+
+        return scopeIds.Distinct().ToDictionary(
+            id => id,
+            id =>
+            {
+                var staleIds = stale[id].Select(s => s.Id).ToHashSet();
+                return assumptions[id].Count()
+                    + threads[id].Count(t => t.Type is "finding" or "followup")
+                    + notes[id].Count(n => n.ToItemId is not null)
+                    + deps[id].Count()
+                    + staleIds.Count
+                    + expired[id].Count(c => !staleIds.Contains(c.ItemId));
+            });
     }
 
     /// <summary>

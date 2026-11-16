@@ -415,22 +415,35 @@ public sealed partial class BoardQueries(NpgsqlDataSource dataSource)
         Guid workspaceId,
         Guid scopeItemId,
         CancellationToken cancellationToken = default)
+        => (await RulesInScopeCountAsync(workspaceId, [scopeItemId], cancellationToken)).GetValueOrDefault(scopeItemId);
+
+    /// <summary>
+    /// <see cref="RulesInScopeCountAsync(Guid, Guid, CancellationToken)"/> for many scopes in one command; a scope
+    /// no rule reads is absent.
+    /// </summary>
+    public async Task<IReadOnlyDictionary<Guid, int>> RulesInScopeCountAsync(
+        Guid workspaceId,
+        IReadOnlyCollection<Guid> scopeItemIds,
+        CancellationToken cancellationToken = default)
     {
         const string sql =
             """
-            SELECT count(*)::int
+            SELECT x.id AS "Scope", count(*)::int AS "Count"
             FROM   constraint_rule c
-            CROSS  JOIN (SELECT id, ancestors FROM item WHERE id = @scope) x
+            CROSS  JOIN (SELECT id, ancestors FROM item WHERE id = ANY(@scopes)) x
             LEFT   JOIN item s ON s.id = c.scope_item_id
             WHERE  c.workspace_id = @workspace
               AND  c.active
               AND  (c.scope_item_id IS NULL
                     OR c.scope_item_id = x.id
                     OR c.scope_item_id = ANY(x.ancestors)
-                    OR s.ancestors @> ARRAY[x.id]::uuid[]);
+                    OR s.ancestors @> ARRAY[x.id]::uuid[])
+            GROUP  BY x.id;
             """;
 
-        return await SingleAsync<int>(sql, new { workspace = workspaceId, scope = scopeItemId }, cancellationToken);
+        return (await ListAsync<ScopeCount>(
+                sql, new { workspace = workspaceId, scopes = Scoped.Ids(scopeItemIds) }, cancellationToken))
+            .ToDictionary(c => c.Scope, c => c.Count);
     }
 
     public async Task<IReadOnlyList<AssumptionRow>> AssumptionsAsync(

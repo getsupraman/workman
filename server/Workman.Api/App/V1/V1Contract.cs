@@ -299,6 +299,11 @@ public sealed record PromptView(string Key, string Label, int? Count, string Tex
 
 public sealed record PromptsView(DateTimeOffset AsOf, long Seq, ItemRefView Scope, IReadOnlyList<PromptView> Prompts);
 
+/// <summary>One scope's prompts in a <c>scopes=</c> read.</summary>
+public sealed record ScopePromptsView(ItemRefView Scope, IReadOnlyList<PromptView> Prompts);
+
+public sealed record ManyPromptsView(DateTimeOffset AsOf, long Seq, IReadOnlyList<ScopePromptsView> Scopes);
+
 /// <summary><c>match</c>: <c>ref</c>, <c>prefix</c> or <c>text</c>; <c>snippet</c> only on a text hit.</summary>
 public sealed record SearchHitView(ItemRefView Item, ItemRefView? Run, ItemRefView? Project, string Match, string? Snippet);
 

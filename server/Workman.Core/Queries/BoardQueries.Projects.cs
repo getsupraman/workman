@@ -41,19 +41,28 @@ public sealed partial class BoardQueries
         Guid projectId,
         string backlogTitle,
         CancellationToken cancellationToken = default)
+        => [.. (await ProjectRunsAsync([projectId], backlogTitle, cancellationToken))[projectId]];
+
+    /// <summary><see cref="ProjectRunsAsync(Guid, string, CancellationToken)"/> for many projects in one command.</summary>
+    public async Task<ILookup<Guid, ProjectRunRow>> ProjectRunsAsync(
+        IReadOnlyCollection<Guid> projectIds,
+        string backlogTitle,
+        CancellationToken cancellationToken = default)
     {
         const string sql =
             $"""
              SELECT {ScopeColumns},
                     i.resolution::text AS "Resolution",
                     i.closed_at        AS "ClosedAt",
-                    (i.parent_id = @project AND (lower(i.ref) = 'backlog' OR i.title = @title)) AS "Backlog",
+                    (i.parent_id = sc.id AND (lower(i.ref) = 'backlog' OR i.title = @title)) AS "Backlog",
                     coalesce(t.done, 0)::int  AS "TasksDone",
                     coalesce(t.total, 0)::int AS "TasksTotal",
                     (coalesce(r.open_count,0) + coalesce(r.doing_count,0)
                      + coalesce(r.review_count,0))::int AS "Unfinished",
-                    h.value AS "Commit"
+                    h.value AS "Commit",
+                    {Scoped.Column}
              FROM   item i
+             JOIN   {Scoped.Scopes} ON i.ancestors @> ARRAY[sc.id]::uuid[]
              LEFT JOIN item s ON s.id = i.ref_scope_id AND s.id <> i.id
              LEFT JOIN item_rollup r ON r.id = i.id
              LEFT JOIN LATERAL (
@@ -69,7 +78,7 @@ public sealed partial class BoardQueries
                       AND  (c.id = i.id OR c.ancestors @> ARRAY[i.id]::uuid[])
                     ORDER  BY a.at DESC
                     LIMIT  1) h ON true
-             WHERE  i.kind = 'run' AND i.ancestors @> ARRAY[@project]::uuid[]
+             WHERE  i.kind = 'run'
              ORDER BY (i.status IN ('done','cancelled','superseded')),
                       CASE WHEN i.status IN ('done','cancelled','superseded') THEN 0
                            ELSE coalesce(r.open_count,0) + coalesce(r.doing_count,0)
@@ -78,7 +87,8 @@ public sealed partial class BoardQueries
                       i.seq;
              """;
 
-        return await ListAsync<ProjectRunRow>(sql, new { project = projectId, title = backlogTitle }, cancellationToken);
+        return await ScopedAsync<ProjectRunRow>(
+            sql, new { scopes = Scoped.Ids(projectIds), title = backlogTitle }, cancellationToken);
     }
 
     /// <summary>
@@ -88,6 +98,15 @@ public sealed partial class BoardQueries
     public async Task<IReadOnlyList<BacklogItemRow>> ProjectBacklogAsync(
         Guid projectId,
         Guid? backlogRunId,
+        CancellationToken cancellationToken = default)
+        => [.. (await ProjectBacklogAsync([(projectId, backlogRunId)], cancellationToken))[projectId]];
+
+    /// <summary>
+    /// <see cref="ProjectBacklogAsync(Guid, Guid?, CancellationToken)"/> for many projects, each with its backlog run,
+    /// in one command.
+    /// </summary>
+    public async Task<ILookup<Guid, BacklogItemRow>> ProjectBacklogAsync(
+        IReadOnlyCollection<(Guid Project, Guid? BacklogRun)> projects,
         CancellationToken cancellationToken = default)
     {
         const string sql =
@@ -99,17 +118,27 @@ public sealed partial class BoardQueries
                    EXISTS (SELECT 1 FROM item o
                            WHERE  o.workspace_id = i.workspace_id
                              AND  lower(o.ref) = lower(i.ref)
-                             AND  o.id <> i.id) AS "RefShared"
-            FROM   item i
+                             AND  o.id <> i.id) AS "RefShared",
+                   sc.id AS "ForScope"
+            FROM   unnest(@projects::uuid[], @backlogs::uuid[]) AS sc(id, backlog)
+            JOIN   item i
+                   ON ((sc.backlog IS NOT NULL AND i.ancestors @> ARRAY[sc.backlog]::uuid[]
+                        AND i.kind IN ('task','followup','subtask','spike','question','incident'))
+                       OR (i.kind = 'followup' AND i.ancestors @> ARRAY[sc.id]::uuid[]))
             LEFT   JOIN item s ON s.id = i.ref_scope_id AND s.id <> i.id
             WHERE  i.status NOT IN ('done','cancelled','superseded')
-              AND  ((@backlog IS NOT NULL AND i.ancestors @> ARRAY[@backlog]::uuid[]
-                     AND i.kind IN ('task','followup','subtask','spike','question','incident'))
-                    OR (i.kind = 'followup' AND i.ancestors @> ARRAY[@project]::uuid[]))
-            ORDER  BY (@backlog IS NOT NULL AND i.ancestors @> ARRAY[@backlog]::uuid[]) DESC,
+            ORDER  BY (sc.backlog IS NOT NULL AND i.ancestors @> ARRAY[sc.backlog]::uuid[]) DESC,
                       i.depth, i.seq, i.id;
             """;
 
-        return await ListAsync<BacklogItemRow>(sql, new { project = projectId, backlog = backlogRunId }, cancellationToken);
+        var distinct = projects.DistinctBy(p => p.Project).ToList();
+        return await ScopedAsync<BacklogItemRow>(
+            sql,
+            new
+            {
+                projects = distinct.Select(p => p.Project).ToArray(),
+                backlogs = distinct.Select(p => p.BacklogRun).ToArray(),
+            },
+            cancellationToken);
     }
 }

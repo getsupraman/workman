@@ -97,16 +97,24 @@ public sealed partial class BoardQueries
 
     /// <summary>When the project the item sits in (or is) was archived; null while it is not.</summary>
     public async Task<DateTimeOffset?> ArchivedAtAsync(Guid itemId, CancellationToken cancellationToken = default)
+        => (await ArchivedAtAsync([itemId], cancellationToken)).TryGetValue(itemId, out var at) ? at : null;
+
+    /// <summary><see cref="ArchivedAtAsync(Guid, CancellationToken)"/> for many items in one command; one not archived is absent.</summary>
+    public async Task<IReadOnlyDictionary<Guid, DateTimeOffset>> ArchivedAtAsync(
+        IReadOnlyCollection<Guid> itemIds,
+        CancellationToken cancellationToken = default)
     {
         const string sql =
             """
-            SELECT p.archived_at
+            SELECT DISTINCT ON (i.id) i.id AS "Id", p.archived_at AS "ArchivedAt"
             FROM   item i
             JOIN   item p ON (p.id = i.id OR p.id = ANY(i.ancestors)) AND p.kind = 'project'
-            WHERE  i.id = @id AND p.archived_at IS NOT NULL
-            LIMIT  1;
+            WHERE  i.id = ANY(@ids) AND p.archived_at IS NOT NULL;
             """;
 
-        return await SingleAsync<DateTimeOffset?>(sql, new { id = itemId }, cancellationToken);
+        return (await ListAsync<ArchivedRow>(sql, new { ids = itemIds.Distinct().ToArray() }, cancellationToken))
+            .ToDictionary(r => r.Id, r => r.ArchivedAt);
     }
+
+    private sealed record ArchivedRow(Guid Id, DateTimeOffset ArchivedAt);
 }

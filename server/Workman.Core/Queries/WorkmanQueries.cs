@@ -148,9 +148,15 @@ public sealed class WorkmanQueries(NpgsqlDataSource dataSource)
     public async Task<IReadOnlyList<UnclosedDependency>> UnclosedDependenciesAsync(
         Guid scopeItemId,
         CancellationToken cancellationToken = default)
+        => [.. (await UnclosedDependenciesAsync([scopeItemId], cancellationToken))[scopeItemId]];
+
+    /// <summary><see cref="UnclosedDependenciesAsync(Guid, CancellationToken)"/> for many scopes in one command.</summary>
+    public async Task<ILookup<Guid, UnclosedDependency>> UnclosedDependenciesAsync(
+        IReadOnlyCollection<Guid> scopeItemIds,
+        CancellationToken cancellationToken = default)
     {
         const string sql =
-            """
+            $"""
             SELECT t.ref            AS "Waiting",
                    b.ref            AS "On",
                    b.status         AS "Status",
@@ -158,12 +164,13 @@ public sealed class WorkmanQueries(NpgsqlDataSource dataSource)
                    t.id             AS "WaitingId",
                    t.ref_scope_id   AS "WaitingScopeId",
                    b.id             AS "OnId",
-                   b.ref_scope_id   AS "OnScopeId"
+                   b.ref_scope_id   AS "OnScopeId",
+                   {Scoped.Column}
             FROM   item_link l
             JOIN   item t ON t.id = l.to_item_id
+            JOIN   {Scoped.Scopes} ON (t.id = sc.id OR t.ancestors @> ARRAY[sc.id]::uuid[])
             JOIN   item b ON b.id = l.from_item_id
             WHERE  l.type = 'blocks'
-              AND  (t.id = @scope OR t.ancestors @> ARRAY[@scope]::uuid[])
               AND  t.status NOT IN ('done','cancelled','superseded')
               AND  (b.status IN ('cancelled','superseded')
                     OR (b.status = 'open' AND b.parent_id IS NULL)
@@ -171,7 +178,8 @@ public sealed class WorkmanQueries(NpgsqlDataSource dataSource)
             ORDER BY t.seq;
             """;
 
-        return await QueryAsync<UnclosedDependency>(sql, new { scope = scopeItemId }, cancellationToken);
+        return await Scoped.ListAsync<UnclosedDependency>(
+            _connections, sql, new { scopes = Scoped.Ids(scopeItemIds) }, cancellationToken);
     }
 
     /// <summary>The <see cref="CountedRollup"/> of one item: what an "X of Y" for it prints.</summary>
@@ -235,25 +243,72 @@ public sealed class WorkmanQueries(NpgsqlDataSource dataSource)
         Guid? scopeItemId = null,
         CancellationToken cancellationToken = default)
     {
+        if (scopeItemId is { } scope)
+        {
+            return [.. (await OpenThreadsUnderAsync(workspaceId, [scope], cancellationToken))[scope]];
+        }
+
         const string sql =
-            """
-            SELECT t.t     AS "Type",
-                   t.ref   AS "Ref",
-                   t.text  AS "Text",
-                   t.scope AS "Scope"
+            $"""
+            SELECT {ThreadColumns}
             FROM   open_thread t
             WHERE  t.workspace_id = @workspace
-              AND  (@scope IS NULL
-                    OR t.scope = @scope
-                    OR EXISTS (SELECT 1 FROM item i
-                               WHERE i.id = t.scope AND i.ancestors @> ARRAY[@scope]::uuid[]))
             ORDER BY t.t, t.ref;
             """;
 
-        return await QueryAsync<OpenThread>(
-            sql,
-            new { workspace = workspaceId, scope = scopeItemId },
-            cancellationToken);
+        return await QueryAsync<OpenThread>(sql, new { workspace = workspaceId }, cancellationToken);
+    }
+
+    /// <summary><see cref="OpenThreadsAsync(Guid, Guid?, CancellationToken)"/> for many scopes in one command.</summary>
+    public async Task<ILookup<Guid, OpenThread>> OpenThreadsUnderAsync(
+        Guid workspaceId,
+        IReadOnlyCollection<Guid> scopeItemIds,
+        CancellationToken cancellationToken = default)
+    {
+        const string sql =
+            $"""
+            SELECT {ThreadColumns},
+                   {Scoped.Column}
+            FROM   open_thread t
+            JOIN   {Scoped.Scopes}
+                   ON (t.scope = sc.id
+                       OR EXISTS (SELECT 1 FROM item i
+                                  WHERE i.id = t.scope AND i.ancestors @> ARRAY[sc.id]::uuid[]))
+            WHERE  t.workspace_id = @workspace
+            ORDER BY t.t, t.ref;
+            """;
+
+        return await Scoped.ListAsync<OpenThread>(
+            _connections, sql, new { workspace = workspaceId, scopes = Scoped.Ids(scopeItemIds) }, cancellationToken);
+    }
+
+    private const string ThreadColumns =
+        """
+        t.t     AS "Type",
+               t.ref   AS "Ref",
+               t.text  AS "Text",
+               t.scope AS "Scope"
+        """;
+
+    /// <summary>
+    /// The kind and status of every item in each scope's subtree, the scope included: what <see cref="SubtreeAsync"/>
+    /// returns of them, for many scopes in one command.
+    /// </summary>
+    public async Task<ILookup<Guid, SubtreeStatus>> SubtreeStatusesAsync(
+        IReadOnlyCollection<Guid> scopeItemIds,
+        CancellationToken cancellationToken = default)
+    {
+        const string sql =
+            $"""
+             SELECT i.id AS "Id", i.kind AS "Kind", i.status AS "Status", {Scoped.Column}
+             FROM   item i
+             {Scoped.JoinItem};
+             """;
+
+        return scopeItemIds.Count == 0
+            ? Array.Empty<SubtreeStatus>().ToLookup(_ => Guid.Empty)
+            : await Scoped.ListAsync<SubtreeStatus>(
+                _connections, sql, new { scopes = Scoped.Ids(scopeItemIds) }, cancellationToken);
     }
 
     public Task<IReadOnlyList<SearchHit>> SearchAsync(

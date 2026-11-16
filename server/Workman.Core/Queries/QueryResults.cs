@@ -57,6 +57,9 @@ public sealed record SubtreeNode(
     long ReviewCount,
     long DoneCount);
 
+/// <summary>One item of a scope's subtree, as far as a prompt counts it (<see cref="WorkmanQueries.SubtreeStatusesAsync"/>).</summary>
+public sealed record SubtreeStatus(Guid Id, string Kind, ItemStatus Status);
+
 /// <summary>Everything unclosed that is not a task — the work_threads backbone.</summary>
 public sealed record OpenThread(string Type, string Ref, string Text, Guid? Scope);
 
