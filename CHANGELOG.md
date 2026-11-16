@@ -5,9 +5,9 @@ All notable changes to the Workman server and the `workman` plugin are recorded 
 [Semantic Versioning](https://semver.org/). The server's version is `serverInfo.version`; the plugin's is
 `plugin/.claude-plugin/plugin.json`.
 
-## [Unreleased]
+## [3.2.3] — 2026-11-16
 
-Server only (read API and dashboard). No migration.
+Server only (read API and dashboard). No migration; the plugin stays 3.1.0.
 
 ### Changed
 
