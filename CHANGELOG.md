@@ -5,6 +5,25 @@ All notable changes to the Workman server and the `workman` plugin are recorded 
 [Semantic Versioning](https://semver.org/). The server's version is `serverInfo.version`; the plugin's is
 `plugin/.claude-plugin/plugin.json`.
 
+## [Unreleased]
+
+Server only (read API and dashboard). No migration.
+
+### Changed
+
+- **The Overview loads faster the more projects a workspace has:** its project cards' prompt buttons (Clean up,
+  Triage, …) come from one request instead of one per card, and `/api/v1/overview` and `/api/v1/inbox` no longer
+  query once per project. On a seeded workspace of 14 projects, `/overview` went from 413 SQL commands to 75,
+  `/inbox` from 275 to 41, and the cards' prompts from 14 requests of about 170 commands each to one request of 31.
+  All three now cost the same for 2 projects as for 14. The buttons, counts, inbox rows and honesty numbers are
+  unchanged.
+
+### Added
+
+- **`GET /api/v1/prompts?scopes={id},{id},…`**: many scopes' prompt actions in one read, each exactly what
+  `?scope=` returns for it; ids the caller cannot see are left out. At most 200 ids. See
+  [docs/10-read-api.md](docs/10-read-api.md).
+
 ## [3.2.2] — 2026-11-16
 
 Server only (read API and dashboard). No migration; the plugin stays 3.1.0.

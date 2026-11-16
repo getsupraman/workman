@@ -331,6 +331,10 @@ with no user; `names` the members by name (case-insensitive order), so the marke
 without a call per project. Read in one statement under the caller's own tenant transaction, so it says
 nothing about a project rule 8 leaves out — the response does not list one, and its member rows are not read.
 
+`honesty` sums over the projects what `work_audit` counts for each. Each of its four counts, like each inbox source
+(`/inbox` below), is read once for every project through the query the one-scope MCP call runs with one id, so the
+overview issues the same number of SQL commands for 2 projects as for 14.
+
 ### `GET /api/v1/runs/{id}/board`
 The run as one flat list, **pre-order by seq, stable** (a parent precedes its children; siblings in
 seq order). The client rebuilds the tree from `parentId`/`depth`/`hasChildren`.
@@ -465,6 +469,9 @@ on the agenda, not in the inbox. `assumption_due` counts an open assumption whos
 whose `revisit_at` has passed; one that meets both is counted once, and `since` is the later of the two that
 happened.
 
+Each source is the query the attention block reads for the same line, run once for every project rather than once per
+project, its rows taken project by project as before: the number of SQL commands does not grow with the projects.
+
 ### `GET /api/v1/journal?scope={id}&since={seq}&before={seq}&limit=&kinds=`
 Ascending by seq. `kinds` comma-separated:
 `transition,verification,report,finding,note,claim,link,created,carried`.
@@ -532,6 +539,20 @@ Read-only like every v1 route: it neither sweeps lapsed claims nor consumes note
 { "asOf": "…", "seq": 1234, "scope": ItemRef,
   "prompts": [{ "key": "cleanup", "label": "Clean up", "count": 7,
                 "text": "Clean up and reorganize Workman project `…` …" }] }
+```
+
+### `GET /api/v1/prompts?scopes={id},{id},…` (added for the dashboard, additive)
+Many scopes' prompt actions in one read: each id's `scope` and `prompts` exactly as `?scope=` returns them, in the order
+given. An id that is unknown, in another workspace or in a project rule 8 hides is left out, not a 404. At most 200 ids;
+more, a malformed id, or `scope` and `scopes` together is a `400 {error}`. An empty list returns no scopes.
+
+Every fact the catalogue reads (the project's runs and backlog, archive, callable refs, rules, leaf statuses and the
+housekeeping count) is read once for all the scopes, so the read issues the same number of SQL commands for 2 projects
+as for 14. `?scope=` is this read with one id. The Overview reads its project cards' prompts here, one request per load
+(one per 200 cards) instead of one per card.
+```jsonc
+{ "asOf": "…", "seq": 1234,
+  "scopes": [{ "scope": ItemRef, "prompts": [Prompt] }] }   // Prompt as in ?scope=
 ```
 
 ### `GET /api/v1/agenda?until=&since=&scope={id}` (deadlines/6, additive)
