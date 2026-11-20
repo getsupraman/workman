@@ -667,26 +667,30 @@ public sealed partial class BoardReader
         ScopeResult.Found scope,
         CancellationToken cancellationToken = default)
     {
+        // mcp-fit/1: every ref outside the scope the reader numbers in prints run-qualified.
+        var home = scope.Item.RefScopeId;
+        var homeRef = await HomeRefAsync(scope.Item, cancellationToken);
         var rows = new List<AuditRow>();
-        rows.AddRange(await board.ForcedTransitionsAsync(scope.Item.Id, cancellationToken));
-        rows.AddRange(await board.NeverRedAsync(scope.Item.Id, cancellationToken));
-        rows.AddRange(await board.SupersededStillReferencedAsync(scope.Item.Id, cancellationToken));
-        rows.AddRange(await board.UncoveredRiskAsync(scope.Item.Id, cancellationToken));
+        rows.AddRange(await board.ForcedTransitionsAsync(scope.Item.Id, cancellationToken, home));
+        rows.AddRange(await board.NeverRedAsync(scope.Item.Id, cancellationToken, home));
+        rows.AddRange(await board.SupersededStillReferencedAsync(scope.Item.Id, cancellationToken, home));
+        rows.AddRange(await board.UncoveredRiskAsync(scope.Item.Id, cancellationToken, home));
         rows.AddRange(await board.RouteLessConstraintsAsync(scope.WorkspaceId, scope.Item.Id, cancellationToken));
-        rows.AddRange(await board.DueAfterParentAsync(scope.Item.Id, cancellationToken));
+        rows.AddRange(await board.DueAfterParentAsync(scope.Item.Id, cancellationToken, home));
 
         foreach (var unverified in await board.DoneUnverifiedAsync(scope.Item.Id, cancellationToken))
         {
+            var shown = ShownRef(unverified.Ref, unverified.QualifiedRef, homeRef);
             rows.Add(new AuditRow(
                 "done-unverified",
-                unverified.Ref,
+                shown,
                 "closed with no passing orchestrator verification",
-                $"work_verify(ref:\"{unverified.Ref}\", result_line:\"…\", run_by:\"orchestrator\")"));
+                $"work_verify(ref:\"{shown}\", result_line:\"…\", run_by:\"orchestrator\")"));
         }
 
         foreach (var dep in await queries.UnclosedDependenciesAsync(scope.Item.Id, cancellationToken))
         {
-            var (waiting, on) = await DependencyRefsAsync(scope, dep, cancellationToken);
+            var (waiting, on) = await DependencyRefsAsync(scope, dep, cancellationToken, runQualified: true);
             rows.Add(new AuditRow(
                 dep.OrderedCorrectly ? "dep-unclosed" : "dep-inverted",
                 waiting,
@@ -739,7 +743,8 @@ public sealed partial class BoardReader
             scope?.Item.Id,
             sinceSeq,
             limit,
-            cancellationToken: cancellationToken);
+            cancellationToken: cancellationToken,
+            home: scope?.Item.RefScopeId);
         if (events.Count == 0)
         {
             return $"HISTORY  no events after seq {sinceSeq}.";
@@ -877,19 +882,26 @@ public sealed partial class BoardReader
     /// <summary>
     /// A dependency's two ends as printed: the waiting item bare inside the rendered scope's run, the
     /// blocker bare inside the waiting item's run, each otherwise a ref that resolves to it alone.
+    /// <paramref name="runQualified"/> (the audit, mcp-fit/1) judges both ends against the rendered scope's
+    /// run and prints either one outside it run-qualified, never bare.
     /// </summary>
     private async Task<(string Waiting, string On)> DependencyRefsAsync(
         ScopeResult.Found scope,
         UnclosedDependency dependency,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        bool runQualified = false)
     {
         var waiting = dependency.WaitingScopeId == scope.Item.RefScopeId
             ? dependency.Waiting
-            : await board.PrintableRefAsync(scope.WorkspaceId, dependency.WaitingId, dependency.Waiting, cancellationToken);
+            : runQualified
+                ? await board.RunQualifiedRefAsync(scope.WorkspaceId, dependency.WaitingId, dependency.Waiting, cancellationToken)
+                : await board.PrintableRefAsync(scope.WorkspaceId, dependency.WaitingId, dependency.Waiting, cancellationToken);
 
-        var on = dependency.OnScopeId == dependency.WaitingScopeId
+        var on = dependency.OnScopeId == (runQualified ? scope.Item.RefScopeId : dependency.WaitingScopeId)
             ? dependency.On
-            : await board.PrintableRefAsync(scope.WorkspaceId, dependency.OnId, dependency.On, cancellationToken);
+            : runQualified
+                ? await board.RunQualifiedRefAsync(scope.WorkspaceId, dependency.OnId, dependency.On, cancellationToken)
+                : await board.PrintableRefAsync(scope.WorkspaceId, dependency.OnId, dependency.On, cancellationToken);
 
         return (waiting, on);
     }

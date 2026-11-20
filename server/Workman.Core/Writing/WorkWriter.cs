@@ -844,7 +844,10 @@ public sealed partial class WorkWriter(NpgsqlDataSource dataSource, BoardQueries
             cancellationToken: cancellationToken));
     }
 
-    /// <summary>The first ref of the given shape that is free inside this item's ref scope.</summary>
+    /// <summary>
+    /// The first ref of the given shape that is free inside this item's ref scope, and not held by a run
+    /// directly under that scope either, since <c>scope/ref</c> reaches both (mcp-fit/1).
+    /// </summary>
     private static Task<string> FreeRefAsync(
         NpgsqlConnection connection,
         NpgsqlTransaction transaction,
@@ -857,8 +860,9 @@ public sealed partial class WorkWriter(NpgsqlDataSource dataSource, BoardQueries
             """
             SELECT EXISTS (
               SELECT 1 FROM item
-              WHERE workspace_id = @workspace
-                AND ref_scope_id IS NOT DISTINCT FROM @scope AND lower(ref) = lower(@ref));
+              WHERE workspace_id = @workspace AND lower(ref) = lower(@ref)
+                AND (ref_scope_id IS NOT DISTINCT FROM @scope
+                     OR (ref_scope_id = id AND parent_id = @scope)));
             """;
 
         return FirstFreeAsync(

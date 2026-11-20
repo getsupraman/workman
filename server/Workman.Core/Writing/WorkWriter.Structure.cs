@@ -227,6 +227,16 @@ public sealed partial class WorkWriter
                     connection, transaction, workspaceId, parent, refScope, kind, rules.ScopesRefs, cancellationToken)
                 : wanted.Ref!.Trim();
 
+            if (!Blank(wanted.Ref)
+                && await QualifiedClashAsync(
+                    connection, transaction, workspaceId, parent, refScope, rules.ScopesRefs, reference, cancellationToken)
+                    is { } clash)
+            {
+                var free = await FreeSlugAsync(
+                    connection, transaction, workspaceId, parent, refScope, rules.ScopesRefs, reference, suggested, cancellationToken);
+                return WriteResult.No(QualifiedRefTaken(kind, reference, parent!.Ref, clash, wanted.Parent!.Trim(), free));
+            }
+
             var row2 = new NewRow(
                 Guid.CreateVersion7(),
                 workspaceId,
@@ -1252,6 +1262,73 @@ public sealed partial class WorkWriter
             $"work_create(items:[{{kind:\"{kind}\", ref:\"{reference}\"}}]) — {holder} already has a {kind} \"{reference}\".",
             $"a {kind}'s ref is unique among its siblings, ignoring case, or \"{name}\" would name two of them",
             $"work_create(items:[{{kind:\"{kind}\", …}}]) without ref — the server numbers it",
+            "work_tree() to see the refs already taken");
+    }
+
+    private sealed record Clash(string Kind, string Ref);
+
+    /// <summary>
+    /// mcp-fit/1. An item the unique indexes let through whose qualified path would name two items: an item
+    /// numbered in a run or project beside a run of that name under it (<c>acme/ga4</c> names both), or a run
+    /// named like the self-scoped parent it sits under (<c>neo/neo</c>). Null when none, and for a root.
+    /// </summary>
+    private static async Task<Clash?> QualifiedClashAsync(
+        NpgsqlConnection connection,
+        NpgsqlTransaction transaction,
+        Guid workspaceId,
+        ScopeRefLite? parent,
+        Guid? refScopeId,
+        bool scopesRefs,
+        string reference,
+        CancellationToken cancellationToken)
+    {
+        if (parent is null || refScopeId is not { } scope)
+        {
+            return null;
+        }
+
+        string sql;
+        if (!scopesRefs)
+        {
+            sql =
+                """
+                SELECT kind AS "Kind", ref AS "Ref" FROM item
+                WHERE  workspace_id = @workspace AND lower(ref) = lower(@ref)
+                  AND  ref_scope_id = id AND parent_id = @scope
+                ORDER  BY seq LIMIT 1;
+                """;
+        }
+        else if (parent.RefScopeId == parent.Id)
+        {
+            sql =
+                """
+                SELECT kind AS "Kind", ref AS "Ref" FROM item
+                WHERE  workspace_id = @workspace AND lower(ref) = lower(@ref)
+                  AND  (id = @scope OR (ref_scope_id = @scope AND id <> @scope))
+                ORDER  BY seq LIMIT 1;
+                """;
+        }
+        else
+        {
+            return null;
+        }
+
+        return await connection.QueryFirstOrDefaultAsync<Clash>(new CommandDefinition(
+            sql, new { workspace = workspaceId, scope, @ref = reference }, transaction, cancellationToken: cancellationToken));
+    }
+
+    private static string QualifiedRefTaken(string kind, string reference, string parentRef, Clash clash, string parentArg, string free)
+    {
+        var path = $"{parentRef}/{reference}";
+        var other = clash.Ref.Equals(parentRef, StringComparison.OrdinalIgnoreCase)
+            ?$"the {clash.Kind} {parentRef} itself"
+            : $"the {clash.Kind} {clash.Ref}";
+
+        return Refusal.Blocked(
+            $"work_create(items:[{{kind:\"{kind}\", parent:\"{parentArg}\", ref:\"{reference}\"}}]) — \"{path}\" "
+            + $"would name both this {kind} and {other}.",
+            $"a qualified ref must name one item, or one of the two could only be reached by work_tree; \"{free}\" is free",
+            $"work_create(items:[{{kind:\"{kind}\", parent:\"{parentArg}\", ref:\"{free}\", …}}])",
             "work_tree() to see the refs already taken");
     }
 

@@ -417,17 +417,20 @@ public sealed partial class BoardReader(WorkmanQueries queries, BoardQueries boa
     {
         var item = scope.Item;
         var lines = new ScopedAttention(await CallableAsync(item, cancellationToken));
+        var homeRef = await HomeRefAsync(item, cancellationToken);
+        string Shown(string reference, string? qualified) => ShownRef(reference, qualified, homeRef);
 
         foreach (var claim in await board.ExpiredClaimsAsync(item.Id, cancellationToken))
         {
             var (on, tree) = claim.Tree is { } t
                 ? ($" on tree \"{Glyph.Flat(t)}\"", $", tree:\"{t}\"")
                 : (string.Empty, string.Empty);
+            var shown = Shown(claim.ItemRef, claim.QualifiedRef);
 
             lines.Add(new AttentionLine(
                 AttentionRank.ExpiredClaim,
-                $"{claim.ItemRef} claim by {claim.AgentName}{on} expired {Glyph.Ago(Since(claim.ExpiresAt))}",
-                $"work_status(ref:\"{claim.ItemRef}\", to:\"in_progress\"{tree}) to retake it",
+                $"{shown} claim by {claim.AgentName}{on} expired {Glyph.Ago(Since(claim.ExpiresAt))}",
+                $"work_status(ref:\"{shown}\", to:\"in_progress\"{tree}) to retake it",
                 claim.ItemRef,
                 claim.QualifiedRef));
         }
@@ -435,10 +438,11 @@ public sealed partial class BoardReader(WorkmanQueries queries, BoardQueries boa
         foreach (var blocker in await board.BlockerFindingsAsync(item.Id, cancellationToken))
         {
             var target = blocker.TargetRef is { Length: > 0 } ? $" against {blocker.TargetRef}" : string.Empty;
+            var shown = Shown(blocker.FindingRef, blocker.QualifiedRef);
             lines.Add(new AttentionLine(
                 AttentionRank.BlockerFinding,
-                $"{blocker.FindingRef} (BLOCKER) is open{target}: {Glyph.Row(blocker.FindingTitle, 40)}",
-                $"work_status(ref:\"{blocker.FindingRef}\", to:\"done\")",
+                $"{shown} (BLOCKER) is open{target}: {Glyph.Row(blocker.FindingTitle, 40)}",
+                $"work_status(ref:\"{shown}\", to:\"done\")",
                 blocker.FindingRef,
                 blocker.QualifiedRef));
         }
@@ -447,20 +451,22 @@ public sealed partial class BoardReader(WorkmanQueries queries, BoardQueries boa
         // call that discharges it, and the agent decides — FINDINGS-live F-L1b.
         foreach (var gate in await board.UngatedPhasesAsync(item.Id, cancellationToken))
         {
+            var shown = Shown(gate.PhaseRef, gate.QualifiedRef);
             lines.Add(new AttentionLine(
                 AttentionRank.PhaseGateNotRun,
-                $"{gate.PhaseRef}: all {gate.TaskCount} tasks done, gate not run",
-                $"work_brief(scope:\"{gate.PhaseRef}\", for:\"gate\") to run it",
+                $"{shown}: all {gate.TaskCount} tasks done, gate not run",
+                $"work_brief(scope:\"{shown}\", for:\"gate\") to run it",
                 gate.PhaseRef,
                 gate.QualifiedRef));
         }
 
         foreach (var unverified in await board.DoneUnverifiedAsync(item.Id, cancellationToken))
         {
+            var shown = Shown(unverified.Ref, unverified.QualifiedRef);
             lines.Add(new AttentionLine(
                 AttentionRank.DoneUnverified,
-                $"{unverified.Ref} is done with no orchestrator verification",
-                $"work_verify(ref:\"{unverified.Ref}\", result_line:\"…\", run_by:\"orchestrator\")",
+                $"{shown} is done with no orchestrator verification",
+                $"work_verify(ref:\"{shown}\", result_line:\"…\", run_by:\"orchestrator\")",
                 unverified.Ref,
                 unverified.QualifiedRef));
         }
@@ -518,7 +524,7 @@ public sealed partial class BoardReader(WorkmanQueries queries, BoardQueries boa
             var first = addressed.First();
             var named = shared.Contains(addressed.Key)
                 ? await AddresseeRefAsync(scope.WorkspaceId, first, cancellationToken)
-                : first.ToRef!;
+                : Shown(first.ToRef!, first.ToQualifiedRef);
 
             lines.Add(new AttentionLine(
                 AttentionRank.UnconsumedNote,
@@ -530,16 +536,36 @@ public sealed partial class BoardReader(WorkmanQueries queries, BoardQueries boa
 
         foreach (var stale in await board.StaleInProgressAsync(item.Id, StaleHours, cancellationToken))
         {
+            var shown = Shown(stale.Ref, stale.QualifiedRef);
             lines.Add(new AttentionLine(
                 AttentionRank.StaleInProgress,
-                $"{stale.Ref} has been in_progress {Glyph.Age(Since(stale.StartedAt))} with no live claim",
-                $"work_status(ref:\"{stale.Ref}\", to:\"in_progress\") to retake it",
+                $"{shown} has been in_progress {Glyph.Age(Since(stale.StartedAt))} with no live claim",
+                $"work_status(ref:\"{shown}\", to:\"in_progress\") to retake it",
                 stale.Ref,
                 stale.QualifiedRef));
         }
 
         return lines;
     }
+
+    /// <summary>The ref of the scope <paramref name="item"/> numbers in: itself for a run or project, else its run's.</summary>
+    private async Task<string?> HomeRefAsync(ScopeRef item, CancellationToken cancellationToken)
+        => item.RefScopeId is not { } home ? null
+            : home == item.Id ? item.Ref
+            : await board.RefOfAsync(home, cancellationToken);
+
+    /// <summary>
+    /// mcp-fit/1. <paramref name="reference"/> as a reader whose ref scope is <paramref name="homeRef"/> must
+    /// read it: bare inside that scope (and for a run or project, whose qualified ref is its bare one), else
+    /// run-qualified. A project's attention block spans every run under it, and "2 claim … expired" named
+    /// none of them. <see cref="BoardQueries.ShownRef"/> is the same rule in SQL.
+    /// </summary>
+    internal static string ShownRef(string reference, string? qualified, string? homeRef)
+        => qualified is { Length: > 0 } q
+           && !q.Equals(reference, StringComparison.OrdinalIgnoreCase)
+           && !(homeRef is not null && q.Equals($"{homeRef}/{reference}", StringComparison.OrdinalIgnoreCase))
+            ? q
+            : reference;
 
     /// <summary>
     /// The ref a worker brief prints for calls and its URI: qualified once another run holds the same

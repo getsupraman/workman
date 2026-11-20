@@ -131,14 +131,37 @@ public sealed partial class BoardQueries(NpgsqlDataSource dataSource)
         {
             [var leaf] => await ResolveAsync(workspaceId, null, null, leaf, cancellationToken),
             [var project, var qualifier, var leaf] =>
-                await ResolveAsync(workspaceId, project, qualifier, leaf, cancellationToken),
+                NumberedInside(await ResolveAsync(workspaceId, project, qualifier, leaf, cancellationToken)),
             [var qualifier, var leaf] =>
                 await ResolveAsync(workspaceId, null, qualifier, leaf, cancellationToken) is { Count: > 0 } byRun
-                    ? byRun
+                    ? TheProjectItself(qualifier, leaf, byRun)
                     : await ResolveAsync(workspaceId, qualifier, null, leaf, cancellationToken),
             _ => [],
         };
     }
+
+    /// <summary>
+    /// mcp-fit/1. <c>project/scope/ref</c> names the ref numbered inside that scope. A run matched only by
+    /// its own name or its parent's yields to it, or a followup under project <c>acme</c> beside a run
+    /// <c>acme/ga4</c> had no form at all: <c>acme/acme/ga4</c> named both. Only strings that named
+    /// both before change their answer.
+    /// </summary>
+    private static IReadOnlyList<ScopeRef> NumberedInside(IReadOnlyList<ScopeRef> matches)
+        => matches.Any(m => m.RefScopeId != m.Id) && matches.Any(m => m.RefScopeId == m.Id)
+            ? [.. matches.Where(m => m.RefScopeId != m.Id)]
+            : matches;
+
+    /// <summary>
+    /// mcp-fit/1. <c>neo/neo</c> is a project's only qualified form, and a run <c>neo</c> anywhere
+    /// matched it too, leaving the project unreachable. A project is a root and unique by name, so
+    /// <c>x/x</c> names it; the run keeps <c>parent/x</c> and <c>project/parent/x</c>.
+    /// </summary>
+    private static IReadOnlyList<ScopeRef> TheProjectItself(string qualifier, string leaf, IReadOnlyList<ScopeRef> matches)
+        => matches.Count > 1
+           && qualifier.Equals(leaf, StringComparison.OrdinalIgnoreCase)
+           && matches.Where(m => m.Kind == "project").ToList() is [var project]
+            ? [project]
+            : matches;
 
     private async Task<IReadOnlyList<ScopeRef>> ResolveAsync(
         Guid workspaceId,
@@ -209,12 +232,14 @@ public sealed partial class BoardQueries(NpgsqlDataSource dataSource)
         var qualified = match.QualifiedRef is { Length: > 0 } q ? q : match.Ref;
         forms.Add(qualified);
 
+        string? parentRef = null;
         if (match.RefScopeId == match.Id)
         {
             if (match.ParentId is { } parentId
                 && await SingleAsync<string>("SELECT ref FROM item WHERE id = @id;", new { id = parentId }, cancellationToken)
                     is { Length: > 0 } parent)
             {
+                parentRef = parent;
                 forms.Add($"{parent}/{match.Ref}");
             }
 
@@ -225,6 +250,11 @@ public sealed partial class BoardQueries(NpgsqlDataSource dataSource)
         {
             forms.Add($"{project}/{match.Ref}");
             forms.Add($"{project}/{qualified}");
+
+            if (parentRef is not null)
+            {
+                forms.Add($"{project}/{parentRef}/{match.Ref}");
+            }
         }
 
         foreach (var form in forms.Distinct(StringComparer.OrdinalIgnoreCase))
@@ -303,9 +333,26 @@ public sealed partial class BoardQueries(NpgsqlDataSource dataSource)
             : reference;
     }
 
+    /// <summary>
+    /// mcp-fit/1. The ref to print for an item outside the reader's run: run-qualified while that resolves to it
+    /// alone, else <see cref="UniqueRefAsync"/>'s form — never bare just because the bare ref happens to be unique.
+    /// </summary>
+    public async Task<string> RunQualifiedRefAsync(
+        Guid workspaceId,
+        Guid itemId,
+        string reference,
+        CancellationToken cancellationToken = default)
+        => (await ResolveAsync(workspaceId, reference, cancellationToken)).FirstOrDefault(m => m.Id == itemId) is { } match
+            ? await CallableRefAsync(match, refShared: true, cancellationToken)
+            : reference;
+
     /// <summary>What must be true to accept a phase (doc 02, <c>item.gate_criterion</c>); null when none was recorded.</summary>
     public Task<string?> GateCriterionAsync(Guid itemId, CancellationToken cancellationToken = default)
         => SingleAsync<string>("SELECT gate_criterion FROM item WHERE id = @id;", new { id = itemId }, cancellationToken);
+
+    /// <summary>An item's bare ref; null when it does not exist.</summary>
+    public Task<string?> RefOfAsync(Guid itemId, CancellationToken cancellationToken = default)
+        => SingleAsync<string>("SELECT ref FROM item WHERE id = @id;", new { id = itemId }, cancellationToken);
 
     /// <summary>The run the item is, or sits in; null for a project, a feature or an orphan.</summary>
     public async Task<ScopeRef?> RunOfAsync(Guid itemId, CancellationToken cancellationToken = default)
@@ -1029,12 +1076,13 @@ public sealed partial class BoardQueries(NpgsqlDataSource dataSource)
         long sinceSeq,
         int limit,
         bool oldestFirst = false,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        Guid? home = null)
     {
         var sql =
             $"""
              SELECT e.seq     AS "Seq",
-                    i.ref     AS "ItemRef",
+                    {ShownRef("i")} AS "ItemRef",
                     e.at      AS "At",
                     coalesce(es.name, e.actor) AS "Actor",
                     e.role    AS "Role",
@@ -1055,7 +1103,7 @@ public sealed partial class BoardQueries(NpgsqlDataSource dataSource)
 
         return await ListAsync<EventRow>(
             sql,
-            new { workspace = workspaceId, scope = scopeItemId, since = sinceSeq, limit },
+            new { workspace = workspaceId, scope = scopeItemId, since = sinceSeq, limit, home },
             cancellationToken);
     }
 
@@ -1110,14 +1158,15 @@ public sealed partial class BoardQueries(NpgsqlDataSource dataSource)
     /// </summary>
     public async Task<IReadOnlyList<AuditRow>> NeverRedAsync(
         Guid scopeItemId,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        Guid? home = null)
     {
-        const string sql =
+        var sql =
             $"""
              SELECT 'verify-never-red'                                  AS "Check",
-                    i.ref                                               AS "Ref",
+                    {ShownRef("i")}                                     AS "Ref",
                     'verify_cmd has never been recorded red: ' || i.verify_cmd AS "Problem",
-                    'work_verify(ref:"' || i.ref || '", command:"' || i.verify_cmd
+                    'work_verify(ref:"' || {ShownRef("i")} || '", command:"' || i.verify_cmd
                       || '", result_line:"<the red line>", passed:false, run_by:"orchestrator")' AS "Route"
              FROM   item i
              WHERE  i.verify_cmd IS NOT NULL
@@ -1130,7 +1179,7 @@ public sealed partial class BoardQueries(NpgsqlDataSource dataSource)
              ORDER  BY i.ref;
              """;
 
-        return await ListAsync<AuditRow>(sql, new { scope = scopeItemId }, cancellationToken);
+        return await ListAsync<AuditRow>(sql, new { scope = scopeItemId, home }, cancellationToken);
     }
 
     /// <summary>
@@ -1140,21 +1189,23 @@ public sealed partial class BoardQueries(NpgsqlDataSource dataSource)
     /// </summary>
     public async Task<IReadOnlyList<AuditRow>> ForcedTransitionsAsync(
         Guid scopeItemId,
-        CancellationToken cancellationToken = default)
-        => [.. (await ForcedTransitionsAsync([scopeItemId], cancellationToken))[scopeItemId]];
+        CancellationToken cancellationToken = default,
+        Guid? home = null)
+        => [.. (await ForcedTransitionsAsync([scopeItemId], cancellationToken, home))[scopeItemId]];
 
     /// <summary><see cref="ForcedTransitionsAsync(Guid, CancellationToken)"/> for many scopes in one command.</summary>
     public async Task<ILookup<Guid, AuditRow>> ForcedTransitionsAsync(
         IReadOnlyCollection<Guid> scopeItemIds,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        Guid? home = null)
     {
-        const string sql =
+        var sql =
             $"""
              SELECT 'forced-closure'                                     AS "Check",
-                    i.ref                                                AS "Ref",
+                    {ShownRef("i")}                                      AS "Ref",
                     'closed with force:true — '
                       || coalesce(nullif(e.payload->>'reason', ''), 'no reason recorded') AS "Problem",
-                    'work_verify(ref:"' || i.ref || '", result_line:"…", run_by:"orchestrator") to '
+                    'work_verify(ref:"' || {ShownRef("i")} || '", result_line:"…", run_by:"orchestrator") to '
                       || 'record the evidence it closed without, or work_note(kind:"decision", '
                       || 'body:"…") to accept it on the record'                            AS "Route",
                     {Scoped.Column}
@@ -1165,20 +1216,21 @@ public sealed partial class BoardQueries(NpgsqlDataSource dataSource)
              ORDER  BY e.seq DESC;
              """;
 
-        return await ScopedAsync<AuditRow>(sql, new { scopes = Scoped.Ids(scopeItemIds) }, cancellationToken);
+        return await ScopedAsync<AuditRow>(sql, new { scopes = Scoped.Ids(scopeItemIds), home }, cancellationToken);
     }
 
     /// <summary>doc 01 §5 check #5: a superseded item that open work still points at.</summary>
     public async Task<IReadOnlyList<AuditRow>> SupersededStillReferencedAsync(
         Guid scopeItemId,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        Guid? home = null)
     {
-        const string sql =
-            """
+        var sql =
+            $"""
             SELECT 'superseded-referenced'                              AS "Check",
-                   s.ref                                                AS "Ref",
-                   'superseded, but ' || o.ref || ' still links to it'   AS "Problem",
-                   'work_link(from:"' || o.ref || '", to:"<the replacement>", type:"blocks")' AS "Route"
+                   {ShownRef("s")}                                      AS "Ref",
+                   'superseded, but ' || {ShownRef("o")} || ' still links to it'   AS "Problem",
+                   'work_link(from:"' || {ShownRef("o")} || '", to:"<the replacement>", type:"blocks")' AS "Route"
             FROM   item_link l
             JOIN   item s ON s.id = l.to_item_id
             JOIN   item o ON o.id = l.from_item_id
@@ -1188,18 +1240,19 @@ public sealed partial class BoardQueries(NpgsqlDataSource dataSource)
             ORDER  BY s.ref;
             """;
 
-        return await ListAsync<AuditRow>(sql, new { scope = scopeItemId }, cancellationToken);
+        return await ListAsync<AuditRow>(sql, new { scope = scopeItemId, home }, cancellationToken);
     }
 
     /// <summary>doc 01 §5 check #6: an upcoming risk no active constraint covers.</summary>
     public async Task<IReadOnlyList<AuditRow>> UncoveredRiskAsync(
         Guid scopeItemId,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        Guid? home = null)
     {
-        const string sql =
+        var sql =
             $"""
              SELECT 'risk-uncovered'                                   AS "Check",
-                    i.ref                                              AS "Ref",
+                    {ShownRef("i")}                                    AS "Ref",
                     'risk_tag "' || t.tag || '" has no active constraint covering it' AS "Problem",
                     'work_note(kind:"decision", body:"…") or record a constraint — '
                       || 'no active constraint_rule lists "' || t.tag || '" in covers_risk' AS "Route"
@@ -1214,7 +1267,7 @@ public sealed partial class BoardQueries(NpgsqlDataSource dataSource)
              ORDER  BY i.ref, t.tag;
              """;
 
-        return await ListAsync<AuditRow>(sql, new { scope = scopeItemId }, cancellationToken);
+        return await ListAsync<AuditRow>(sql, new { scope = scopeItemId, home }, cancellationToken);
     }
 
     /// <summary>A prohibition with no way out — doc 02 §8's <c>route</c> column, audited.</summary>
@@ -1244,6 +1297,16 @@ public sealed partial class BoardQueries(NpgsqlDataSource dataSource)
             new { workspace = workspaceId, scope = scopeItemId },
             cancellationToken);
     }
+
+    /// <summary>
+    /// mcp-fit/1. <paramref name="alias"/>'s ref as a reader of <c>@home</c> (a ref scope) needs it: bare inside
+    /// that scope and for a run or project, else run-qualified, <c>run/ref</c>. A bare <c>2</c> in a
+    /// project's audit or history named no run, and the same <c>2</c> sits in each.
+    /// </summary>
+    internal static string ShownRef(string alias)
+        => $"(CASE WHEN {alias}.ref_scope_id IS NULL OR {alias}.ref_scope_id = {alias}.id "
+           + $"OR {alias}.ref_scope_id = @home::uuid THEN {alias}.ref "
+           + $"ELSE (SELECT rs.ref FROM item rs WHERE rs.id = {alias}.ref_scope_id) || '/' || {alias}.ref END)";
 
     private const string ScopeColumns =
         """

@@ -120,20 +120,21 @@ public sealed partial class BoardQueries
     /// </summary>
     public async Task<IReadOnlyList<AuditRow>> DueAfterParentAsync(
         Guid scopeItemId,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        Guid? home = null)
     {
-        const string sql =
+        var sql =
             $"""
              SELECT 'due-after-parent' AS "Check",
-                    i.ref              AS "Ref",
+                    {ShownRef("i")}    AS "Ref",
                     'due ' || coalesce(to_char(i.due_on, 'YYYY-MM-DD'),
                                        to_char(i.due_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"'))
-                      || ' ends after its parent ' || p.ref || ' is due ('
+                      || ' ends after its parent ' || {ShownRef("p")} || ' is due ('
                       || coalesce(to_char(p.due_on, 'YYYY-MM-DD'),
                                   to_char(p.due_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"'))
                       || ')' AS "Problem",
-                    'work_update(ref:"' || i.ref || '", due:"…") to bring it inside, or move '
-                      || p.ref || '''s due' AS "Route"
+                    'work_update(ref:"' || {ShownRef("i")} || '", due:"…") to bring it inside, or move '
+                      || {ShownRef("p")} || '''s due' AS "Route"
              FROM   item i
              JOIN   item p ON p.id = i.parent_id
              WHERE  {InScope}
@@ -144,6 +145,6 @@ public sealed partial class BoardQueries
              ORDER  BY i.ref;
              """;
 
-        return await ListAsync<AuditRow>(sql, new { scope = scopeItemId }, cancellationToken);
+        return await ListAsync<AuditRow>(sql, new { scope = scopeItemId, home }, cancellationToken);
     }
 }
