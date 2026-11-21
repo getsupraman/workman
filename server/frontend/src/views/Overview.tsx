@@ -355,7 +355,7 @@ function RunStrip(props: { run: RunOverview }) {
       <Show when={t()} fallback={<div class="segs" />}>
         {(tt) => <Segs leaves={tt().leaves} />}
       </Show>
-      <div class="strip-n" title={countTitle(t() ?? counted(props.run.rollup))}>
+      <div class="strip-n" title={countTitle(t() ?? counted(props.run.rollup), props.run.rollup.notCounted)}>
         <strong>{(t() ?? counted(props.run.rollup)).done}</strong>
         <span> / {(t() ?? counted(props.run.rollup)).total}</span>
       </div>

@@ -504,7 +504,7 @@ function RunLink(props: { run: RunOverview; current: boolean }) {
       {...tipFor(() => ({ title: props.run.item.title, sub: props.run.item.fullRef }))}
     >
       <span class="rl-title">{short(props.run.item.title)}</span>
-      <span class="rl-count" title={countTitle(counts() ?? counted(props.run.rollup))}>
+      <span class="rl-count" title={countTitle(counts() ?? counted(props.run.rollup), props.run.rollup.notCounted)}>
         {`${(counts() ?? counted(props.run.rollup)).done}/${(counts() ?? counted(props.run.rollup)).total}`}
       </span>
       <span class="rl-bar">

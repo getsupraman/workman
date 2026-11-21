@@ -176,6 +176,7 @@ a.proj.on { background: var(--side-2); color: var(--gold); }
 .page-h > div:first-child { min-width: 0; }
 h1 { font-family: var(--font-serif); font-size: 28px; line-height: 1.2; margin: 0; font-weight: 700; letter-spacing: -0.2px; overflow-wrap: anywhere; }
 .sub { color: var(--ink-2); margin-top: 6px; max-width: 72ch; }
+.sub .not-counted { color: var(--ink-3); font-size: 13px; }
 .stamp { color: var(--ink-3); font-size: 12.5px; white-space: nowrap; }
 .failure { margin-bottom: 20px; padding: 10px 14px; border-radius: 10px; background: var(--stop-soft); color: var(--stop); font-size: 13px; }
 

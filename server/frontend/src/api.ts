@@ -27,7 +27,12 @@ export type Rollup = {
   superseded: number
   /** Unclosed findings anywhere below: never part of `total`. */
   findingsOpen: number
+  /** What is open below but outside `total` (mcp-fit/5); absent from a server before it. */
+  notCounted?: NotCounted
 }
+
+/** The open waits and findings a rollup leaves out of its "X of Y". */
+export type NotCounted = { waits: number; findings: number }
 
 export type Session = {
   id: string

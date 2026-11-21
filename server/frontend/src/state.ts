@@ -1,4 +1,4 @@
-import type { BarLeaf, BoardRow, ItemPage, ItemRef, Rollup } from './api.ts'
+import type { BarLeaf, BoardRow, ItemPage, ItemRef, NotCounted, Rollup } from './api.ts'
 
 /** doc 10's Rollup leaves: the kinds that are a unit of work rather than a container of it. */
 export const LEAF = new Set(['task', 'followup', 'subtask', 'spike', 'question', 'incident'])
@@ -184,5 +184,21 @@ export const counted = (r: Rollup): { done: number; total: number; cancelled: nu
 })
 
 /** A compact "3/6" cell's tooltip, so the dense count still says what it leaves out. */
-export const countTitle = (c: { done: number; total: number; cancelled: number }): string =>
-  `${c.done} of ${c.total} done${c.cancelled ? `, ${c.cancelled} cancelled` : ''}`
+export const countTitle = (c: { done: number; total: number; cancelled: number }, left?: NotCounted): string =>
+  `${c.done} of ${c.total} done${c.cancelled ? `, ${c.cancelled} cancelled` : ''}` +
+  (notCountedList(left) ? ` · not counted: ${notCountedList(left)}` : '')
+
+const plural = (n: number, noun: string): string => `${n} open ${noun}${n === 1 ? '' : 's'}`
+
+/** "2 open waits, 1 open finding"; empty when nothing is left out. */
+const notCountedList = (left?: NotCounted): string =>
+  [left?.waits ? plural(left.waits, 'wait') : '', left?.findings ? plural(left.findings, 'finding') : '']
+    .filter(Boolean)
+    .join(', ')
+
+/**
+ * What the run header prints beside its "X of Y": the open waits and findings the rollup leaves out, as work_tree
+ * names them. A server without `notCounted` falls back to the findings line. Empty when nothing is left out.
+ */
+export const notCounted = (r: { findingsOpen?: number; notCounted?: NotCounted }): string =>
+  r.notCounted ? (notCountedList(r.notCounted) ? `Not counted: ${notCountedList(r.notCounted)}.` : '') : findingsOpen(r.findingsOpen ?? 0)

@@ -5,7 +5,7 @@
  *
  *   node verify/state-cases.mjs
  */
-import { CLOSED, LEAF, answer, barInput, barTally, confirmation, confirmedText, countTitle, counted, findingsOpen, independent, progress, state, tally } from '../src/state.ts'
+import { CLOSED, LEAF, answer, barInput, barTally, confirmation, confirmedText, countTitle, counted, findingsOpen, independent, notCounted, progress, state, tally } from '../src/state.ts'
 import { DEFAULT_FILTER, FILTERS, asFilter, cancelledLines, plan, planOrder, planQuery, runPageHref, withoutCancelled } from '../src/plan.ts'
 import { readFileSync } from 'node:fs'
 import { KEYS, KEYS_COMMAND, isHelpKey, keysTable } from '../src/keys.ts'
@@ -228,6 +228,15 @@ check('the X of Y leaves findings out: 1 of 3', [tally(findingRows).done, tally(
 check('header: several open', findingsOpen(3), '3 findings open.')
 check('header: one open', findingsOpen(1), '1 finding open.')
 check('header: none, nothing printed', [findingsOpen(0), findingsOpen(undefined)], ['', ''])
+
+console.log('\n── the rollup says what it leaves out (mcp-fit/5) ──────────────────────────')
+check('not counted: waits and a finding', notCounted({ findingsOpen: 1, notCounted: { waits: 17, findings: 1 } }), 'Not counted: 17 open waits, 1 open finding.')
+check('not counted: one wait only', notCounted({ findingsOpen: 0, notCounted: { waits: 1, findings: 0 } }), 'Not counted: 1 open wait.')
+check('not counted: findings only', notCounted({ findingsOpen: 3, notCounted: { waits: 0, findings: 3 } }), 'Not counted: 3 open findings.')
+check('not counted: nothing left out, nothing printed', notCounted({ findingsOpen: 0, notCounted: { waits: 0, findings: 0 } }), '')
+check('not counted: an older server falls back to findings', notCounted({ findingsOpen: 2 }), '2 findings open.')
+check('the compact tooltip names what it leaves out', countTitle({ done: 3, total: 6, cancelled: 0 }, { waits: 2, findings: 1 }), '3 of 6 done · not counted: 2 open waits, 1 open finding')
+check('the compact tooltip without anything left out', countTitle({ done: 3, total: 6, cancelled: 0 }, { waits: 0, findings: 0 }), '3 of 6 done')
 
 console.log('\n── the run page opens on Open, and its links keep an explicit filter ───────')
 check('no filter in the URL is Open', asFilter(undefined), 'open')

@@ -3,7 +3,7 @@ import { A, useNavigate, useParams, useSearchParams } from '@solidjs/router'
 import * as api from '../api.ts'
 import type { Board, BoardRow, ItemRef } from '../api.ts'
 import { load, workspaceZone } from '../store.ts'
-import { CLOSED, findingsOpen, progress, rowState, tally } from '../state.ts'
+import { CLOSED, notCounted, progress, rowState, tally } from '../state.ts'
 import { FILTERS, asFilter, cancelledLines, plan, planOrder, planQuery as query, runPageHref, type Filter } from '../plan.ts'
 import { step } from '../listnav.ts'
 import { reveal, useListKeys } from '../listkeys.ts'
@@ -185,7 +185,7 @@ function RunHeader(props: { board: Board }) {
         <h1>{short(props.board.run.title)}</h1>
         <div class="sub">
           {progress(t())}
-          <Show when={findingsOpen(props.board.rollup.findingsOpen)}>{(text) => <span> {text()}</span>}</Show>
+          <Show when={notCounted(props.board.rollup)}>{(text) => <span class="not-counted"> {text()}</span>}</Show>
         </div>
         <PromptActions scope={props.board.run.id} />
       </div>
