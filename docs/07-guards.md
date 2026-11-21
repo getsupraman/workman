@@ -99,7 +99,7 @@ Refused unless **all** hold. Each maps to a rule the corpus shows being broken:
 | # | Condition | The corpus failure it prevents |
 |---|---|---|
 | 1 | every `item_criterion` is `checked` | 424 unchecked boxes in "finished" runs |
-| 2 | ≥1 `verification` with `passed = true` and **`run_by = 'orchestrator'`**. If **both** the item's `verify_cmd` and the verification's `command` are present they must match; a null `command` does **not** fail the guard | *"worker self-reports of 'tests pass' are the claim you would most regret trusting"* |
+| 2 | ≥1 `verification` with `passed = true` and **`run_by = 'orchestrator'`**. If **both** the item's `verify_cmd` and the verification's `command` are present they must match; a null `command` does **not** fail the guard. **Or** a confirmation by a person (below) — but **only** when the item's `verify_cmd` is empty or explicitly marked `verify_manual` | *"worker self-reports of 'tests pass' are the claim you would most regret trusting"* |
 | 3 | no child item is open — except a run's own `backlog` phase, which the close carries out (§4) | a phase closed over unfinished tasks |
 | 4 | no open `finding` with `severity = 'blocker'` targets it | gate blockers dissolved into prose |
 | 5 | for kinds with `requires_commit` **set**: ≥1 `artifact` of kind `commit`. **No seeded kind sets it, `task` included** — see below | *"every accepted task ends in a commit"* — a rule the corpus itself does not keep |
@@ -186,6 +186,43 @@ load agents reached for `force` instead. `verify` and `criteria` bundle those wr
   conditions are listed in the `forced_transition`.
 
 The refusals that route to `work_verify` or `work_update` name this form beside them.
+
+`verify` also takes the confirmation form, `{confirmed_by, quote}`, instead of `{command, result_line, passed}`,
+under the same rules as `work_verify`'s (below): both fields, none of the run's, never from a worker, and refused
+with nothing written on an item whose `verify_cmd` is a real command.
+
+### Confirmation by a person
+
+Many items are not code: a call, a purchase, an approval. Their only honest evidence is a person's word, and
+before mcp-fit/4 the only way to close on it was `force`, which the audit lists as forced. A confirmation is that
+word, recorded as its own kind of evidence:
+
+```
+work_verify(ref, confirmed_by:"Dana", quote:"The supplier called back: the order is placed.")
+work_status(ref, to:"done", verify:{confirmed_by:"Dana", quote:"…"}, criteria:[…], commit?)
+```
+
+- **A row of its own kind.** A `verification` with `run_by = human`, `passed`, no `command`, and the person in
+  `confirmed_by`, their words in `quote` (and in `result_line`, so a reader that knows nothing of confirmations
+  still prints their words). Check constraints make a half-written one, or one with a command, unwritable. A
+  question's answer stays what it was: a human verification with no person.
+- **Both fields, nothing else.** `confirmed_by` and `quote` are required together; a confirmation that also
+  carries `command`, `result_line` or `passed` is refused.
+- **Never a worker** (C344). An orchestrator, a controller or a human records one; a worker is refused and hands
+  back what it heard in `work_report`.
+- **Only where the check is a person's** (C343). On an item with a real `verify_cmd` that is not marked manual,
+  the confirmation is refused at write time with both routes: run the command, or `work_update(ref,
+  verify_manual:true)` if it really is a manual check. Condition 2 reads the same rule at close time, so a
+  confirmation recorded while the check was manual does not close the item once the marker is taken off.
+- **`verify_manual` is explicit** (C345): a boolean on the item, set by `work_create` / `work_update`, default
+  false. Nothing reads "manual" from the text of `verify_cmd`.
+- **Not forced, not verified.** A confirmed close is an ordinary `status` transition, never a
+  `forced_transition`. It always reads `Confirmed by <person>: “<quote>”` — in `work_get`, the brief, `work_history`
+  (event kind `confirmed`), the close's success text, `/api/v1` and the dashboard — never Passed, ✓ or a runner's
+  name. It is counted on its own: not in *closed without independent proof*, not as verified; `work_audit` lists it
+  under `done-confirmed`, apart from `done-unverified` and `forced-closure`.
+
+Everything else in §3 is unchanged.
 
 ---
 

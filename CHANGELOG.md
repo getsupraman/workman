@@ -7,9 +7,23 @@ All notable changes to the Workman server and the `workman` plugin are recorded 
 
 ## [Unreleased]
 
-Server only. No migration; existing data is not changed.
+Server only. One migration, `20261121090000_HumanConfirmation`: it adds `item.verify_manual` (default false) and
+`verification.confirmed_by` / `quote` with their check constraints; existing rows are not changed.
 
 ### Added
+
+- **A confirmation by a person, and an explicit manual marker.** `work_verify(ref, confirmed_by, quote)` — or the
+  one-call close's `verify:{confirmed_by, quote}` — records a named person's words as its own kind of evidence: a
+  human row that is never a passed run. It satisfies the done guard's verification condition only when the item's
+  `verify_cmd` is empty or marked `verify_manual:true` (new on `work_create` and `work_update`, never inferred from
+  the text); on a real command it is refused with the routes. Both fields are required, a confirmation with
+  `command`, `result_line` or `passed` is refused, and a worker cannot record one. A confirmed close is not a
+  `forced_transition`. It reads `Confirmed by <person>: “<quote>”` in `work_get`, the brief, `work_history`, the
+  close, `/api/v1` and the dashboard's Evidence tab (its own card), and is counted on its own: `work_audit`'s
+  `done-confirmed`, the overview's `honesty.confirmed` and a new strip tile, never in *closed without independent
+  proof*. Question answers are unchanged. `/api/v1` gains `verifyManual`, `confirmedBy`/`quote`, the `confirmed`
+  flag and bar input, additively. `tools/list` changes for every profile (`work_verify`; `work_create`,
+  `work_update`, `work_status` for orchestrators).
 
 - **`work_history` prints when each event happened and pages back past the newest 100.** Every row carries the
   UTC time to the minute (`2026-11-20 15:57Z`); `beforeSeq` reads the events before a seq, and while older events

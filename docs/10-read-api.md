@@ -317,11 +317,11 @@ Everything a human needs on landing, in one call.
     "sharing": { "members": 2, "you": true, "names": ["ana", "ben"] },   // added for sharing, additive
     "runs": [{ "item": ItemRef, "rollup": Rollup, "branch": "feat/x" | null, "worktree": "P:/…" | null,
                "activeClaims": 1, "lastEventAt": "…", "inboxCount": 2,
-               "lastVerification": { "passed": true, "at": "…" } | null }]
+               "lastVerification": { "passed": true, "at": "…", "confirmed": false } | null }]
   }],                           // newest lastActivityAt first, then ref
   "workingNow": [Claim],        // live and expired-unreleased claims, newest first
   "inboxCount": 3,
-  "honesty": { "doneUnverified": 0, "forced": 0, "ungated": 0, "followupsOpen": 4 } }
+  "honesty": { "doneUnverified": 0, "forced": 0, "ungated": 0, "followupsOpen": 4, "confirmed": 1 } }
 ```
 
 `sharing` (added for the dashboard's sharing marker, additive) is who shares the project (doc 02 §12b):
@@ -331,7 +331,9 @@ with no user; `names` the members by name (case-insensitive order), so the marke
 without a call per project. Read in one statement under the caller's own tenant transaction, so it says
 nothing about a project rule 8 leaves out — the response does not list one, and its member rows are not read.
 
-`honesty` sums over the projects what `work_audit` counts for each. Each of its four counts, like each inbox source
+`honesty` sums over the projects what `work_audit` counts for each. `confirmed` (mcp-fit/4, additive) counts items
+closed on a person's confirmation and on no orchestrator run: they are in neither `doneUnverified` nor any verified
+count, and a forced close is never one. Each of its counts, like each inbox source
 (`/inbox` below), is read once for every project through the query the one-scope MCP call runs with one id, so the
 overview issues the same number of SQL commands for 2 projects as for 14.
 
@@ -349,11 +351,14 @@ seq order). The client rebuilds the tree from `parentId`/`depth`/`hasChildren`.
     "rollup": Rollup | null,                  // containers only
     "claim": Claim | null,
     "commit": "a439808" | null,               // latest commit artifact
-    "verification": { "passed": true, "runBy": "orchestrator", "at": "…" } | null,   // latest
+    "verification": { "passed": true, "runBy": "orchestrator", "at": "…",
+                      "confirmedBy": "Dana" | null } | null,   // latest; confirmedBy: a person's word, not a run
     "blockedBy": [ItemRef],                   // open blockers only
-    "flags": ["disagrees","done_unverified","forced","stale_claim","unconsumed_notes"],
+    "flags": ["disagrees","done_unverified","confirmed","forced","stale_claim","unconsumed_notes"],
+                                              // confirmed: done on a person's confirmation, never also done_unverified
     "openedAt": "…", "startedAt": "…" | null, "closedAt": "…" | null,
-    "due": "…" | null, "notBefore": "…" | null, "late": false, "slips": 0 }] }   // Dates, additive
+    "due": "…" | null, "notBefore": "…" | null, "late": false, "slips": 0,   // Dates, additive
+    "verifyManual": false }] }                // mcp-fit/4, additive
 ```
 
 ### `GET /api/v1/boards?runs={id},{id},…` (runs optional; added for the dashboard, additive)
@@ -384,8 +389,9 @@ dashboard's `state()` stays the one place a colour comes from.
       "id": "uuid", "qualifiedRef": "m5/1.2", "title": "…", "kind": "task",
       "status": "done", "resolution": "accepted" | null,
       "claimExpired": false,                    // the held claim has lapsed
-      "proof": true,                            // latest verification passed, not run by the worker
-      "waitingOn": ["m5/1.4"] }] }] }           // qualified refs of the open items blocking it
+      "proof": true,                            // latest verification passed, not run by the worker, not a confirmation
+      "waitingOn": ["m5/1.4"],                  // qualified refs of the open items blocking it
+      "confirmed": false }] }] }                // latest evidence is a person's confirmation (mcp-fit/4, additive)
 ```
 A leaf is what the Rollup counts: a leaf kind, or a phase or feature with nothing below it.
 
@@ -404,7 +410,9 @@ A unit page: what was asked, what the agent **reported**, what was **verified**.
     "notDone": "…", "at": "…" }],
   "verifications": [{                          // work_verify: what was PROVEN
     "command": "…", "resultLine": "Passed! 308", "passed": true, "counts": { } | null,
-    "runBy": "orchestrator", "session": Session | null, "redCheck": "…" | null, "at": "…" }],
+    "runBy": "orchestrator", "session": Session | null, "redCheck": "…" | null, "at": "…",
+    "confirmedBy": "Dana" | null, "quote": "…" | null }],   // a confirmation by a person (mcp-fit/4, additive):
+                                               // runBy human, passed, no command; never a passed run
   "artifacts": [{ "kind": "commit", "value": "a439808", "at": "…" }],
   "children": [{ "item": ItemRef, "criteria": { "checked": 1, "total": 2 } }],
   "findings": [{ "item": ItemRef, "severity": "blocker", "source": "review" }],   // against this item
@@ -414,7 +422,8 @@ A unit page: what was asked, what the agent **reported**, what was **verified**.
   "assumptions": [{ "ref": "A1", "text": "…", "status": "open", "revisitWhen": ItemRef | null }],
   "events": [JournalEvent],                    // newest 50 for this item, ascending
   "eventsHasMore": true,
-  "due": "…" | null, "notBefore": "…" | null, "late": false, "slips": 0 }   // Dates, additive
+  "due": "…" | null, "notBefore": "…" | null, "late": false, "slips": 0,   // Dates, additive
+  "verifyManual": false }                      // the check is a person's (mcp-fit/4, additive)
 ```
 
 ### `GET /api/v1/items/{id}/brief?for=resume|worker|gate`
