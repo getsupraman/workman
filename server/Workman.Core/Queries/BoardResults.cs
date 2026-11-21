@@ -59,7 +59,8 @@ public sealed record NoteRow(
     string? FromRef,
     Guid Id,
     Guid? ToItemId,
-    DateTimeOffset CreatedAt);
+    DateTimeOffset CreatedAt,
+    DateTimeOffset? AcknowledgedAt = null);
 
 public sealed record ItemReportRow(
     Guid ItemId,

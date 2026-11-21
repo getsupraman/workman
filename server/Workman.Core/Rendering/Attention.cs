@@ -45,13 +45,18 @@ public enum AttentionRank
 /// <c>phase-4</c> in each of four runs. Every source names one item, the unconsumed-note line
 /// included: it is one line per addressee (ws/13), so its call can never name an ambiguous scope.
 /// </para>
+/// <para>
+/// <paramref name="Or"/> is a second route, rendered on its own indented line under the call so the pair stays inside
+/// <see cref="Columns.Width"/>: the note line's acknowledge (mcp-fit/5).
+/// </para>
 /// </summary>
 public sealed record AttentionLine(
     AttentionRank Rank,
     string What,
     string Call,
     string? Ref = null,
-    string? QualifiedRef = null);
+    string? QualifiedRef = null,
+    string? Or = null);
 
 /// <summary>
 /// The attention lines of one scope, carrying the ref their uncapped block is read back under, so a
@@ -108,5 +113,7 @@ public static class Attention
         return block.Length == 0 ? body : $"{body}\n\n{block}";
     }
 
-    private static string Line(AttentionLine line) => $"{Glyph.Warn} {Glyph.Flat(line.What)} — {Glyph.Flat(line.Call)}";
+    private static string Line(AttentionLine line) =>
+        $"{Glyph.Warn} {Glyph.Flat(line.What)} — {Glyph.Flat(line.Call)}"
+        + (line.Or is null ? string.Empty : $"\n  or {Glyph.Flat(line.Or)}");
 }

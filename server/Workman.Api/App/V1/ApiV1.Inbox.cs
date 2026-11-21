@@ -163,7 +163,7 @@ public static partial class ApiV1
 
         foreach (var scope in scopes)
         {
-            foreach (var addressed in notes[scope].Where(n => n.ToItemId is not null).GroupBy(n => n.ToItemId!.Value))
+            foreach (var addressed in notes[scope].Where(n => n.ToItemId is not null && n.AcknowledgedAt is null).GroupBy(n => n.ToItemId!.Value))
             {
                 waiting.Add(new Waiting(
                     "unconsumed_note", addressed.Key, $"{addressed.Count()} note(s) addressed to it unconsumed",

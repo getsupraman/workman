@@ -38,7 +38,7 @@ public sealed class AttentionRefTests(PostgresFixture fixture)
     private static readonly string[] BelowTheCap =
     [
         "A3 is past revisit_when (1.1 is closed) — work_assume(ref:\"A3\", resolve:\"confirmed\", evidence:\"…\")",
-        "1 note(s) addressed to 1.3 unconsumed — work_brief(scope:\"1.3\", for:\"worker\")",
+        "1 note(s) addressed to 1.3 unconsumed — work_brief(scope:\"1.3\", for:\"worker\")\n  or work_note(acknowledge:\"1.3\")",
         "1.3 has been in_progress 1d with no live claim — work_status(ref:\"1.3\", to:\"in_progress\") to retake it",
     ];
 
@@ -56,7 +56,7 @@ public sealed class AttentionRefTests(PostgresFixture fixture)
             string.Join("\n", lines
                 .Where(l => l.Rank >= AttentionRank.AssumptionPastRevisit)
                 .OrderBy(l => l.Rank)
-                .Select(l => $"{l.What} — {l.Call}")));
+                .Select(l => $"{l.What} — {l.Call}" + (l.Or is null ? "" : $"\n  or {l.Or}"))));
     }
 
     /// <summary>

@@ -18,7 +18,11 @@ public sealed record RollupView(
     int Open,
     int Cancelled,
     int Superseded,
-    int FindingsOpen);
+    int FindingsOpen,
+    NotCountedView NotCounted);
+
+/// <summary>mcp-fit/5: what is open below the item but outside <see cref="RollupView.Total"/> — the rollup says what it leaves out.</summary>
+public sealed record NotCountedView(int Waits, int Findings);
 
 public sealed record SessionView(
     Guid Id,

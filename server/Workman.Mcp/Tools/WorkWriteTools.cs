@@ -248,23 +248,31 @@ public sealed class WorkWriteTools(
     }
 
     [Authorize(Policy = WorkmanPolicies.Worker)]
-    [McpServerTool(Name = "work_note", Title = "Carry forward: a fact the next agent needs")]
+    [McpServerTool(Name = "work_note", Title = "Carry a fact forward")]
     [Description("""
-        Records something the next agent must not have to rediscover. Addressed with to:, it renders
-        into that item's brief and is marked consumed there — delivered exactly once.
-        Do not paste code or diffs; record the sha and the path.
-        Next: nothing. It is a side effect, not a step.
+        Records what the next agent must not rediscover; with to:, it renders once into that
+        item's worker brief. No code or diffs: record the sha and path.
+        Next: nothing; a side effect.
         """)]
     public async Task<CallToolResult> NoteAsync(
         [Description("carry_forward | do_not_rederive | correction | incident | environment | decision | observation")]
-        string kind,
-        [Description("The note, in one or two lines.")] string body,
-        [Description("A future item's ref, e.g. \"3.1\".")]
+        string? kind = null,
+        [Description("One or two lines.")] string? body = null,
+        [Description("The item it is for.")]
         string? to = null,
         [Description("The item this came out of.")] string? from = null,
+        [Description("Instead of a note: a ref whose notes leave attention, not its brief.")]
+        string? acknowledge = null,
         CancellationToken cancellationToken = default)
     {
         var id = tenant.Id;
+
+        if (!string.IsNullOrWhiteSpace(acknowledge))
+        {
+            return Result(await Guarded(
+                $"work_note(acknowledge:\"{acknowledge}\")",
+                () => writer.AcknowledgeNotesAsync(id, caller.Actor, acknowledge, kind, body, to, cancellationToken)));
+        }
 
         return Result(await Guarded(
             $"work_note(kind:\"{kind}\", …)",

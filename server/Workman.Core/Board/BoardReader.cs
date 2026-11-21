@@ -529,7 +529,9 @@ public sealed partial class BoardReader(WorkmanQueries queries, BoardQueries boa
         // own notes anyway. A shared bare ref is printed qualified, as every other call is (ws/10).
         var notes = await board.UnconsumedNotesAsync(
             scope.WorkspaceId, item.Id, cancellationToken, openAddresseesOnly: true);
-        var addressees = notes.Where(n => n.ToItemId is not null).GroupBy(n => n.ToItemId!.Value).ToList();
+        var addressees = notes.Where(n => n.ToItemId is not null && n.AcknowledgedAt is null)
+            .GroupBy(n => n.ToItemId!.Value)
+            .ToList();
         var shared = (await board.FactsAsync([.. addressees.Select(a => a.Key)], cancellationToken))
             .Where(f => f.RefShared)
             .Select(f => f.Id)
@@ -547,7 +549,8 @@ public sealed partial class BoardReader(WorkmanQueries queries, BoardQueries boa
                 $"{addressed.Count()} note(s) addressed to {named} unconsumed",
                 $"work_brief(scope:\"{named}\", for:\"worker\")",
                 first.ToRef,
-                first.ToQualifiedRef));
+                first.ToQualifiedRef,
+                $"work_note(acknowledge:\"{named}\")"));
         }
 
         foreach (var stale in await board.StaleInProgressAsync(item.Id, StaleHours, cancellationToken))

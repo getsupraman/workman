@@ -107,6 +107,82 @@ public sealed partial class WorkWriter
                   + "marked consumed there."));
     }
 
+    /// <summary>
+    /// <c>work_note(acknowledge:"&lt;ref&gt;")</c>: every unconsumed, unacknowledged note addressed to that item leaves the
+    /// attention line, the inbox and the board flag. <c>consumed_at</c> is not touched: the next worker brief of the item
+    /// still renders them and consumes them there (C346).
+    /// </summary>
+    public async Task<WriteResult> AcknowledgeNotesAsync(
+        Guid workspaceId,
+        Actor actor,
+        string acknowledge,
+        string? kind,
+        string? body,
+        string? to,
+        CancellationToken cancellationToken = default)
+    {
+        var call = $"work_note(acknowledge:\"{Glyph.Flat(acknowledge)}\")";
+
+        if (!Blank(kind) || !Blank(body) || !Blank(to))
+        {
+            return WriteResult.No(Refusal.Blocked(
+                $"{call} with kind, body or to. Nothing was written.",
+                "acknowledge records no note; it only takes the notes already addressed to the item out of attention",
+                $"{call} on its own, and work_note(kind:\"…\", body:\"…\", to:\"…\") separately"));
+        }
+
+        if (actor.Role is not (ActorRole.Orchestrator or ActorRole.Controller or ActorRole.Human))
+        {
+            return WriteResult.No(Refusal.Blocked(
+                $"{call} — a {Pg.Label(actor.Role)} cannot acknowledge notes. Nothing was written.",
+                "only an orchestrator, a controller or a human acknowledges; a worker reads its notes in its brief",
+                $"work_brief(scope:\"{Glyph.Flat(acknowledge)}\", for:\"worker\") renders them"));
+        }
+
+        var (target, refusal) = await ResolveAsync(workspaceId, acknowledge, cancellationToken);
+        if (target is null)
+        {
+            return WriteResult.No(refusal!);
+        }
+
+        await using var tenant = await _connections.TenantAsync(cancellationToken);
+        var (connection, transaction) = tenant;
+
+        const string sql =
+            """
+            UPDATE note SET acknowledged_at = now(), acknowledged_by = @actor
+             WHERE workspace_id = @workspace AND to_item_id = @item
+               AND consumed_at IS NULL AND acknowledged_at IS NULL;
+            """;
+
+        var count = await connection.ExecuteAsync(new CommandDefinition(
+            sql,
+            new { workspace = workspaceId, item = target.Id, actor = actor.Name },
+            transaction,
+            cancellationToken: cancellationToken));
+
+        var shown = Glyph.Flat(acknowledge.Trim());
+
+        if (count > 0)
+        {
+            await EventAsync(
+                connection,
+                transaction,
+                workspaceId,
+                target.Id,
+                actor,
+                "note_acknowledged",
+                $"{count} note(s) acknowledged",
+                new { count },
+                cancellationToken);
+        }
+
+        await transaction.CommitAsync(cancellationToken);
+
+        return WriteResult.Ok(
+            $"OK  {shown}  {count} note(s) acknowledged — they still reach the next worker brief of {shown}");
+    }
+
     /// <summary>Shared by <c>work_note</c> and <c>work_import</c>'s note records.</summary>
     private static async Task<Guid> InsertNoteAsync(
         NpgsqlConnection connection,

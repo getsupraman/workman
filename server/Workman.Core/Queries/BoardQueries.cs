@@ -649,7 +649,8 @@ public sealed partial class BoardQueries(NpgsqlDataSource dataSource)
                f.ref   AS "FromRef",
                n.id    AS "Id",
                n.to_item_id AS "ToItemId",
-               n.created_at AS "CreatedAt"
+               n.created_at AS "CreatedAt",
+               n.acknowledged_at AS "AcknowledgedAt"
         """;
 
     private const string NoteJoins =
@@ -1209,6 +1210,7 @@ public sealed partial class BoardQueries(NpgsqlDataSource dataSource)
     /// <summary>
     /// doc 01 §5 check #1: a <c>verify_cmd</c> this workspace has never recorded red. That is the
     /// "filter matches only tests that already pass" defect, which no file-based audit can see.
+    /// An item whose check is marked manual (<c>verify_manual</c>, set explicitly — C345) has no command to see red.
     /// </summary>
     public async Task<IReadOnlyList<AuditRow>> NeverRedAsync(
         Guid scopeItemId,
@@ -1224,6 +1226,7 @@ public sealed partial class BoardQueries(NpgsqlDataSource dataSource)
                       || '", result_line:"<the red line>", passed:false, run_by:"orchestrator")' AS "Route"
              FROM   item i
              WHERE  i.verify_cmd IS NOT NULL
+               AND  NOT i.verify_manual
                AND  i.status NOT IN ('done','cancelled','superseded')
                AND  {InScope}
                AND  NOT EXISTS (SELECT 1 FROM verification v

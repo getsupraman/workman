@@ -128,7 +128,8 @@ public sealed partial class ApiQueries(NpgsqlDataSource dataSource)
                     count(c.id) FILTER (WHERE c.status = 'done')::int           AS "Done",
                     count(c.id) FILTER (WHERE c.status = 'cancelled')::int      AS "Cancelled",
                     count(c.id) FILTER (WHERE c.status = 'superseded')::int     AS "Superseded",
-                    ({WorkmanQueries.FindingsOpenBelow("p")})::int              AS "FindingsOpen"
+                    ({WorkmanQueries.FindingsOpenBelow("p")})::int              AS "FindingsOpen",
+                    ({WorkmanQueries.WaitsOpenBelow("p")})::int                 AS "WaitsOpen"
              FROM   item p
              LEFT   JOIN item c ON c.ancestors @> ARRAY[p.id] AND {WorkmanQueries.Counted}
              WHERE  p.id = ANY(@ids)
@@ -408,7 +409,8 @@ public sealed partial class ApiQueries(NpgsqlDataSource dataSource)
         EXISTS (SELECT 1 FROM event fe
                 WHERE fe.item_id = i.id AND fe.kind = 'forced_transition')            AS "Forced",
         EXISTS (SELECT 1 FROM note n
-                WHERE n.to_item_id = i.id AND n.consumed_at IS NULL)                  AS "UnconsumedNotes",
+                WHERE n.to_item_id = i.id AND n.consumed_at IS NULL
+                  AND n.acknowledged_at IS NULL)                                     AS "UnconsumedNotes",
         (r.open_count + r.doing_count + r.blocked_count + r.review_count + r.done_count)::int AS "RollupTotal",
         r.done_count::int AS "RollupDone",
         v.confirmed_by AS "VerificationConfirmedBy",

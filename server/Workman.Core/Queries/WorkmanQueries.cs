@@ -63,8 +63,13 @@ public sealed class WorkmanQueries(NpgsqlDataSource dataSource)
     /// The unclosed findings anywhere below <paramref name="alias"/>: never part of an "X of Y"
     /// (<see cref="Counted"/> leaves them out), printed beside it so they are not lost.
     /// </summary>
-    internal static string FindingsOpenBelow(string alias)
-        => $"SELECT count(*) FROM item f WHERE f.ancestors @> ARRAY[{alias}.id] AND f.kind = 'finding' "
+    internal static string FindingsOpenBelow(string alias) => OpenBelow(alias, "finding");
+
+    /// <summary>The unclosed waits anywhere below <paramref name="alias"/>: like findings, never part of an "X of Y".</summary>
+    internal static string WaitsOpenBelow(string alias) => OpenBelow(alias, "wait");
+
+    private static string OpenBelow(string alias, string kind)
+        => $"SELECT count(*) FROM item f WHERE f.ancestors @> ARRAY[{alias}.id] AND f.kind = '{kind}' "
          + "AND f.status NOT IN ('done','cancelled','superseded')";
 
     /// <summary>

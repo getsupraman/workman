@@ -106,7 +106,8 @@ public sealed partial class BoardReader
             .Where(n => keep.Count == 0 || n.Id == root.Id || keep.Contains(n.Status))
             .ToList();
 
-        var findingsOpen = FindingsOpenBelow(subtree);
+        var findingsOpen = OpenBelow(subtree, "finding");
+        var waitsOpen = OpenBelow(subtree, "wait");
 
         var lines = new List<string>();
         foreach (var node in nodes)
@@ -114,7 +115,11 @@ public sealed partial class BoardReader
             facts.TryGetValue(node.Id, out var fact);
             var total = Total(node);
             var rollup = includeCounts
-                ? TreeRollup(node.DoneCount, total, findingsOpen.GetValueOrDefault(node.Id))
+                ? TreeRollup(
+                    node.DoneCount,
+                    total,
+                    waitsOpen.GetValueOrDefault(node.Id),
+                    findingsOpen.GetValueOrDefault(node.Id))
                 : null;
 
             lines.Add(BoardRenderer.TreeRow(new TreeItem(
@@ -140,24 +145,38 @@ public sealed partial class BoardReader
         return string.Join("\n", lines);
     }
 
-    /// <summary>"8/11 done · 3 findings open"; either half alone when the other is zero, null when both are.</summary>
-    private static string? TreeRollup(long done, long total, int findings)
+    /// <summary>
+    /// "8/11 done · not counted: 2 open waits, 3 open findings" (mcp-fit/5); either half alone when the other is
+    /// empty, null when both are. The open waits and findings are what the "X of Y" leaves out.
+    /// </summary>
+    internal static string? TreeRollup(long done, long total, int waits, int findings)
     {
         var counted = total > 0 ? $"{done}/{total} done" : null;
-        var open = findings > 0 ? $"{findings} finding{(findings == 1 ? "" : "s")} open" : null;
+        var left = new List<string>();
+        if (waits > 0)
+        {
+            left.Add($"{waits} open wait{(waits == 1 ? "" : "s")}");
+        }
+
+        if (findings > 0)
+        {
+            left.Add($"{findings} open finding{(findings == 1 ? "" : "s")}");
+        }
+
+        var open = left.Count > 0 ? $"not counted: {string.Join(", ", left)}" : null;
         return counted is null ? open : open is null ? counted : $"{counted} · {open}";
     }
 
     /// <summary>
-    /// Per container, the unclosed findings anywhere below it — the count an "X of Y" leaves out
+    /// Per container, the unclosed items of <paramref name="kind"/> anywhere below it — what an "X of Y" leaves out
     /// (<see cref="WorkmanQueries.Counted"/>), so the tree prints it beside the rollup instead.
     /// </summary>
-    private static Dictionary<Guid, int> FindingsOpenBelow(IReadOnlyList<SubtreeNode> subtree)
+    private static Dictionary<Guid, int> OpenBelow(IReadOnlyList<SubtreeNode> subtree, string kind)
     {
         var parents = subtree.ToDictionary(n => n.Id, n => n.ParentId);
         var counts = new Dictionary<Guid, int>();
 
-        foreach (var finding in subtree.Where(n => n.Kind == "finding"
+        foreach (var finding in subtree.Where(n => n.Kind == kind
             && n.Status is not (ItemStatus.Done or ItemStatus.Cancelled or ItemStatus.Superseded)))
         {
             for (var up = finding.ParentId; up is { } id && parents.ContainsKey(id); up = parents[id])

@@ -69,7 +69,22 @@ public sealed class AttentionAndFrontierTests(PostgresFixture fixture)
         Assert.Matches(@"^--- attention \([1-5]( of \d+)?\) ---$", block[0]);
         var warned = block[1..].Where(l => l.StartsWith('⚠')).ToArray();
         Assert.InRange(warned.Length, 1, 5);
-        Assert.All(block[1..].Except(warned), line => Assert.Matches(@"^\+\d+ more — read work://attention/run-x with ReadMcpResourceTool$", line));
+
+        // mcp-fit/5: a second route sits on its own line directly under its ⚠ line (doc 06 §1's 100 columns), one at most.
+        var continued = block[1..]
+            .Select((line, i) => (line, i))
+            .Where(x => x.line.StartsWith("  or ", StringComparison.Ordinal))
+            .ToArray();
+        Assert.All(continued, x =>
+        {
+            Assert.Matches(@"^  or work_[a-z_]+\(", x.line);
+            Assert.True(x.i > 0, "a continuation line opens the block");
+            Assert.StartsWith("⚠", block[1..][x.i - 1], StringComparison.Ordinal);
+        });
+
+        Assert.All(
+            block[1..].Except(warned).Except(continued.Select(x => x.line)),
+            line => Assert.Matches(@"^\+\d+ more — read work://attention/run-x with ReadMcpResourceTool$", line));
         Assert.All(warned, line =>
         {
             Assert.Contains(" — ", line, StringComparison.Ordinal);

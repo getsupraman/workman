@@ -40,7 +40,8 @@ public sealed record LeafRollup(
     int Done,
     int Cancelled,
     int Superseded,
-    int FindingsOpen)
+    int FindingsOpen,
+    int WaitsOpen)
 {
     public int Total => Open + InProgress + Blocked + Review + Done + Cancelled + Superseded;
 }
