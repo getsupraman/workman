@@ -242,6 +242,14 @@ server-numbered run is `1`, `2`, … (under a feature `<feature>.1`), a project 
 ref free among those siblings and in the parent's scope, since `atlas/1` reaches both. Another
 workspace's rows never count. A duplicate is refused naming the sibling that holds the ref.
 
+**A qualified path names one item (mcp-fit/1).** Neither index sees a run and an item numbered in
+the run's parent scope, though `acme/ga4` reaches both, nor a run named like its project (`neo/neo`).
+`work_create` refuses such an explicit ref, naming the first free variant (`ga4-2`), and the free-ref
+probes skip it. Rows stored before the rule stay as they are and stay reachable: `project/scope/ref`
+prefers the ref numbered in that scope over a run matched by its own or its parent's name, and `x/x`
+names the project `x`. An ambiguity refusal offers, for every candidate, a form checked to resolve to
+it alone.
+
 ### Kinds are data
 
 `projects > features > plans > epics > tasks > sub-tasks > etc.` is configuration, not a migration.

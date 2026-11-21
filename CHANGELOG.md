@@ -5,6 +5,23 @@ All notable changes to the Workman server and the `workman` plugin are recorded 
 [Semantic Versioning](https://semver.org/). The server's version is `serverInfo.version`; the plugin's is
 `plugin/.claude-plugin/plugin.json`.
 
+## [Unreleased]
+
+Server only. No migration; existing data is not changed.
+
+### Fixed
+
+- **Every item is reachable by a ref again.** A followup created under a project with the name of a run under it
+  could not be named at all: `work_get` refused `acme/ga4-access` as ambiguous and offered only the run. The same
+  held for a project and a run sharing its name. An ambiguity refusal now offers a form for every candidate, each
+  checked to resolve to it alone (`ga4-access/ga4-access` for the run, `acme/acme/ga4-access` for the followup,
+  `neo/neo` for the project, `neo/neo/neo` for its run).
+- **`work_create` refuses a ref whose qualified path would name two items** (an item beside a run of that name,
+  a run beside a project-level item or named like its project) and names a free ref; suggested and numbered refs
+  skip those names.
+- **`work_audit`, the attention block and `work_history` print refs outside the reader's run run-qualified**
+  (`run-b/9.1`), so "closed with force:true" and "claim … expired" say which run they mean.
+
 ## [3.2.3] — 2026-11-16
 
 Server only (read API and dashboard). No migration; the plugin stays 3.1.0.
