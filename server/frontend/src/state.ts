@@ -8,7 +8,7 @@ export const EMPTY_COUNTED = new Set(['phase', 'feature'])
 
 export const CLOSED = new Set(['done', 'cancelled', 'superseded'])
 
-export type StateKey = 'gone' | 'stop' | 'doing' | 'proven' | 'claimed' | 'wait' | 'idle'
+export type StateKey = 'gone' | 'stop' | 'doing' | 'proven' | 'confirmed' | 'claimed' | 'wait' | 'idle'
 
 export type State = { k: StateKey; label: string }
 
@@ -23,11 +23,20 @@ export type StateInput = {
   claimExpired: boolean
   proof: boolean | null
   waitingOn: string[]
+  /** Closed on a person's confirmation (C343): its own state, never `proven` and never `claimed`. */
+  confirmed?: boolean
 }
 
-/** Independent means someone other than the author ran it: a worker's own run is a claim. */
-export const independent = (v: { passed: boolean; runBy: string } | null | undefined): boolean =>
-  v != null && v.passed && v.runBy !== 'worker'
+/** Independent means someone other than the author ran it: a worker's own run is a claim, a person's word is not a run. */
+export const independent = (v: { passed: boolean; runBy: string; confirmedBy?: string | null } | null | undefined): boolean =>
+  v != null && v.passed && v.runBy !== 'worker' && !v.confirmedBy
+
+/** The latest evidence is a person's confirmation. */
+export const confirmation = (v: { passed: boolean; confirmedBy?: string | null } | null | undefined): boolean =>
+  v != null && v.passed && !!v.confirmedBy
+
+/** C343 — a confirmation's one wording on the dashboard, as on every text surface. */
+export const confirmedText = (person: string, quote: string): string => `Confirmed by ${person}: “${quote}”`
 
 /** One vocabulary of state, used by every view. The order of the tests is the precedence. */
 export function state(i: StateInput): State {
@@ -43,6 +52,7 @@ export function state(i: StateInput): State {
     if (!LEAF.has(i.kind)) return { k: 'proven', label: 'Done' }
     if (i.kind === 'question' && i.proof === true) return { k: 'proven', label: 'Answered' }
     if (i.proof === true) return { k: 'proven', label: 'Verified' }
+    if (i.confirmed === true) return { k: 'confirmed', label: 'Confirmed by a person' }
     if (i.proof === null) return { k: 'claimed', label: 'Done' }
     return { k: 'claimed', label: 'Done, not verified' }
   }
@@ -58,6 +68,7 @@ const rowInput = (row: BoardRow): StateInput => ({
   claimExpired: row.claim?.expired === true,
   proof: independent(row.verification),
   waitingOn: row.blockedBy.map((b) => b.qualifiedRef),
+  confirmed: confirmation(row.verification),
 })
 
 export const rowState = (row: BoardRow): State => state(rowInput(row))
@@ -71,6 +82,7 @@ export function pageInput(page: ItemPage): StateInput {
     resolution: page.resolution,
     claimExpired: page.claim?.expired === true,
     proof: independent(latest),
+    confirmed: confirmation(latest),
     waitingOn: page.links.in
       .filter((l) => l.type === 'blocks' && !CLOSED.has(l.item.status))
       .map((l) => l.item.qualifiedRef),
@@ -104,7 +116,7 @@ const counts = (rows: BoardRow[], i: number): boolean => {
 
 /** The numbers over counted items in order, each with its status and the segment it draws. */
 function tallyOf(counted: { status: string; seg: Seg }[]): Tally {
-  const t: Tally = { gone: 0, stop: 0, doing: 0, proven: 0, claimed: 0, wait: 0, idle: 0, total: 0, done: 0, cancelled: 0, leaves: [] }
+  const t: Tally = { gone: 0, stop: 0, doing: 0, proven: 0, confirmed: 0, claimed: 0, wait: 0, idle: 0, total: 0, done: 0, cancelled: 0, leaves: [] }
 
   for (const { status, seg } of counted) {
     const k = seg.state.k
@@ -115,7 +127,7 @@ function tallyOf(counted: { status: string; seg: Seg }[]): Tally {
     t.leaves.push(seg)
   }
 
-  t.done = t.proven + t.claimed
+  t.done = t.proven + t.confirmed + t.claimed
   return t
 }
 
@@ -138,6 +150,7 @@ export const barInput = (leaf: BarLeaf): StateInput => ({
   claimExpired: leaf.claimExpired,
   proof: leaf.proof,
   waitingOn: leaf.waitingOn,
+  confirmed: leaf.confirmed === true,
 })
 
 /** `tally()` over a run's `/bars` leaves, which the server already kept to the counted ones, in board order. */
@@ -154,6 +167,7 @@ export function progress(t: Tally): string {
     `${t.done} of ${t.total} done` +
     (t.cancelled ? `, ${t.cancelled} cancelled` : '') +
     (moved ? `, ${moved} moved or superseded` : '') +
+    (t.confirmed ? `, ${t.confirmed} confirmed by a person` : '') +
     (t.claimed ? `, ${t.claimed} without independent proof` : '') +
     (t.doing ? `, ${t.doing} in progress` : '') +
     (t.stop ? `, ${t.stop} blocked` : '') +

@@ -18,6 +18,7 @@
   --proj-bg: linear-gradient(16deg, #f3f0e9, #f8f6f1);
   --accent: #4f5bd5; --accent-soft: #eef0fd;
   --proven: #1f8a5b; --proven-soft: #e6f4ec;
+  --confirmed: #7a4fb5; --confirmed-soft: #f1ebfa;
   --claimed: #b7791f; --claimed-soft: #fbf1df;
   --doing: #4f5bd5; --doing-soft: #eef0fd;
   --stop: #c2362b; --stop-soft: #fbe9e7;
@@ -37,6 +38,7 @@
     --proj-bg: linear-gradient(16deg, #121212, #151515);
     --accent: #3794ff; --accent-soft: #04395e;
     --proven: #4ec9b0; --proven-soft: #12322c;
+    --confirmed: #c586c0; --confirmed-soft: #3a2338;
     --claimed: #dcdcaa; --claimed-soft: #36351f;
     --doing: #3794ff; --doing-soft: #0d2f4f;
     --stop: #f14c4c; --stop-soft: #3f1a1a;
@@ -54,6 +56,7 @@
   --proj-bg: linear-gradient(16deg, #121212, #151515);
   --accent: #3794ff; --accent-soft: #04395e;
   --proven: #4ec9b0; --proven-soft: #12322c;
+  --confirmed: #c586c0; --confirmed-soft: #3a2338;
   --claimed: #dcdcaa; --claimed-soft: #36351f;
   --doing: #3794ff; --doing-soft: #0d2f4f;
   --stop: #f14c4c; --stop-soft: #3f1a1a;
@@ -203,6 +206,7 @@ a.row:hover { background: var(--bg); }
 .dot { width: 10px; height: 10px; border-radius: 50%; margin-top: 5px; display: inline-block; flex: none; }
 .s-proven { background: var(--proven); }
 .s-claimed { background: var(--claimed); }
+.s-confirmed { background: var(--confirmed); }
 .s-doing { background: var(--doing); box-shadow: 0 0 0 3px var(--doing-soft); }
 .s-stop { background: var(--stop); box-shadow: 0 0 0 3px var(--stop-soft); }
 .s-idle { background: transparent; border: 2px solid var(--idle); }
@@ -213,6 +217,7 @@ a.row:hover { background: var(--bg); }
 .pill { display: inline-flex; align-items: center; gap: 6px; height: 24px; padding: 0 10px; border-radius: 12px; font-size: 12px; font-weight: 600; white-space: nowrap; }
 .p-proven { background: var(--proven-soft); color: var(--proven); }
 .p-claimed { background: var(--claimed-soft); color: var(--claimed); }
+.p-confirmed { background: var(--confirmed-soft); color: var(--confirmed); }
 .p-doing { background: var(--doing-soft); color: var(--doing); }
 .p-stop { background: var(--stop-soft); color: var(--stop); }
 .p-idle, .p-wait { background: var(--line-2); color: var(--ink-2); }
@@ -294,6 +299,7 @@ a.row:hover { background: var(--bg); }
 .segs i { flex: 1 1 0; min-width: 4px; max-width: 34px; border-radius: 4px; background: var(--idle); opacity: 0.55; }
 .segs i.proven { background: var(--proven); opacity: 1; }
 .segs i.claimed { background: var(--claimed); opacity: 1; }
+.segs i.confirmed { background: var(--confirmed); opacity: 1; }
 .segs i.doing { background: var(--doing); opacity: 1; }
 .segs i.stop { background: var(--stop); opacity: 1; }
 .segs i.wait { background: transparent; box-shadow: inset 0 0 0 1.5px var(--idle); opacity: 1; }
@@ -420,6 +426,7 @@ a.group-h:hover { color: var(--accent); }
 .ev-col h3 { font-size: 13px; margin: 0 0 4px; display: flex; align-items: center; gap: 8px; }
 .ev-col p.hint { margin: 0 0 12px; color: var(--ink-3); font-size: 12.5px; }
 .ev { border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; margin-bottom: 10px; }
+.ev-confirmed { border-color: var(--confirmed); background: var(--confirmed-soft); }
 .ev-top { display: flex; justify-content: space-between; gap: 10px; font-size: 12.5px; color: var(--ink-3); flex-wrap: wrap; }
 .ev-line { margin-top: 6px; font-weight: 500; overflow-wrap: anywhere; }
 .ev-cmd { margin-top: 8px; color: var(--ink-2); background: var(--line-2); border-radius: 6px; padding: 6px 8px; overflow-wrap: anywhere; }

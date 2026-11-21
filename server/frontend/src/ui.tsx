@@ -211,6 +211,7 @@ export function Known<T extends object>(props: {
 export const Legend = () => (
   <div class="legend">
     <span><i style={{ background: 'var(--proven)' }} />Verified</span>
+    <span><i style={{ background: 'var(--confirmed)' }} />Confirmed by a person</span>
     <span><i style={{ background: 'var(--claimed)' }} />Done, not verified</span>
     <span><i style={{ background: 'var(--doing)' }} />In progress</span>
     <span><i style={{ background: 'var(--stop)' }} />Blocked</span>

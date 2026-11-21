@@ -189,14 +189,27 @@ export function groupInbox(rows: InboxRow[]): InboxGroup[] {
 
 type HonestyCell = { n: number; label: string; bad: boolean }
 
-/** The four counts beside "Working now". A zero needs no decision, so it gets no hue. */
+/** The labels of `honestyCells`, in order: also what the strip shows while the overview loads. */
+export const HONESTY_LABELS = [
+  'closed without independent proof',
+  'closed on a person\'s confirmation',
+  'forced closures',
+  'follow-ups open',
+  'tasks open',
+] as const
+
+/**
+ * The five counts beside "Working now". A zero needs no decision, so it gets no hue. A confirmed close is its own
+ * count (C343): neither verified nor unproven, so it is never bad and never folded into either neighbour.
+ */
 export function honestyCells(honesty: Honesty, projects: ProjectOverview[]): HonestyCell[] {
   const open = openTasks(projects)
   return [
-    { n: honesty.doneUnverified, label: 'closed without independent proof', bad: honesty.doneUnverified > 0 },
-    { n: honesty.forced, label: 'forced closures', bad: honesty.forced > 0 },
-    { n: honesty.followupsOpen, label: 'follow-ups open', bad: false },
-    { n: open, label: 'tasks open', bad: false },
+    { n: honesty.doneUnverified, label: HONESTY_LABELS[0], bad: honesty.doneUnverified > 0 },
+    { n: honesty.confirmed ?? 0, label: HONESTY_LABELS[1], bad: false },
+    { n: honesty.forced, label: HONESTY_LABELS[2], bad: honesty.forced > 0 },
+    { n: honesty.followupsOpen, label: HONESTY_LABELS[3], bad: false },
+    { n: open, label: HONESTY_LABELS[4], bad: false },
   ]
 }
 

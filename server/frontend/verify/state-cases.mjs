@@ -5,7 +5,7 @@
  *
  *   node verify/state-cases.mjs
  */
-import { CLOSED, LEAF, answer, barInput, barTally, countTitle, counted, findingsOpen, independent, progress, state, tally } from '../src/state.ts'
+import { CLOSED, LEAF, answer, barInput, barTally, confirmation, confirmedText, countTitle, counted, findingsOpen, independent, progress, state, tally } from '../src/state.ts'
 import { DEFAULT_FILTER, FILTERS, asFilter, cancelledLines, plan, planOrder, planQuery, runPageHref, withoutCancelled } from '../src/plan.ts'
 import { readFileSync } from 'node:fs'
 import { KEYS, KEYS_COMMAND, isHelpKey, keysTable } from '../src/keys.ts'
@@ -24,7 +24,7 @@ import { PROMPTS_MAX, promptChunks, promptScopes, promptsByScope } from '../src/
 import { asInboxFilter, cardFacts, choreRow, decisionRow, filterInbox, forController, groupHousekeeping, inboxOrder, keepSelected, needsYou, needsYouCount, rowProject, withInboxFilter } from '../src/inbox.ts'
 import { expiresIn, isLastAdmin, isLinkPath, joinStep, joinToken, nameProblem, passwordMessage, passwordProblem, resetStep, resetToken, roleLabel, showSwitcher, slugFrom, slugProblem } from '../src/admin.ts'
 import { addDays, agendaGroups, agendaOrder, agendaRowFacts, agendaUntil, dateChips, dayHeading, dueEnd, zonedDay } from '../src/dates.ts'
-import { INBOX_FILTERS, inboxKind } from '../src/inbox.ts'
+import { HONESTY_LABELS, INBOX_FILTERS, honestyCells, inboxKind } from '../src/inbox.ts'
 import { agendaHref } from '../src/nav.ts'
 import { agendaBack, backText, inboxBack, runBack } from '../src/back.ts'
 import { CAL_VIEWS, DAYS_SPAN, asDay, calendarKey, calendarParams, dayGroups, dayView, monday, monthCell, monthGrid, parseCalendar, periodDays, periodRange, periodText, placeEntries, shiftPeriod, switchView, withCalendar } from '../src/calendar.ts'
@@ -1177,6 +1177,41 @@ console.log('\n── barTally(): /bars leaves draw what tally() drew from the b
   check('Overview never calls api.prompts( per card', /\bapi\.prompts\(/.test(overviewSource), false)
   check('Overview reads api.manyPrompts once and provides it', [/\bapi\.manyPrompts\b/.test(overviewSource), /<SharedPrompts\.Provider\b/.test(overviewSource)], [true, true])
   check('a card reads its own scope only without a provider', /shared === undefined \? load\(/.test(read2('../src/views/Prompts.tsx')), true)
+}
+
+console.log('\n── a confirmation by a person: its own state, card and count (C343) ────────')
+{
+  const word = { passed: true, runBy: 'human', at: '2026-11-21T10:00:00Z', confirmedBy: 'Dana' }
+  check('a confirmation is not independent proof', independent(word), false)
+  check('a confirmation is a confirmation', confirmation(word), true)
+  check('a question answer (human, no person) is still proof', [independent({ passed: true, runBy: 'human' }), confirmation({ passed: true, runBy: 'human' })], [true, false])
+  check('done leaf, confirmed by a person', state(input({ status: 'done', confirmed: true })), { k: 'confirmed', label: 'Confirmed by a person' })
+  check('an orchestrator run beats a confirmation', state(input({ status: 'done', proof: true, confirmed: true })), { k: 'proven', label: 'Verified' })
+  check('open, a confirmation recorded early is still open', state(input({ confirmed: true })), { k: 'idle', label: 'Open' })
+  check('the one wording', confirmedText('Dana', 'the order is placed'), 'Confirmed by Dana: “the order is placed”')
+
+  const confirmedRows = [
+    row(ref('run', 'in_progress'), 0),
+    row(ref('task', 'done'), 1, { verification: word }),
+    row(ref('task', 'done'), 1, { verification: proven }),
+    row(ref('task', 'done'), 1),
+  ]
+  const ct = tally(confirmedRows)
+  check('tally(): one each of proven, confirmed, claimed', [ct.proven, ct.confirmed, ct.claimed, ct.done], [1, 1, 1, 3])
+  check('progress() names the confirmed one apart', progress(ct), '3 of 3 done, 1 confirmed by a person, 1 without independent proof.')
+  check('barTally() reads a /bars leaf the same', barTally([{ id: 'x', qualifiedRef: 'r/x', title: 't', kind: 'task', status: 'done', resolution: null, claimExpired: false, proof: false, waitingOn: [], confirmed: true }]).confirmed, 1)
+
+  const cells = honestyCells({ doneUnverified: 2, forced: 1, ungated: 0, followupsOpen: 3, confirmed: 4 }, [])
+  check('the strip: five tiles, in order', cells.map((c) => c.label), [...HONESTY_LABELS])
+  check('the confirmed tile counts confirmations alone, and is never bad', cells[1], { n: 4, label: "closed on a person's confirmation", bad: false })
+  check('the unverified tile does not absorb it', cells[0], { n: 2, label: 'closed without independent proof', bad: true })
+
+  const detail = readFileSync(new URL('../src/views/Detail.tsx', import.meta.url), 'utf8')
+  const card = detail.slice(detail.indexOf('function ConfirmationCard'), detail.indexOf('const CONVENTIONS'))
+  check('the evidence tab routes a confirmation to its own card', /fallback=\{<ConfirmationCard v=\{v\} \/>\}/.test(detail), true)
+  check('the card has its own pill and style', [/p-confirmed/.test(card), /ev-confirmed/.test(card)], [true, true])
+  check('the card never says Passed, never the green pill, never run by', [/Passed/.test(card), /p-proven/.test(card), /run by/.test(card)], [false, false, false])
+  check('the card prints confirmedText', /confirmedText\(/.test(card), true)
 }
 
 console.log(failures === 0 ? '\nAll checks passed.' : `\n${failures} check(s) failed.`)

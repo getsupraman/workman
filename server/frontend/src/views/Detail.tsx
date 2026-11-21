@@ -1,9 +1,9 @@
 import { For, Index, Match, Show, Switch, createSignal, type JSX } from 'solid-js'
 import { A } from '@solidjs/router'
 import * as api from '../api.ts'
-import type { BoardRow, ItemPage, ItemRef } from '../api.ts'
+import type { BoardRow, ItemPage, ItemRef, VerificationRecord } from '../api.ts'
 import { load, workspaceZone } from '../store.ts'
-import { CLOSED, answer, pageInput, refState, rowState, state } from '../state.ts'
+import { CLOSED, answer, confirmedText, pageInput, refState, rowState, state } from '../state.ts'
 import { ago, cap, claimHolder, clock, day, plural } from '../format.ts'
 import { CheckIcon } from '../icons.tsx'
 import { pathCrumbs } from '../nav.ts'
@@ -267,7 +267,7 @@ function OverviewTab(props: Props) {
 
       <Show when={p().verifyCmd}>
         {(cmd) => (
-          <Section title="Verified by running">
+          <Section title={p().verifyManual ? 'Checked by a person (manual)' : 'Verified by running'}>
             <div class="ev-cmd mono">{cmd()}</div>
           </Section>
         )}
@@ -380,9 +380,10 @@ function EvidenceTab(props: { page: ItemPage }) {
           <Dot k="proven" style={{ margin: 0 }} />
           What was verified
         </h3>
-        <p class="hint">From work_verify, run by someone other than the author.</p>
+        <p class="hint">From work_verify, run by someone other than the author, or confirmed by a person.</p>
         <For each={verifications()} fallback={<div class="empty bare">Nothing verified yet.</div>}>
           {(v) => (
+            <Show when={!v.confirmedBy} fallback={<ConfirmationCard v={v} />}>
             <div class="ev">
               <div class="ev-top">
                 <span class={`pill ${v.passed ? 'p-proven' : 'p-stop'}`}>{v.passed ? 'Passed' : 'Failed'}</span>
@@ -402,9 +403,25 @@ function EvidenceTab(props: { page: ItemPage }) {
                 )}
               </Show>
             </div>
+            </Show>
           )}
         </For>
       </div>
+    </div>
+  )
+}
+
+/** C343 — a person's confirmation, in its own card: their name and words, never the Passed pill or a runner. */
+function ConfirmationCard(props: { v: VerificationRecord }) {
+  return (
+    <div class="ev ev-confirmed">
+      <div class="ev-top">
+        <span class="pill p-confirmed">Confirmed by a person</span>
+        <span>
+          recorded{props.v.session ? ` by ${props.v.session.name}` : ''} · {day(props.v.at)} {clock(props.v.at)}
+        </span>
+      </div>
+      <div class="ev-line">{confirmedText(props.v.confirmedBy ?? '', props.v.quote ?? props.v.resultLine)}</div>
     </div>
   )
 }

@@ -6,7 +6,7 @@ import { account, bars, inbox, load, overview, refreshOverview } from '../store.
 import { promptChunks, promptScopes, promptsByScope } from '../prompts.ts'
 import { CLOSED, barTally, countTitle, counted, refState } from '../state.ts'
 import { backlogHref, inboxHref, itemHref, projectHref, runHref } from '../nav.ts'
-import { forController, honestyCells, needsYou, needsYouCount, openTasks } from '../inbox.ts'
+import { HONESTY_LABELS, forController, honestyCells, needsYou, needsYouCount, openTasks } from '../inbox.ts'
 import { byActivity } from '../projects.ts'
 import { projectRuns, runRow } from '../lists.ts'
 import { UNKNOWN, ago, claimHolder, clock, day, plural, projectName, projectTagline, short } from '../format.ts'
@@ -106,7 +106,7 @@ export default function Overview() {
                   <Show
                     when={overview()}
                     fallback={
-                      <For each={['closed without independent proof', 'forced closures', 'follow-ups open', 'tasks open']}>
+                      <For each={[...HONESTY_LABELS]}>
                         {(label) => (
                           <div class="count">
                             <strong>{UNKNOWN}</strong>

@@ -84,7 +84,8 @@ export type JournalEvent = {
   summary: string | null
 }
 
-export type Honesty = { doneUnverified: number; forced: number; ungated: number; followupsOpen: number }
+/** `confirmed`: closed on a person's confirmation, counted in neither `doneUnverified` nor as verified (C343). */
+export type Honesty = { doneUnverified: number; forced: number; ungated: number; followupsOpen: number; confirmed: number }
 
 export type RunOverview = {
   item: ItemRef
@@ -94,7 +95,7 @@ export type RunOverview = {
   activeClaims: number
   lastEventAt: string | null
   inboxCount: number
-  lastVerification: { passed: boolean; at: string } | null
+  lastVerification: { passed: boolean; at: string; confirmed?: boolean } | null
 }
 
 export type ProjectOverview = {
@@ -116,7 +117,8 @@ export type Overview = {
   honesty: Honesty
 }
 
-export type Verification = { passed: boolean; runBy: string; at: string }
+/** `confirmedBy` is set when the latest evidence is a person's confirmation, which is never a passed run. */
+export type Verification = { passed: boolean; runBy: string; at: string; confirmedBy?: string | null }
 
 export type BoardRow = {
   item: ItemRef
@@ -177,6 +179,8 @@ export type BarLeaf = {
   proof: boolean
   /** The qualified refs of the open items that block it. */
   waitingOn: string[]
+  /** The latest evidence is a person's confirmation: not proof, and not its absence either. */
+  confirmed?: boolean
 }
 
 /** What a run's bar draws: its leaves in board order, the first row holding a claim, and the run's close. */
@@ -213,6 +217,9 @@ export type VerificationRecord = {
   session: Session | null
   redCheck: string | null
   at: string
+  /** A confirmation by a person: who, and their words (`resultLine` holds the same words). */
+  confirmedBy?: string | null
+  quote?: string | null
 }
 
 export type Note = {
@@ -233,6 +240,8 @@ export type ItemPage = {
   path: ItemRef[]
   intent: string | null
   verifyCmd: string | null
+  /** The check is one a person makes, set explicitly with work_update (never read from the text). */
+  verifyManual?: boolean
   riskTags: string[]
   priority: number
   severity: string | null

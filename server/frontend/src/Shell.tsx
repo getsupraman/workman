@@ -491,7 +491,7 @@ function RunLink(props: { run: RunOverview; current: boolean }) {
     if (bar === undefined) return null
     return barTally(bar.leaves)
   }
-  const width = (k: 'proven' | 'claimed' | 'doing' | 'stop') => {
+  const width = (k: 'proven' | 'confirmed' | 'claimed' | 'doing' | 'stop') => {
     const t = counts()
     return t && t.total > 0 ? `${(t[k] / t.total) * 100}%` : '0'
   }
@@ -509,6 +509,7 @@ function RunLink(props: { run: RunOverview; current: boolean }) {
       </span>
       <span class="rl-bar">
         <i style={{ width: width('proven'), background: 'var(--proven)' }} />
+        <i style={{ width: width('confirmed'), background: 'var(--confirmed)' }} />
         <i style={{ width: width('claimed'), background: 'var(--claimed)' }} />
         <i style={{ width: width('doing'), background: 'var(--doing)' }} />
         <i style={{ width: width('stop'), background: 'var(--stop)' }} />
