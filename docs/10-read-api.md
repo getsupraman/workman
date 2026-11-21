@@ -444,12 +444,17 @@ outside the workspace is a 404.
 ### `GET /api/v1/inbox?project={id}` (project optional)
 Everything waiting on a **human**, newest first.
 ```jsonc
-{ "asOf": "…", "seq": 1234, "rows": [{
+{ "asOf": "…", "seq": 1234,
+  "groups": { "decide": 2, "waiting": 3, "blockedUndated": 1, "housekeeping": 4 },   // mcp-fit/7: rows per group
+  "rows": [{
     "key": "blocked:uuid",           // stable: kind + ":" + item id; a client may remember dismissals by it
-    "kind": "blocked|blocker_finding|question|expired_claim|assumption_due|overdue|done_unverified|stale_in_progress|unconsumed_note",
+    "kind": "blocked|blocker_finding|question|wait|expired_claim|assumption_due|overdue|done_unverified|stale_in_progress|unconsumed_note",
     "item": ItemRef, "run": ItemRef, "what": "…", "since": "…",
     "call": "work_status(ref:\"ws/12\", to:\"in_progress\")",       // the resolving MCP call, qualified
-    "audience": "human|controller",  // human: question, blocked, overdue; every other kind: controller
+    "audience": "human|controller",  // human: question, blocked, overdue, wait; every other kind: controller
+    "group": "decide|waiting|blocked-undated|housekeeping",   // mcp-fit/7, additive: the Needs you section
+    "due": "2026-11-30" | "2026-11-30T16:00:00Z" | null,      // the due the row is read by, as written
+    "dueAt": "…" | null,             // that due as the instant it ends; null when there is no due
     "detail": "…" | null,            // the one fact a person needs: plain text, one line, ≤ ~200 chars
     "actor": "…" | null,             // done_unverified: closed_by; expired_claim: the claim's agent
     "tree": "…" | null,              // expired_claim: the claim's tree
@@ -462,7 +467,7 @@ and `since` instead. `detail` per kind:
 
 | kind | detail |
 |---|---|
-| `question` | the first non-empty line of the intent; null without one (the title is the question) |
+| `question`, `wait` | the first non-empty line of the intent; null without one (the title is the question) |
 | `blocked` | the `reason` of the latest transition to `blocked` |
 | `blocker_finding` | `"<source> · against: <target title>"` |
 | `assumption_due` | the first assumption's statement, then `" (+N more)"` when there are several |
@@ -474,7 +479,28 @@ and `since` instead. `detail` per kind:
 else this request's scheme and host); it is null only when there is neither.
 
 An item that is open and waiting on another item's `blocks` edge is **not** an inbox row: it waits on
-work, not on a person.
+work, not on a person. The exception is a `blocked` item that an open `wait` holds through a `blocks` edge: it waits
+on someone outside the system, and is a `blocked` row in the `waiting` group whose `call` closes that wait
+(`work_status(ref:"<wait>", to:"done") when its answer arrives`).
+
+**Groups (mcp-fit/7, additive).** Every row carries a `group`, the section of Needs you it is drawn in, in this
+order:
+
+| group | rows |
+|---|---|
+| `decide` | open questions; `overdue` items; a `blocked` item nothing open holds that **has** a due (someone must act by then) |
+| `waiting` | every open `wait` (kind `wait`, one row each), and every `blocked` item an open wait holds |
+| `blocked-undated` | a `blocked` item nothing open holds, with no due |
+| `housekeeping` | every `audience: controller` kind, unchanged: `done_unverified`, `blocker_finding`, `assumption_due`, `expired_claim`, `stale_in_progress`, `unconsumed_note` |
+
+`due` and `dueAt` are the date a row is read by: a waiting row's wait's due (for a blocked item, the wait holding it
+that is due first), any other row's own item's; null for housekeeping. `rows` stay newest first; a client draws the
+`waiting` group by `dueAt`, soonest first, undated last. `kind`, `audience` and `key` mean what they meant.
+`groups` counts the rows in each group.
+
+**Not yet actionable.** A row of the `decide`, `waiting` or `blocked-undated` groups whose own item has a
+`not_before` that has not started is left out — it is in neither `rows` nor `groups`, nor the overview's
+`inboxCount`. It appears once its not_before starts.
 
 `overdue` is one row per open item whose `due` has passed (a date-only due at the end of that day in the
 workspace time zone), with `since` the instant it fell due. Only what is overdue now: an item merely due soon is

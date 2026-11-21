@@ -375,8 +375,8 @@ these lines — expired claims and phase gates appear nowhere else — so the ro
 
 Ranking: expired claims → blocker findings → **phases whose tasks are all done and whose gate has not
 run** → items done-but-unverified → **overdue items** → **items due within three days that an open
-blocker still holds** → assumptions past revisit → unconsumed notes for the current scope → stale
-`in_progress`.
+blocker still holds** → assumptions past revisit → **open questions a decision note may already answer** →
+unconsumed notes for the current scope → stale `in_progress`.
 
 ```
 ⚠ overdue: 1.5 Send the signed contract (due 2026-11-19) — work_get(refs:["1.5"]), then finish it or work_update(ref:"1.5", due:"…")
@@ -413,6 +413,20 @@ same done guard as `accepted`, so they cannot close without an orchestrator veri
 
 > **Changed 2026-10-23 (defer-verify).** A deferred item raised `<ref> is done with no orchestrator
 > verification — work_verify(…)`, which invites a verification of work that was never done here.
+
+**An answered-looking question** (mcp-fit/7) is an open `question` with a `decision` note from it or to it. It
+gets one line, quoting the newest such note, and the call that closes it, whose `reason` is the answer:
+
+```
+⚠ Q1 may be answered: decision "Keep the bare ref i…" — work_status(ref:"Q1", to:"done", reason:"…")
+```
+
+The quote is at most 40 characters, fewer when the ref would push the line past 100 columns, and never fewer than
+12: a ref is never shortened, so only a long one makes the line wider. A closed question, or one without a decision
+note, raises no line.
+
+> **Changed 2026-11-21 (mcp-fit/7).** An answer given in chat and recorded as a decision note left its question open,
+> in a person's Needs you, with nothing pointing at the one call that closes it.
 
 **The unconsumed-note line is one line per addressee**: `N note(s) addressed to <ref> unconsumed —
 work_brief(scope:"<ref>", for:"worker")`, where `<ref>` is bare unless another item in the workspace

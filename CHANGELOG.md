@@ -14,6 +14,19 @@ adds `claim.lease_minutes` (1..480 or NULL), `claimed_by` and `claimed_by_sessio
 
 ### Added
 
+- **Needs you in groups.** Every `/api/v1/inbox` row carries a `group` — `decide` (questions, overdue items, blocked
+  items with a due), `waiting` (open waits, and blocked items an open wait holds), `blocked-undated` (blocked with no
+  date) or `housekeeping` (every controller kind, unchanged) — with the `due` and `dueAt` it is read by, and the
+  response a `groups` count per group, all additively. Open waits and the blocked items they hold are new rows
+  (kind `wait`, and `blocked` with the wait's close as its `call`). A row whose `not_before` has not started is left
+  out until it starts. The Needs you page shows the groups as sections with counts, decide first, waiting by due,
+  housekeeping after them as before; the Overview card prints the counts. A server that sends no `group` renders as
+  before.
+
+- **A hint when a question looks answered.** An open question with a `decision` note from or to it gets the
+  attention line `Q1 may be answered: decision "…" — work_status(ref:"Q1", to:"done", reason:"…")`, ranked after
+  assumptions past revisit and before unconsumed notes.
+
 - **Claims for delegated work.** `work_status(ref, "in_progress", lease:<minutes>, for_session:"<session>")` lets an
   orchestrator, a controller or a human claim an item for the session that works it, with a lease of up to 480
   minutes. Above 480, an unknown, released or revoked session, and a worker passing either are refused, and nothing
