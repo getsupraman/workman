@@ -31,22 +31,22 @@ THE LOOP — everything else is a detour off this spine:
   work_brief  ->  work_next  ->  work_status(in_progress)  ->  do the work
               ->  work_status(done, verify:{...}, criteria:[...])  ->  work_next
 
-START EVERY SESSION WITH work_brief. It is the recovery payload: goal, where you are, the
-literal next action, the constraints that bind you, open assumptions, and notes addressed to
-you. It is generated, so it cannot be stale. You do not need to read anything else first.
-On an empty server it tells you how to create your first project.
+START EVERY SESSION WITH work_brief: goal, where you are, the literal next action, the
+constraints that bind you, open assumptions and notes addressed to you. It is generated, so it
+cannot be stale; on an empty server it tells you how to create your first project.
 
 CLOSING IS GUARDED, AND THE REFUSAL TELLS YOU WHAT IS MISSING:
   work_status(ref, "done") is refused unless every done-criterion is checked, a verification
   exists that YOU ran (not one a worker reported), no child is still open, and no blocker
-  finding targets it. Read the refusal — it names the exact calls that fix it.
-  You cannot drop work silently: deferring is a MOVE, not a status. work_status(ref,
-  "deferred", target: ..., reason: ...) creates a real open item somewhere else.
+  finding targets it. One call closes: verify:{command, result_line, passed} and
+  criteria:[{id, checked}] are written with the move; a refusal writes nothing, names the fix.
+  A person's word closes only a manual check (verify_manual:true on create/update) or an item
+  with no verify_cmd: work_verify(ref, confirmed_by, quote) — never force:true.
+  Deferring is a MOVE: work_status(ref, "deferred", target:, reason:) opens an item elsewhere.
 
-READ THE `attention` BLOCK at the end of every result. It is the only part that is about work
-you are NOT currently doing: expired claims, assumptions past their revisit point, notes
-addressed to an item you are about to brief. Acting on it costs one call; ignoring it is how
-a run ends with 84% of its checkboxes still open.
+READ THE `attention` BLOCK at the end of every result: expired claims, assumptions past their
+revisit point, notes addressed to an item you are about to brief (read one without briefing:
+work_note(acknowledge:"<ref>")). Ignoring it is how a run ends with 84% of its boxes open.
 
 REFS inside a run are numbers — `2.3`, `F-07`; from another run, qualify: `entity-store/2.3`.
 Items under a project or its backlog have names: give work_create a short kebab ref.
@@ -65,7 +65,7 @@ NEVER run `claude mcp get/list` or start a claude process to check Workman: a to
 check blocks every agent's Workman tools for 15 minutes.
 ```
 
-**Measured: 40 lines, 33 non-blank, ~690 tokens, widest line 94 chars.** Exactly at the 40-line
+**Measured: 40 lines, 33 non-blank, ~710 tokens, widest line 94 chars.** Exactly at the 40-line
 budget, with no room to grow — and re-measured on every change, because a budget nobody measures is a
 wish.
 
@@ -76,9 +76,9 @@ wish.
 | What this is + *"do not write those files"* | Without it the agent writes `LEDGER.md` **and** uses the tools, and the two disagree — the exact failure mode being replaced. |
 | The loop | The spine in two lines, ending in the one-call close: `work_status(done)` carrying its own `verify` and `criteria`, so an honest close costs one call rather than four. Turns a flat list into a workflow, which no single tool description can do. |
 | Start with `work_brief` | The single highest-value habit. Makes cold start and post-compaction recovery the same action. |
-| The closure guard | The forced-closure contract, stated **before** the agent hits it, plus the promise that the refusal is actionable — so a refusal reads as guidance rather than as a wall. |
+| The closure guard | The forced-closure contract, stated **before** the agent hits it, plus the promise that the refusal is actionable — so a refusal reads as guidance rather than as a wall. It names the one-call close's two arguments, and the only honest close on a person's word: `work_verify(ref, confirmed_by, quote)` on a check marked `verify_manual` or an item with no `verify_cmd`, never `force` — an MCP-only client has no skill to learn that from. |
 | Deferral is a move | The one rule an agent would otherwise route around by inventing a "deferred" status. |
-| The attention block | It is the nag channel; if it is not read, it does not exist. Cites the measured 84% figure because a number persuades where an adjective does not. |
+| The attention block | It is the nag channel; if it is not read, it does not exist. Names `work_note(acknowledge:)` as the route for a note read without briefing, so a reviewer does not consume it. Cites the measured 84% figure because a number persuades where an adjective does not. |
 | Refs | Prevents invented refs, which is the most likely wrong call in a cold start, and names how a ref reaches a human: a readable name, linked through the `web` base, never a bare number. |
 | Role | Forced by the probe: hidden tools produce no error, so only this text can explain the silence. |
 | DO NOT | Four failure modes the corpus shows repeatedly, each phrased as a rule with a route. |

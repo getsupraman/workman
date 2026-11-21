@@ -5,27 +5,49 @@ All notable changes to the Workman server and the `workman` plugin are recorded 
 [Semantic Versioning](https://semver.org/). The server's version is `serverInfo.version`; the plugin's is
 `plugin/.claude-plugin/plugin.json`.
 
-## [Unreleased]
+## [3.3.0] — 2026-11-21
 
-Server only. Three migrations. `20261121090000_HumanConfirmation` adds `item.verify_manual` (default false) and
-`verification.confirmed_by` / `quote` with their check constraints. `20261121120000_NoteAcknowledged` adds
-`note.acknowledged_at` / `acknowledged_by`, which are set together or not at all. `20261121150000_DelegatedClaims`
-adds `claim.lease_minutes` (1..480 or NULL), `claimed_by` and `claimed_by_session_id`. Existing rows are not changed.
+Server 3.3.0 and plugin 3.2.0. One-call closes, confirmations by a person, claims for delegated work,
+acknowledged notes and a grouped Needs you.
+
+### Upgrade
+
+- **Three migrations run on start**, all additive; existing rows are not changed.
+  `20261121090000_HumanConfirmation` adds `item.verify_manual` (default false) and `verification.confirmed_by` /
+  `quote` with their check constraints. `20261121120000_NoteAcknowledged` adds `note.acknowledged_at` /
+  `acknowledged_by`, which are set together or not at all. `20261121150000_DelegatedClaims` adds
+  `claim.lease_minutes` (1..480 or NULL), `claimed_by` and `claimed_by_session_id`.
+- **The API is additive.** Every new MCP parameter is optional and every `/api/v1` field is new; a call that
+  worked on 3.2.x works unchanged, and a dashboard or client that ignores the new fields reads as before.
+- **`tools/list` changed** for every profile (`work_verify`, `work_note`, `work_history`, `work_threads`,
+  `work_search`; for orchestrators and controllers also `work_status`, `work_create` and `work_update`). A session
+  sees the new schemas and the new server instructions (below) once it reconnects.
+- **Update the plugin** to get the skills that use the new calls (`/plugin` → update `workman`, or reinstall). The
+  skills still work against a 3.2.x server: every new call is marked "3.3.0 and later" beside the older route.
 
 ### Added
 
-- **Needs you in groups.** Every `/api/v1/inbox` row carries a `group` — `decide` (questions, overdue items, blocked
-  items with a due), `waiting` (open waits, and blocked items an open wait holds), `blocked-undated` (blocked with no
-  date) or `housekeeping` (every controller kind, unchanged) — with the `due` and `dueAt` it is read by, and the
-  response a `groups` count per group, all additively. Open waits and the blocked items they hold are new rows
-  (kind `wait`, and `blocked` with the wait's close as its `call`). A row whose `not_before` has not started is left
-  out until it starts. The Needs you page shows the groups as sections with counts, decide first, waiting by due,
-  housekeeping after them as before; the Overview card prints the counts. A server that sends no `group` renders as
-  before.
+- **One-call close: `work_status(to:"done")` takes `verify` and `criteria`.** `verify:{command, result_line,
+  passed, red_check?}` and `criteria:[{id, checked, evidence?}]` are written through `work_verify`'s and
+  `work_update`'s own code in the same transaction as the move, and the five done conditions are checked on the
+  result. A refusal writes nothing and lists every unmet condition; a red run or a `command` other than the item's
+  `verify_cmd` in the call refuses the close even over an older green run. With them `done` is reachable from
+  `open` and `ready`; with any other move, or from a worker-role caller, they are refused. Without them nothing
+  changes. The refusals that route to `work_verify`/`work_update`, the server instructions' loop and docs 01 and
+  07 name the one-call form. `tools/list` changes for orchestrators (`work_status` schema).
 
-- **A hint when a question looks answered.** An open question with a `decision` note from or to it gets the
-  attention line `Q1 may be answered: decision "…" — work_status(ref:"Q1", to:"done", reason:"…")`, ranked after
-  assumptions past revisit and before unconsumed notes.
+- **A confirmation by a person, and an explicit manual marker.** `work_verify(ref, confirmed_by, quote)` — or the
+  one-call close's `verify:{confirmed_by, quote}` — records a named person's words as its own kind of evidence: a
+  human row that is never a passed run. It satisfies the done guard's verification condition only when the item's
+  `verify_cmd` is empty or marked `verify_manual:true` (new on `work_create` and `work_update`, never inferred from
+  the text); on a real command it is refused with the routes. Both fields are required, a confirmation with
+  `command`, `result_line` or `passed` is refused, and a worker cannot record one. A confirmed close is not a
+  `forced_transition`. It reads `Confirmed by <person>: “<quote>”` in `work_get`, the brief, `work_history`, the
+  close, `/api/v1` and the dashboard's Evidence tab (its own card), and is counted on its own: `work_audit`'s
+  `done-confirmed`, the overview's `honesty.confirmed` and a new strip tile, never in *closed without independent
+  proof*. Question answers are unchanged. `/api/v1` gains `verifyManual`, `confirmedBy`/`quote`, the `confirmed`
+  flag and bar input, additively. `tools/list` changes for every profile (`work_verify`; `work_create`,
+  `work_update`, `work_status` for orchestrators).
 
 - **Claims for delegated work.** `work_status(ref, "in_progress", lease:<minutes>, for_session:"<session>")` lets an
   orchestrator, a controller or a human claim an item for the session that works it, with a lease of up to 480
@@ -47,41 +69,35 @@ adds `claim.lease_minutes` (1..480 or NULL), `claimed_by` and `claimed_by_sessio
   `work_note`, `kind` and `body` are now optional in the schema (they are still required for a note), and its
   description was shortened to pay for the new parameter. `tools/list` changes for every profile.
 
+- **Needs you in groups.** Every `/api/v1/inbox` row carries a `group` — `decide` (questions, overdue items, blocked
+  items with a due), `waiting` (open waits, and blocked items an open wait holds), `blocked-undated` (blocked with no
+  date) or `housekeeping` (every controller kind, unchanged) — with the `due` and `dueAt` it is read by, and the
+  response a `groups` count per group, all additively. Open waits and the blocked items they hold are new rows
+  (kind `wait`, and `blocked` with the wait's close as its `call`). A row whose `not_before` has not started is left
+  out until it starts. The Needs you page shows the groups as sections with counts, decide first, waiting by due,
+  housekeeping after them as before; the Overview card prints the counts. A server that sends no `group` renders as
+  before.
+
+- **A hint when a question looks answered.** An open question with a `decision` note from or to it gets the
+  attention line `Q1 may be answered: decision "…" — work_status(ref:"Q1", to:"done", reason:"…")`, ranked after
+  assumptions past revisit and before unconsumed notes.
+
 - **Rollups say what they leave out.** A container's rollup in `work_tree` reads
   `130/303 done · not counted: 17 open waits, 1 open finding`. The suffix is omitted when nothing is left out,
   and it replaces the old `· N findings open`. `/api/v1`'s `Rollup` gains `notCounted {waits, findings}`,
   additively. The dashboard prints it muted beside the run header's count and in the tooltip of the overview's
   and sidebar's compact counts. The numbers themselves do not change.
 
-- **A confirmation by a person, and an explicit manual marker.** `work_verify(ref, confirmed_by, quote)` — or the
-  one-call close's `verify:{confirmed_by, quote}` — records a named person's words as its own kind of evidence: a
-  human row that is never a passed run. It satisfies the done guard's verification condition only when the item's
-  `verify_cmd` is empty or marked `verify_manual:true` (new on `work_create` and `work_update`, never inferred from
-  the text); on a real command it is refused with the routes. Both fields are required, a confirmation with
-  `command`, `result_line` or `passed` is refused, and a worker cannot record one. A confirmed close is not a
-  `forced_transition`. It reads `Confirmed by <person>: “<quote>”` in `work_get`, the brief, `work_history`, the
-  close, `/api/v1` and the dashboard's Evidence tab (its own card), and is counted on its own: `work_audit`'s
-  `done-confirmed`, the overview's `honesty.confirmed` and a new strip tile, never in *closed without independent
-  proof*. Question answers are unchanged. `/api/v1` gains `verifyManual`, `confirmedBy`/`quote`, the `confirmed`
-  flag and bar input, additively. `tools/list` changes for every profile (`work_verify`; `work_create`,
-  `work_update`, `work_status` for orchestrators).
-
 - **`work_history` prints when each event happened and pages back past the newest 100.** Every row carries the
   UTC time to the minute (`2026-11-20 15:57Z`); `beforeSeq` reads the events before a seq, and while older events
   exist the page ends with `Older: work_history(beforeSeq:N)`, workspace-wide as well as under a scope.
+
 - **`work_threads` is bounded.** A scope whose threads do not fit one page (100 rows, 16,000 characters) prints a
   count per kind with the call that reads each; a long kind pages with `limit` and `after` and a `More:` line. A
   scope that fits prints as before.
-- **`work_brief` names the server release** on a `server 3.2.3` line under its header. `serverInfo.version` and the
+
+- **`work_brief` names the server release** on a `server 3.3.0` line under its header. `serverInfo.version` and the
   brief read one constant, `Workman.Core.ServerVersion`, so they cannot differ; a release now bumps that constant.
-- **One-call close: `work_status(to:"done")` takes `verify` and `criteria`.** `verify:{command, result_line,
-  passed, red_check?}` and `criteria:[{id, checked, evidence?}]` are written through `work_verify`'s and
-  `work_update`'s own code in the same transaction as the move, and the five done conditions are checked on the
-  result. A refusal writes nothing and lists every unmet condition; a red run or a `command` other than the item's
-  `verify_cmd` in the call refuses the close even over an older green run. With them `done` is reachable from
-  `open` and `ready`; with any other move, or from a worker-role caller, they are refused. Without them nothing
-  changes. The refusals that route to `work_verify`/`work_update`, the server instructions' loop and docs 01 and
-  07 name the one-call form. `tools/list` changes for orchestrators (`work_status` schema).
 
 ### Changed
 
@@ -91,6 +107,20 @@ adds `claim.lease_minutes` (1..480 or NULL), `claimed_by` and `claimed_by_sessio
 
 - **`work_search` honours `limit` up to 200** (it stopped at 50) and says `more hits exist` when the result was
   cut.
+
+- **The server instructions teach the new calls** in the same 40 lines: the loop ends in the one-call close, the
+  closing block names `verify:{…}` and `criteria:[…]` and the only honest close on a person's word
+  (`work_verify(ref, confirmed_by, quote)` on a check marked `verify_manual` or an item with no `verify_cmd`, never
+  `force`), and the attention block names `work_note(acknowledge:)`. The start and deferral lines were shortened to
+  pay for it. See [docs/05-server-instructions.md](docs/05-server-instructions.md).
+
+- **Plugin 3.2.0: the controller, orchestrate and agents skills use the 3.3.0 calls.** Closing is the one-call close
+  by default, with the multi-call form kept for older servers; a check only a person can make is marked
+  `verify_manual` when it is planned and closes on `work_verify(ref, confirmed_by, quote)`, recorded by the
+  controller or orchestrator only, never by a worker; a note read without briefing is acknowledged; and a controller
+  claims a unit for the agent it launched with
+  `work_status(ref, "in_progress", tree: "<the agent's worktree>", lease: <≤480>, for_session: "<agent name>")`,
+  taking it back by moving it to `review` and claiming it again.
 
 ### Fixed
 

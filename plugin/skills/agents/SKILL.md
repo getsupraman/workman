@@ -539,7 +539,13 @@ When you do run several: distinct `name` each, keep each returned result, and br
 previous agent's branch rather than the base, so conflicts get resolved once by the agent that caused
 them instead of piling up at the end. If the work is tracked in Workman, claim each unit with its own
 worktree — `work_status(ref, "in_progress", tree: "<repo_root>")` — or the second claim in the same run
-is refused.
+is refused. On 3.3.0 and later, claim it **for** the agent once it is launched, so its lease outlives
+your idle stretches: `work_status(ref, "in_progress", tree: "<the agent's worktree>", lease: <≤480>,
+for_session: "<agent name>")`. The agent holds it, either session's calls renew it, and `agent_stop`
+or a release of the name frees it. Pass the agent's own tree, never yours: one tree takes claims from
+one session only (`claim_one_session_per_tree`). Take it back by moving it to `review` and claiming it
+again with a plain `in_progress`. An older server refuses `lease` and `for_session`; claim with `tree:`
+alone.
 
 ---
 

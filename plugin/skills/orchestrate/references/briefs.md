@@ -86,7 +86,7 @@ read broadly "to be safe".
 ## Do not
 - Do not commit or push. Leave changes in the working tree; the orchestrator commits.
 - Do not call `work_verify`, `work_status`, `work_report` or any other `work_*`
-  tool that writes. Report in the format below; the orchestrator records it. You
+  tool that writes — a confirmation by a person (`confirmed_by`) included. Report in the format below; the orchestrator records it. You
   run on its credentials, so your write would be filed as its evidence.
 - Do not delete any file not named in scope above. If deletion looks correct,
   report it and stop — you cannot see what a later phase needs.

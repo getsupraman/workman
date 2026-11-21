@@ -139,6 +139,17 @@ Each launch starts the same way: `work_next(scope: "<queue ref>")` names the uni
 written. The claim is per working tree, so pass `tree:` — without it the whole run is one tree and a
 second unit of the queue is refused while the first is in progress.
 
+**On 3.3.0 and later, claim it for the agent** once `agent_launch` has registered its name (the
+name must be a live session of yours):
+`work_status(ref, "in_progress", tree: "<the agent's worktree>", lease: <minutes, at most 480>,
+for_session: "<the agent's name>")`. The agent becomes the holder (`wk-a (for ctl-a)`), the calls of
+either session renew it to that lease, and releasing or stopping the agent releases it — so a
+multi-hour unit no longer fills the attention with "claim expired". Always pass the agent's own tree:
+`claim_one_session_per_tree` lets only one session claim on a tree, so a claim for the agent on your
+tree blocks your next claim there. To take the unit back, move it out of `in_progress` (to `review`,
+say) and claim it again with a plain `work_status(ref, "in_progress")`. An older server refuses
+`lease` and `for_session`: claim with `tree:` alone, as above.
+
 **Integration strategy, decided before the first launch:**
 
 - Each unit gets its own branch **and its own worktree** (a background agent cannot edit your
@@ -188,6 +199,10 @@ are the controller-level additions.
 renders the unit's criteria, its verification command, the queue's BINDING rules and any notes
 addressed to it — paste that in rather than retyping it. Everything below is what it cannot know: it
 renders an item's state, not which verbs the session you are about to launch may run.
+
+A worker brief **consumes** the notes it renders. To read a unit's notes without handing them over,
+use `work_get`; to clear a note you have read from the attention line without consuming it,
+`work_note(acknowledge: "<unit ref>")` on 3.3.0 and later — the next worker brief still renders it.
 
 **Tell the agent the unit item is yours.** It may keep its own run for the work inside the unit, but
 it must not call `work_status`, `work_verify` or `work_report` on the unit's ref: those are your
@@ -271,10 +286,22 @@ Verify, merge, remove the worktree, delete the branch — in that order; a workt
 **Stop the agent before removing its worktree**, or the removal fails halfway and leaves the tree on
 disk and out of the registry.
 
-A landed unit closes with the commit that landed it: tick its criteria with `work_update(ref,
+A landed unit closes with the commit that landed it. On 3.3.0 and later that is one call:
+`work_status(ref, "done", commit: "<sha>", verify: {command: "<the unit's verify_cmd>", result_line:
+"<the line it printed>", passed: true}, criteria: [{id, checked: true, evidence}])` — the run, the
+ticks and the move are written together, and a refusal writes none of them. The multi-call form is
+still valid, and is the only one an older server takes: `work_verify(…)`, then `work_update(ref,
 criteria: [{id, checked: true, evidence}])`, then `work_status(ref, "done", commit: "<sha>")`. The
 close is refused until every criterion is checked, one of *your* verifications exists and no blocker
 finding targets it; the refusal names the call for each gap.
+
+**A unit only a person can check** — a phone call, a look at a screen — closes on their words, never
+on `force: true`: `work_verify(ref, confirmed_by: "<person>", quote: "<what they said>")`, or
+`verify: {confirmed_by, quote}` in the one-call close (3.3.0 and later). It counts only where the
+unit's check is manual — `verify_manual: true` on `work_create`/`work_update`, set explicitly — or the
+unit has no `verify_cmd`; on a real command it is refused. It reads `Confirmed by <person>` and is
+counted apart from verifications. Only you record one, with the person's own words: a worker role is
+refused, and a confirmation an agent says it heard is a claim, not a person's word.
 
 When a unit closes, resolve each finding under it: done with the unit's commit, or deferred with a
 target and the reason. A minor finding does not hold the close, so nothing else will make you look.

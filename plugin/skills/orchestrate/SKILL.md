@@ -107,7 +107,7 @@ next → claim → brief → delegate → report → verify → judge → commit
 
 **1. Next and claim.** `work_next(scope: "<run ref>")` names the ready task and its command. `work_status(ref, "in_progress")` claims it. It already ranks overdue and due-today tasks first and holds back one whose `not_before` has not come. A task blocked by an open `wait` (something outside) is not stuck: the wait closes with what arrived, `work_status(…, "done", reason:)`. On a scheduled check (a loop or cron that wakes you), call `work_agenda(until: <today>, since: <the last check>)` first.
 
-**2. Brief.** Use the template in `references/briefs.md`. The done-criteria, verification command and BINDING block come from `work_brief(scope: "<task ref>", for: "worker")` — hand those over verbatim. The brief adds what the store cannot give: the allow-list, the banned shell shapes, the facts you established, the environment's benign noise.
+**2. Brief.** Use the template in `references/briefs.md`. The done-criteria, verification command and BINDING block come from `work_brief(scope: "<task ref>", for: "worker")` — hand those over verbatim. That call consumes the notes it renders: to read them without briefing, use `work_get`; to clear one from the attention line and leave it for the brief, `work_note(acknowledge: "<task ref>")` (3.3.0 and later). The brief adds what the store cannot give: the allow-list, the banned shell shapes, the facts you established, the environment's benign noise.
 
 **3. Delegate.** One `general-purpose` agent, `run_in_background: false`. Give it the *why*: a worker that understands the goal makes better local calls.
 
@@ -125,7 +125,7 @@ next → claim → brief → delegate → report → verify → judge → commit
 
 **7. Commit** — see *Commit discipline*.
 
-**8. Close.** Tick each criterion with its evidence — `work_update(ref, criteria: [{id: "c1", checked: true, evidence: "…"}])` — then `work_status(ref, "done", commit: "<sha>")`. `force: true` leaves a permanent mark; use it only when you can say why in `reason:`, never because the guard is inconvenient.
+**8. Close.** On 3.3.0 and later, one call: `work_status(ref, "done", commit: "<sha>", verify: {command: "<the task's verify_cmd>", result_line: "<the line it printed>", passed: true}, criteria: [{id: "c1", checked: true, evidence: "…"}])` records your run, ticks the criteria and closes together; a refusal writes nothing and lists every gap. The multi-call form is still valid, and is the only one an older server takes: `work_verify(…)`, tick each criterion with `work_update(ref, criteria: [{id: "c1", checked: true, evidence: "…"}])`, then `work_status(ref, "done", commit: "<sha>")`. `force: true` leaves a permanent mark; use it only when you can say why in `reason:`, never because the guard is inconvenient — and never to close on someone's word (see *A person's word* below).
 
 **Re-plan triggers** (stop, revise the plan in the store, tell the user what changed and why):
 - Two attempts at a task that varied the *same dimension* both failed.
@@ -145,6 +145,8 @@ Re-planning is a success mode. Mechanics: `references/decompose.md` › *Re-plan
 Never trust a worker's "tests pass". Also confirm the changed-file list matches the report — unreported files are a finding.
 
 **Record every run, red ones included:** `work_verify(ref, result_line: "<the line it printed>", passed: true|false)`. **Never let a subagent call `work_verify` or `work_status`:** it runs on your session's credentials, so its claim would be recorded as your evidence.
+
+**A person's word.** A task only a person can check (a phone call, a look at a device) closes on what they said, not on `force: true`: `work_verify(ref, confirmed_by: "<person>", quote: "<their words>")`, or `verify: {confirmed_by, quote}` in the one-call close — 3.3.0 and later. It counts only where the task's check is manual — `verify_manual: true`, set explicitly on `work_create`/`work_update` — or the task has no `verify_cmd`; on a real command it is refused. It reads `Confirmed by <person>` and is counted apart from verifications. You record it, from the person directly; a worker never does, and a worker's "they said it works" is a claim, not a confirmation.
 
 - **Run the narrowest command that can fail for this task.** Filtered tests during tasks; the full suite only at phase gates and close-out.
 - **A check that could not have come out the other way verifies nothing.** A measurement needs ≥3 runs — record median and range. A setup the system silently rejected makes a driven check a false defect — read the state back before believing a red.

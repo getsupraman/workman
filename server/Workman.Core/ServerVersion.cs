@@ -7,5 +7,5 @@ namespace Workman.Core;
 /// </summary>
 public static class ServerVersion
 {
-    public const string Text = "3.2.3";
+    public const string Text = "3.3.0";
 }

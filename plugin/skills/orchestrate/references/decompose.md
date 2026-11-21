@@ -60,6 +60,7 @@ When you group tasks into a phase, note **where they touch each other** — the 
 `work_create` **refuses a task with no `verify_cmd` or no done-criterion.** Do not satisfy it with a placeholder.
 
 - **A verification command must be able to fail.** Write the filter against a class the task will *create*, not one that already exists — `--filter ~DatasetRun` matching eight passing tests reports `Passed! 8` against an endpoint nobody implemented. If you cannot name a command that goes red on unimplemented work, the done-criterion isn't real yet. `work_audit` lists the commands never recorded red — suspects, not convictions.
+- **A check only a person can make is marked, not disguised.** When the honest check is a person looking — a device, a phone call, a sign-off — write what they check as the `verify_cmd` and set `verify_manual: true` on `work_create` (or later with `work_update`), 3.3.0 and later. The task then closes on that person's words (`work_verify(ref, confirmed_by, quote)`), `work_audit` stops flagging it as never red, and nothing infers "manual" from the text. On an older server there is no marker: say in the intent who checks it.
 - **A superseded task is linked, not annotated.** A replaced task left open stays on the frontier. Create its replacement and `work_link(from: <new>, to: <old>, type: "supersedes")`, which marks the old one superseded. Never retitle an old task into a new one.
 
 ## Recording as you go — by exception

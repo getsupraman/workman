@@ -287,7 +287,7 @@ The server gives every session the same loop, in its MCP instructions:
 
 ```
 work_brief → work_next → work_status(in_progress) → do the work
-           → work_verify → work_status(done) → work_next
+           → work_status(done, verify:{…}, criteria:[…]) → work_next
 ```
 
 - **`work_brief`** is the recovery payload: the goal, where the run stands, the literal next call,
@@ -298,12 +298,16 @@ work_brief → work_next → work_status(in_progress) → do the work
   item in the dashboard.
 - **`work_status(ref, "done")`** is guarded. It is refused unless every done-criterion is checked, an
   orchestrator ran a passing verification, no child is still open and no blocker finding targets it.
-  It lists every unmet condition at once, with the call that fixes each. The full rules are in
-  [docs/07-guards.md](docs/07-guards.md).
+  It lists every unmet condition at once, with the call that fixes each. One call can carry the
+  verification and the ticked criteria with the move, and a refusal writes none of them. A check only
+  a person can make is marked `verify_manual` and closes on their words (`Confirmed by <person>`),
+  counted apart from verifications. The full rules are in [docs/07-guards.md](docs/07-guards.md).
 - **Claims are leased.** Starting work takes a claim with a lease, so two sessions don't silently work
-  the same task. When a lease lapses, the task goes back to `ready` for someone else.
+  the same task. When a lease lapses, the task goes back to `ready` for someone else. A controller
+  can claim for the agent it launched, with a lease of up to eight hours that ends when the agent
+  stops.
 - **Every result ends with an `attention` block**: expired claims, assumptions past their revisit
-  point, notes for the item you're about to brief.
+  point, notes for the item you're about to brief (`work_note(acknowledge:)` clears one you've read).
 
 Roles come from the credential: a signed-in person is a controller, and an agent holds the role it
 was launched with. Workers report and verify; orchestrators and controllers plan, judge, close and

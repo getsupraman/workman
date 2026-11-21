@@ -20,22 +20,22 @@ public static class WorkmanServerInstructions
           work_brief  ->  work_next  ->  work_status(in_progress)  ->  do the work
                       ->  work_status(done, verify:{...}, criteria:[...])  ->  work_next
 
-        START EVERY SESSION WITH work_brief. It is the recovery payload: goal, where you are, the
-        literal next action, the constraints that bind you, open assumptions, and notes addressed to
-        you. It is generated, so it cannot be stale. You do not need to read anything else first.
-        On an empty server it tells you how to create your first project.
+        START EVERY SESSION WITH work_brief: goal, where you are, the literal next action, the
+        constraints that bind you, open assumptions and notes addressed to you. It is generated, so it
+        cannot be stale; on an empty server it tells you how to create your first project.
 
         CLOSING IS GUARDED, AND THE REFUSAL TELLS YOU WHAT IS MISSING:
           work_status(ref, "done") is refused unless every done-criterion is checked, a verification
           exists that YOU ran (not one a worker reported), no child is still open, and no blocker
-          finding targets it. Read the refusal — it names the exact calls that fix it.
-          You cannot drop work silently: deferring is a MOVE, not a status. work_status(ref,
-          "deferred", target: ..., reason: ...) creates a real open item somewhere else.
+          finding targets it. One call closes: verify:{command, result_line, passed} and
+          criteria:[{id, checked}] are written with the move; a refusal writes nothing, names the fix.
+          A person's word closes only a manual check (verify_manual:true on create/update) or an item
+          with no verify_cmd: work_verify(ref, confirmed_by, quote) — never force:true.
+          Deferring is a MOVE: work_status(ref, "deferred", target:, reason:) opens an item elsewhere.
 
-        READ THE `attention` BLOCK at the end of every result. It is the only part that is about work
-        you are NOT currently doing: expired claims, assumptions past their revisit point, notes
-        addressed to an item you are about to brief. Acting on it costs one call; ignoring it is how
-        a run ends with 84% of its checkboxes still open.
+        READ THE `attention` BLOCK at the end of every result: expired claims, assumptions past their
+        revisit point, notes addressed to an item you are about to brief (read one without briefing:
+        work_note(acknowledge:"<ref>")). Ignoring it is how a run ends with 84% of its boxes open.
 
         REFS inside a run are numbers — `2.3`, `F-07`; from another run, qualify: `entity-store/2.3`.
         Items under a project or its backlog have names: give work_create a short kebab ref.
