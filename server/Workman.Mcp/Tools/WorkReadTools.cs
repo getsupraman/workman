@@ -181,7 +181,7 @@ public sealed class WorkReadTools(
     public async Task<CallToolResult> SearchAsync(
         [Description("What to look for. Ordinary words; phrases in quotes work.")]
         string q,
-        [Description("How many hits. Default 10.")]
+        [Description("How many hits. Default 10, at most 200.")]
         int limit = 10,
         [Description("Only hits under this ref. Omit for the whole workspace.")]
         string? scope = null,
@@ -199,7 +199,7 @@ public sealed class WorkReadTools(
         var body = await reader.SearchAsync(
             found.WorkspaceId,
             q ?? string.Empty,
-            Clamp(limit, 1, 50),
+            Clamp(limit, 1, SearchCap),
             scoped ? found : null,
             history: caller.Actor.Role != ActorRole.Worker,
             cancellationToken);
@@ -265,11 +265,15 @@ public sealed class WorkReadTools(
         string? scope = null,
         [Description("Comma-separated: assumptions, findings, followups, notes, stale, deps. Omit for all.")]
         string? include = null,
+        [Description("Rows per page. Default 100.")]
+        int limit = 100,
+        [Description("Rows to skip: the More line's cursor.")]
+        int after = 0,
         CancellationToken cancellationToken = default)
         => await WithScopeAsync(
             "work_threads",
             scope,
-            found => reader.ThreadsAsync(found, Split(include), cancellationToken),
+            found => reader.ThreadsAsync(found, Split(include), Clamp(limit, 1, 200), Math.Max(after, 0), cancellationToken),
             cancellationToken);
 
     [Authorize(Policy = WorkmanPolicies.Orchestrator)]
@@ -297,7 +301,7 @@ public sealed class WorkReadTools(
     [Authorize(Policy = WorkmanPolicies.Orchestrator)]
     [McpServerTool(Name = "work_history", Title = "Recover: what happened while you were away", ReadOnly = true)]
     [Description("""
-        The append-only event stream, newest first and cursor-paged by seq: transitions,
+        The append-only event stream, newest first with UTC times, cursor-paged by seq: transitions,
         verifications, forced closures, imports.
         Reach for it after a compaction, or when picking up a run someone else was driving.
         Next: work_get(refs:["<ref>"]) on anything surprising.
@@ -309,6 +313,8 @@ public sealed class WorkReadTools(
         long sinceSeq = 0,
         [Description("How many events. Default 20.")]
         int limit = 20,
+        [Description("Only events before this seq: the Older line's cursor.")]
+        long? beforeSeq = null,
         CancellationToken cancellationToken = default)
     {
         var resolved = await reader.ResolveDefaultAsync(tenant.Id, scope, caller.Actor.SessionId, cancellationToken);
@@ -321,6 +327,7 @@ public sealed class WorkReadTools(
             found.WorkspaceId,
             scope is { Length: > 0 } ? found : null,
             sinceSeq,
+            beforeSeq,
             Clamp(limit, 1, 100),
             cancellationToken);
 
@@ -351,6 +358,9 @@ public sealed class WorkReadTools(
 
     private static CallToolResult Text(string body)
         => new() { Content = [new TextContentBlock { Text = body }] };
+
+    /// <summary>mcp-fit/2 — the most hits one work_search returns; past it the result says more exist.</summary>
+    public const int SearchCap = 200;
 
     private static int Clamp(int value, int low, int high) => Math.Clamp(value, low, high);
 

@@ -1077,7 +1077,8 @@ public sealed partial class BoardQueries(NpgsqlDataSource dataSource)
         int limit,
         bool oldestFirst = false,
         CancellationToken cancellationToken = default,
-        Guid? home = null)
+        Guid? home = null,
+        long? beforeSeq = null)
     {
         var sql =
             $"""
@@ -1093,6 +1094,7 @@ public sealed partial class BoardQueries(NpgsqlDataSource dataSource)
              LEFT   JOIN agent_session es ON es.id = e.session_id
              WHERE  e.workspace_id = @workspace
                AND  e.seq > @since
+               AND  (@before::bigint IS NULL OR e.seq < @before)
                AND  (@scope IS NULL
                      OR e.item_id = @scope
                      OR EXISTS (SELECT 1 FROM item x
@@ -1103,7 +1105,7 @@ public sealed partial class BoardQueries(NpgsqlDataSource dataSource)
 
         return await ListAsync<EventRow>(
             sql,
-            new { workspace = workspaceId, scope = scopeItemId, since = sinceSeq, limit, home },
+            new { workspace = workspaceId, scope = scopeItemId, since = sinceSeq, limit, home, before = beforeSeq },
             cancellationToken);
     }
 

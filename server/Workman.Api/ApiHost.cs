@@ -136,7 +136,7 @@ public static class ApiHost
                 {
                     Name = "workman",
                     Title = "Workman",
-                    Version = "3.2.3",
+                    Version = Workman.Core.ServerVersion.Text,
                 };
                 options.ServerInstructions = WorkmanServerInstructions.Text;
             })

@@ -43,8 +43,8 @@ public sealed class ImportVisibilityTests(PostgresFixture fixture)
     /// wait kind (deadlines/3); the worker list did not move.
     /// Both are hashed sorted by name with LF line endings, so every host and checkout pins the same bytes.
     /// </summary>
-    private const string WorkerList = "edca5676e8c59aebeb06c2d4624bbf08827ec7db24f5e323cc6a2a54a8986b17";
-    private const string OrchestratorList = "8869ef36e8aaff4f6d68b5bb894c0bb8441928268001da1f5b33d28a51e35f44";
+    private const string WorkerList = "474955513066a8c298d4360fc827956e8dc8bf8d115ad84229e861301255777a";
+    private const string OrchestratorList = "5f2036543d21113446a292cdb6b9a7ac16239926e3cec870a990f50351539ae7";
     private const string ControllerList = OrchestratorList;
 
     [Fact]
@@ -94,10 +94,10 @@ public sealed class ImportVisibilityTests(PostgresFixture fixture)
         var tools = await client.ListToolsAsync(cancellationToken: Ct);
         var import = Assert.Single(tools, t => t.Name == "work_import");
 
-        // A ratchet, by the budget test's measure (chars / 4): 538 for the tool, 7175 for the granted list (7174 before work_create named the wait kind, deadlines/3; 6918 before deadlines/4, 6849 before deadlines/2).
+        // A ratchet, by the budget test's measure (chars / 4): 538 for the tool, 7260 for the granted list (7175 before mcp-fit/2 added history beforeSeq, search and threads paging; 7174 before work_create named the wait kind, deadlines/3; 6918 before deadlines/4, 6849 before deadlines/2).
         var cost = (JsonSerializer.Serialize(import.ProtocolTool).Length + 3) / 4;
         var total = (JsonSerializer.Serialize(tools.Where(t => t.Name.StartsWith("work_", StringComparison.Ordinal)).Select(t => t.ProtocolTool)).Length + 3) / 4;
-        Assert.True(cost <= 540 && total <= 7175, $"work_import costs {cost} tokens in tools/list; the granted session's work_* list {total}");
+        Assert.True(cost <= 540 && total <= 7260, $"work_import costs {cost} tokens in tools/list; the granted session's work_* list {total}");
 
         var text = await ReadServer.CallAsync(client, "work_import", new Dictionary<string, object?>
         {

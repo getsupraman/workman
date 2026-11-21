@@ -356,6 +356,7 @@ public sealed partial class BoardReader(WorkmanQueries queries, BoardQueries boa
         await housekeeping.SweepAsync(scope.WorkspaceId, cancellationToken);
 
         var (brief, rendered) = await RenderBriefAsync(scope, variant, cancellationToken);
+        brief = WithServer(brief);
 
         if (IsWorkerVariant(variant))
         {
@@ -386,7 +387,20 @@ public sealed partial class BoardReader(WorkmanQueries queries, BoardQueries boa
         return string.Join("\n", lines);
     }
 
-    public const string UnnamedKeyed = "session  unnamed — work_session(name:\"<the name ListAgents shows for you>\")";
+    public const string ServerLine = $"server   {ServerVersion.Text}";
+
+    /// <summary>
+    /// mcp-fit/2 — which release answered, under the header. Inserted first, so the web and session
+    /// lines inserted after it sit above it and it closes the header block.
+    /// </summary>
+    private static string WithServer(string brief)
+    {
+        var lines = brief.Split('\n').ToList();
+        lines.Insert(Math.Min(1, lines.Count), ServerLine);
+        return string.Join("\n", lines);
+    }
+
+    public const string UnnamedKeyed ="session  unnamed — work_session(name:\"<the name ListAgents shows for you>\")";
 
     public const string UnnamedBare =
         "session  unnamed — /workman:setup installs the session helper; then start a new session";

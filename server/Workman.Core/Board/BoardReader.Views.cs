@@ -451,7 +451,10 @@ public sealed partial class BoardReader
         bool history,
         CancellationToken cancellationToken = default)
     {
-        var hits = await queries.SearchAsync(workspaceId, query, limit, scope?.Item.Id, false, cancellationToken);
+        // One hit past the limit is read only to know whether the result was cut (mcp-fit/2).
+        var read = await queries.SearchAsync(workspaceId, query, limit + 1, scope?.Item.Id, false, cancellationToken);
+        var more = read.Count > limit;
+        var hits = more ? read.Take(limit).ToList() : read;
         var under = scope is null ? string.Empty : $" under {await CallableAsync(scope.Item, cancellationToken)}";
         if (hits.Count == 0)
         {
@@ -461,7 +464,11 @@ public sealed partial class BoardReader
                      : "      Try fewer words, drop the scope, or work_tree() to see what is here.");
         }
 
-        var lines = new List<string> { $"SEARCH \"{Glyph.Flat(query)}\"{under} — {hits.Count} hits", string.Empty };
+        var lines = new List<string>
+        {
+            $"SEARCH \"{Glyph.Flat(query)}\"{under} — {hits.Count} hits" + (more ? ", more hits exist" : string.Empty),
+            string.Empty,
+        };
         string? first = null;
 
         foreach (var hit in hits)
@@ -511,6 +518,11 @@ public sealed partial class BoardReader
         }
 
         lines.Add(string.Empty);
+        if (more)
+        {
+            lines.Add($"More hits exist past these {hits.Count}: raise limit (at most 200), add words, or give a scope.");
+        }
+
         lines.Add(first is null ? "Next: nothing to open — each note is printed whole above." : $"Next: {first} on a hit.");
         return string.Join("\n", lines);
     }
@@ -521,7 +533,7 @@ public sealed partial class BoardReader
         IReadOnlyCollection<string> include,
         CancellationToken cancellationToken = default)
     {
-        var rowList = (await ThreadsAsync(scope, include, rows: true, cancellationToken)).ToList();
+        var rowList = (await ThreadsAsync(scope, include, rows: true, cancellationToken)).Select(r => r.Lines).ToList();
         // A wrapped row spans several lines, so the header counts rows, not lines.
         var rows = rowList.Count;
         var lines = rowList.SelectMany(row => row).ToList();
@@ -534,6 +546,94 @@ public sealed partial class BoardReader
 
         lines.Insert(0, string.Empty);
         lines.Insert(0, $"THREADS  {rows} unclosed under {scope.Item.Ref}");
+        return string.Join("\n", lines);
+    }
+
+    /// <summary>mcp-fit/2 — what one <c>work_threads</c> page may print, header and footer aside.</summary>
+    public const int ThreadsPageBudget = 16_000;
+
+    /// <summary>
+    /// <c>work_threads</c>, bounded (mcp-fit/2). A selection that fits one page prints exactly as
+    /// <see cref="ThreadsAsync(ScopeResult.Found, IReadOnlyCollection{string}, CancellationToken)"/> does. One
+    /// that does not, over more than one kind, prints a count per kind and the call that reads each; a
+    /// single kind, or any call with <paramref name="after"/>, prints a page of at most
+    /// <paramref name="limit"/> rows and <see cref="ThreadsPageBudget"/> characters, and the call that
+    /// reads the next one. Every row is reachable; none is cut.
+    /// </summary>
+    public async Task<string> ThreadsAsync(
+        ScopeResult.Found scope,
+        IReadOnlyCollection<string> include,
+        int limit,
+        int after,
+        CancellationToken cancellationToken = default)
+    {
+        var all = await ThreadsAsync(scope, include, rows: true, cancellationToken);
+        static int Size(ThreadRow row) => row.Lines.Sum(l => l.Length + 1);
+        var whole = all.Sum(Size);
+
+        if (after <= 0 && all.Count <= limit && whole <= ThreadsPageBudget)
+        {
+            return await ThreadsAsync(scope, include, cancellationToken);
+        }
+
+        var at = await CallableAsync(scope.Item, cancellationToken);
+        string Call(string? kinds, int? from)
+            => $"work_threads(scope:\"{at}\""
+               + (kinds is null ? string.Empty : $", include:\"{kinds}\"")
+               + (from is { } f ? $", after:{f}" : string.Empty)
+               + ")";
+
+        var byKind = all.GroupBy(r => r.Kind).ToList();
+        if (after <= 0 && byKind.Count > 1)
+        {
+            var summary = new List<string>
+            {
+                $"THREADS  {all.Count} unclosed under {scope.Item.Ref} — too many for one page "
+                + $"({whole / 1000}k characters); read them by kind:",
+                string.Empty,
+            };
+            summary.AddRange(byKind.Select(g =>
+                $"  {Glyph.Pad(g.Key, 12)} {g.Count(),5}  — {Call(g.Key, null)}"));
+            summary.Add(string.Empty);
+            summary.Add($"Next: {Call(byKind[0].Key, null)}; a long kind pages on with after:.");
+            return string.Join("\n", summary);
+        }
+
+        var included = include.Count == 0 ? null : string.Join(",", include);
+        var start = Math.Clamp(after, 0, all.Count);
+        var page = new List<ThreadRow>();
+        var used = 0;
+        foreach (var row in all.Skip(start))
+        {
+            if (page.Count == limit || (page.Count > 0 && used + Size(row) > ThreadsPageBudget))
+            {
+                break;
+            }
+
+            page.Add(row);
+            used += Size(row);
+        }
+
+        if (page.Count == 0)
+        {
+            return $"THREADS  {all.Count} unclosed under {scope.Item.Ref}; none after row {start}.\n"
+                 +$"         {Call(included, null)} for the first page.";
+        }
+
+        var end = start + page.Count;
+        var lines = new List<string>
+        {
+            $"THREADS  rows {start + 1}–{end} of {all.Count} unclosed under {scope.Item.Ref}"
+            + (included is null ? string.Empty : $" ({included})"),
+            string.Empty,
+        };
+        lines.AddRange(page.SelectMany(r => r.Lines));
+        if (end < all.Count)
+        {
+            lines.Add(string.Empty);
+            lines.Add($"More: {Call(included, end)} for rows {end + 1} on.");
+        }
+
         return string.Join("\n", lines);
     }
 
@@ -580,7 +680,7 @@ public sealed partial class BoardReader
     /// One entry per thread, each the lines it renders to. Named <c>ThreadsAsync</c> because the
     /// <c>Glyph.Row</c> allow-list in NoClipSourceTests is keyed by method name.
     /// </summary>
-    private async Task<IReadOnlyList<IReadOnlyList<string>>> ThreadsAsync(
+    private async Task<IReadOnlyList<ThreadRow>> ThreadsAsync(
         ScopeResult.Found scope,
         IReadOnlyCollection<string> include,
         bool rows,
@@ -588,6 +688,8 @@ public sealed partial class BoardReader
     {
         var wanted = include.Count == 0 ? AllThreads : include;
         var found = new List<IReadOnlyList<string>>();
+        var kinds = new List<string>();
+        void Tag(string kind) => kinds.AddRange(Enumerable.Repeat(kind, found.Count - kinds.Count));
 
         if (wanted.Contains("assumptions"))
         {
@@ -602,6 +704,7 @@ public sealed partial class BoardReader
                 a.Statement,
                 $"{Glyph.Pad(a.Evidence.ToString().ToLowerInvariant(), 9)}  "
                 + $"— work_assume(ref:\"{a.Callable}\", resolve:\"confirmed\", evidence:\"…\")").ToList()));
+            Tag("assumptions");
         }
 
         var threads = await queries.OpenThreadsAsync(scope.WorkspaceId, scope.Item.Id, cancellationToken);
@@ -612,6 +715,7 @@ public sealed partial class BoardReader
                 $"{Glyph.Pad(t.Ref, 6)}  {Glyph.Pad("find", 6)}  "
                 + $"{Glyph.Pad(Glyph.Row(t.Text, 46), 46)}  "
                 + $"— work_status(ref:\"{t.Ref}\", to:\"done\")"]));
+            Tag("findings");
         }
 
         if (wanted.Contains("followups"))
@@ -620,6 +724,7 @@ public sealed partial class BoardReader
                 $"{Glyph.Pad(t.Ref, 6)}  {Glyph.Pad("foll", 6)}  "
                 + $"{Glyph.Pad(Glyph.Row(t.Text, 46), 46)}  "
                 + $"— work_status(ref:\"{t.Ref}\", to:\"in_progress\")"]));
+            Tag("followups");
         }
 
         if (wanted.Contains("notes"))
@@ -636,6 +741,7 @@ public sealed partial class BoardReader
                     $"— work_brief(scope:\"{await AddresseeRefAsync(scope.WorkspaceId, n, cancellationToken)}\", "
                     + "for:\"worker\") consumes it").ToList());
             }
+            Tag("notes");
         }
 
         if (wanted.Contains("deps"))
@@ -648,6 +754,7 @@ public sealed partial class BoardReader
                     + $"{Glyph.Pad($"waiting on {on} ({d.Status.ToString().ToLowerInvariant()})", 46)}  "
                     + $"— work_status(ref:\"{on}\", to:\"done\") or work_link to re-point it"]);
             }
+            Tag("deps");
         }
 
         if (wanted.Contains("stale"))
@@ -657,10 +764,13 @@ public sealed partial class BoardReader
                 $"{Glyph.Pad(s.Ref, 6)}  {Glyph.Pad("stale", 6)}  "
                 + $"{Glyph.Pad($"in_progress {Glyph.Age(Since(s.StartedAt))}, no live claim", 46)}  "
                 + $"— work_status(ref:\"{s.Ref}\", to:\"in_progress\") to retake it"]));
+            Tag("stale");
         }
 
-        return found;
+        return [.. found.Zip(kinds, (lines, kind) => new ThreadRow(kind, lines))];
     }
+
+    private sealed record ThreadRow(string Kind, IReadOnlyList<string> Lines);
 
     /// <summary>doc 01 §5 — the mechanical half of the plan audit; every row carries its fix.</summary>
     public async Task<string> AuditAsync(
@@ -731,23 +841,43 @@ public sealed partial class BoardReader
         return string.Join("\n", lines);
     }
 
-    public async Task<string> HistoryAsync(
+    public Task<string> HistoryAsync(
         Guid workspaceId,
         ScopeResult.Found? scope,
         long sinceSeq,
         int limit,
         CancellationToken cancellationToken = default)
+        => HistoryAsync(workspaceId, scope, sinceSeq, null, limit, cancellationToken);
+
+    /// <summary>
+    /// doc 01 §3.1 — newest first, each row with the time it happened. <paramref name="beforeSeq"/> pages
+    /// backwards: the footer names the call that reads the page below this one, so no event is out of
+    /// reach however long the stream is (mcp-fit/2). One row more than asked is read only to know
+    /// whether that page exists.
+    /// </summary>
+    public async Task<string> HistoryAsync(
+        Guid workspaceId,
+        ScopeResult.Found? scope,
+        long sinceSeq,
+        long? beforeSeq,
+        int limit,
+        CancellationToken cancellationToken = default)
     {
-        var events = await board.EventsAsync(
+        var read = await board.EventsAsync(
             workspaceId,
             scope?.Item.Id,
             sinceSeq,
-            limit,
+            limit + 1,
             cancellationToken: cancellationToken,
-            home: scope?.Item.RefScopeId);
+            home: scope?.Item.RefScopeId,
+            beforeSeq: beforeSeq);
+        var older = read.Count > limit;
+        var events = older ? read.Take(limit).ToList() : read;
         if (events.Count == 0)
         {
-            return $"HISTORY  no events after seq {sinceSeq}.";
+            return beforeSeq is { } before
+                ? $"HISTORY  no events before seq {before}" + (sinceSeq > 0 ? $" and after seq {sinceSeq}." : ".")
+                : $"HISTORY  no events after seq {sinceSeq}.";
         }
 
         var lines = new List<string>
@@ -760,6 +890,7 @@ public sealed partial class BoardReader
         foreach (var e in events)
         {
             var label = $"{Glyph.Pad(e.Seq.ToString(), 7)}  "
+                        + $"{EventTime(e.At)}  "
                         + $"{Glyph.Pad(Glyph.Flat(e.ItemRef ?? Glyph.None), 6)}  "
                         + $"{Glyph.Pad(Glyph.Flat(e.Kind), 18)}  "
                         + $"{Glyph.Pad(Glyph.Flat(e.Actor), 18)}  ";
@@ -768,11 +899,23 @@ public sealed partial class BoardReader
         }
 
         lines.Add(string.Empty);
-        lines.Add($"Next: work_get(refs:[\"{events.First(e => e.ItemRef is not null).ItemRef}\"]) "
-                + "on anything surprising.");
+        if (older)
+        {
+            var under = scope is null ? string.Empty : $"scope:\"{await CallableAsync(scope.Item, cancellationToken)}\", ";
+            var since = sinceSeq > 0 ? $", sinceSeq:{sinceSeq}" : string.Empty;
+            lines.Add($"Older: work_history({under}beforeSeq:{events[^1].Seq}{since}) for the events before these.");
+        }
+
+        lines.Add(events.FirstOrDefault(e => e.ItemRef is not null) is { } surprising
+            ? $"Next: work_get(refs:[\"{surprising.ItemRef}\"]) on anything surprising."
+            : "Next: work_brief() to orient.");
 
         return string.Join("\n", lines);
     }
+
+    /// <summary>UTC to the minute, the zone spelled as one letter: <c>2026-11-20 15:57Z</c>.</summary>
+    public static string EventTime(DateTimeOffset at)
+        => at.UtcDateTime.ToString("yyyy-MM-dd HH:mm", System.Globalization.CultureInfo.InvariantCulture) + "Z";
 
     /// <summary>
     /// doc 02 §8 — the workspace rules plus everything scoped to this item's ancestors, red lines
