@@ -43,7 +43,7 @@ public sealed class V1AgendaTests(PostgresFixture fixture)
             configure: b => b.Services.AddSingleton<TimeProvider>(new FixedClock(now)));
         var reader = await ReaderAsync(server);
 
-        var agenda = await GetAsync(reader, "/api/v1/agenda?until=2026-11-22&since=2026-11-20");
+        var agenda = await GetAsync(reader, "/api/v1/agenda?until=2026-11-22&since=2026-11-20", now);
         Assert.Equal(now, agenda.GetProperty("asOf").GetDateTimeOffset());
         Assert.True(agenda.GetProperty("seq").GetInt64() >= 0);
         Assert.Equal("Europe/Rome", agenda.GetProperty("zone").GetString());
@@ -66,13 +66,13 @@ public sealed class V1AgendaTests(PostgresFixture fixture)
         Assert.Equal("2026-11-20", ByRef(Array(agenda, "actionable"), "1.7").GetProperty("notBefore").GetString());
 
         // A scope is an id, as every v1 URL takes; the run's lists are the workspace's here.
-        var scoped = await GetAsync(reader, $"/api/v1/agenda?until=2026-11-22&scope={world.RunId}");
+        var scoped = await GetAsync(reader, $"/api/v1/agenda?until=2026-11-22&scope={world.RunId}", now);
         Assert.Equal(world.RunId, scoped.GetProperty("scope").GetProperty("id").GetGuid());
         Assert.Equal(["1.5", "1.1"], Refs(scoped, "overdue"));
 
         // An instant until is an instant: 22:00 UTC on the 22nd is before the 22nd ends in Rome; midnight there is its end.
-        Assert.Empty(Refs(await GetAsync(reader, "/api/v1/agenda?until=2026-11-22T22:00:00Z"), "due"));
-        Assert.Equal(["1.2"], Refs(await GetAsync(reader, "/api/v1/agenda?until=2026-11-23T00:00:00%2B01:00"), "due"));
+        Assert.Empty(Refs(await GetAsync(reader, "/api/v1/agenda?until=2026-11-22T22:00:00Z", now), "due"));
+        Assert.Equal(["1.2"], Refs(await GetAsync(reader, "/api/v1/agenda?until=2026-11-23T00:00:00%2B01:00", now), "due"));
 
         Assert.Equal(HttpStatusCode.NotFound, (await reader.GetAsync($"/api/v1/agenda?until=2026-11-22&scope={Guid.CreateVersion7()}", Ct)).StatusCode);
         foreach (var bad in new[] { "/api/v1/agenda", "/api/v1/agenda?until=tomorrow", "/api/v1/agenda?until=2026-11-20T17:00",

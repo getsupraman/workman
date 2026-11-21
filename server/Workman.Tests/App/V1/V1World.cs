@@ -124,8 +124,11 @@ internal static class V1Http
     /// </summary>
     public static Task<HttpClient> ReaderAsync(AppServer server) => server.SignInAsync(Ct);
 
-    /// <summary>A v1 body, after asserting rule 3 and rule 4 hold on it.</summary>
-    public static async Task<JsonElement> GetAsync(HttpClient client, string path)
+    /// <summary>
+    /// A v1 body, after asserting rule 3 and rule 4 hold on it. <paramref name="clock"/> is the server's injected
+    /// clock when the test pins one: <c>asOf</c> must then equal it instead of being recent by the real clock.
+    /// </summary>
+    public static async Task<JsonElement> GetAsync(HttpClient client, string path, DateTimeOffset? clock = null)
     {
         var response = await client.GetAsync(path, Ct);
         var body = await response.Content.ReadAsStringAsync(Ct);
@@ -134,7 +137,15 @@ internal static class V1Http
         Assert.Equal(ApiV1.Version, Assert.Single(response.Headers.GetValues(ApiV1.Header)));
 
         var json = JsonDocument.Parse(body).RootElement.Clone();
-        Assert.True(json.GetProperty("asOf").GetDateTimeOffset() > DateTimeOffset.UtcNow.AddMinutes(-5));
+        var asOf = json.GetProperty("asOf").GetDateTimeOffset();
+        if (clock is { } pinned)
+        {
+            Assert.Equal(pinned, asOf);
+        }
+        else
+        {
+            Assert.True(asOf > DateTimeOffset.UtcNow.AddMinutes(-5));
+        }
         Assert.Equal(JsonValueKind.Number, json.GetProperty("seq").ValueKind);
         return json;
     }
