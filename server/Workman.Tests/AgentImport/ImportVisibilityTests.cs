@@ -40,11 +40,12 @@ public sealed class ImportVisibilityTests(PostgresFixture fixture)
     /// unscoped rule binds every project (rule-scope); the orchestrator list re-pinned when work_create/work_update gained
     /// due and not_before (deadlines/2), +69 tokens on the granted list; both re-pinned when work_agenda joined every
     /// profile (deadlines/4), +256 tokens on the granted list; the orchestrator list re-pinned when work_create named the
-    /// wait kind (deadlines/3); the worker list did not move.
+    /// wait kind (deadlines/3); the orchestrator list re-pinned when work_status gained verify and criteria, the
+    /// one-call close (mcp-fit/3), +208 tokens on the granted list; the worker list did not move.
     /// Both are hashed sorted by name with LF line endings, so every host and checkout pins the same bytes.
     /// </summary>
     private const string WorkerList = "474955513066a8c298d4360fc827956e8dc8bf8d115ad84229e861301255777a";
-    private const string OrchestratorList = "5f2036543d21113446a292cdb6b9a7ac16239926e3cec870a990f50351539ae7";
+    private const string OrchestratorList = "47cc10bcb590be77e00f79f2ccfe8c670e560005555c76b31c7a2c516d34d039";
     private const string ControllerList = OrchestratorList;
 
     [Fact]
@@ -94,10 +95,10 @@ public sealed class ImportVisibilityTests(PostgresFixture fixture)
         var tools = await client.ListToolsAsync(cancellationToken: Ct);
         var import = Assert.Single(tools, t => t.Name == "work_import");
 
-        // A ratchet, by the budget test's measure (chars / 4): 538 for the tool, 7260 for the granted list (7175 before mcp-fit/2 added history beforeSeq, search and threads paging; 7174 before work_create named the wait kind, deadlines/3; 6918 before deadlines/4, 6849 before deadlines/2).
+        // A ratchet, by the budget test's measure (chars / 4): 538 for the tool, 7468 for the granted list (7260 before mcp-fit/3 added work_status verify and criteria; 7175 before mcp-fit/2 added history beforeSeq, search and threads paging; 7174 before work_create named the wait kind, deadlines/3; 6918 before deadlines/4, 6849 before deadlines/2).
         var cost = (JsonSerializer.Serialize(import.ProtocolTool).Length + 3) / 4;
         var total = (JsonSerializer.Serialize(tools.Where(t => t.Name.StartsWith("work_", StringComparison.Ordinal)).Select(t => t.ProtocolTool)).Length + 3) / 4;
-        Assert.True(cost <= 540 && total <= 7260, $"work_import costs {cost} tokens in tools/list; the granted session's work_* list {total}");
+        Assert.True(cost <= 540 && total <= 7468, $"work_import costs {cost} tokens in tools/list; the granted session's work_* list {total}");
 
         var text = await ReadServer.CallAsync(client, "work_import", new Dictionary<string, object?>
         {

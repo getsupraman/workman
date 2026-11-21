@@ -62,49 +62,8 @@ public sealed partial class WorkWriter
         var item = await LoadAsync(connection, transaction, scope.Id, cancellationToken);
         var runner = actor.RunnerFor(runBy);
 
-        const string sql =
-            """
-            INSERT INTO verification
-                (id, workspace_id, item_id, command, result_line, passed, counts, run_by, red_check, session_id)
-            VALUES (@id, @workspace, @item, @command, @result, @passed, @counts::jsonb,
-                    @runBy::verify_runner, @redCheck::jsonb, @session);
-            """;
-
-        await connection.ExecuteAsync(new CommandDefinition(
-            sql,
-            new
-            {
-                id = Guid.CreateVersion7(),
-                session = actor.SessionId,
-                workspace = item.WorkspaceId,
-                item = item.Id,
-                command = Blank(command) ? item.VerifyCmd : command!.Trim(),
-                result = Glyph.Flat(resultLine),
-                passed,
-                counts = Blank(counts) ? null : counts,
-                runBy = Pg.Label(runner),
-                redCheck = Blank(redCheck) ? null : JsonSerializer.Serialize(new { note = redCheck }),
-            },
-            transaction,
-            cancellationToken: cancellationToken));
-
-        await HeartbeatAsync(
-            connection,
-            transaction,
-            item.Id,
-            actor,
-            await TtlAsync(connection, transaction, item.WorkspaceId, cancellationToken),
-            cancellationToken);
-
-        await EventAsync(
-            connection,
-            transaction,
-            item.WorkspaceId,
-            item.Id,
-            actor,
-            "verified",
-            $"{item.Ref} {(passed ? "green" : "RED")} by {Pg.Label(runner)}: {Glyph.Flat(resultLine)}",
-            new { command, result_line = resultLine, passed, run_by = Pg.Label(runner) },
+        await RecordVerificationAsync(
+            connection, transaction, item, actor, runner, command, resultLine, passed, counts, redCheck,
             cancellationToken);
 
         await transaction.CommitAsync(cancellationToken);
@@ -401,4 +360,68 @@ public sealed partial class WorkWriter
         $"NOT DONE: {args.NotDone ?? string.Empty}");
 
     private static bool Blank(string? text) => string.IsNullOrWhiteSpace(text);
+
+    /// <summary>
+    /// The verification row, the claim heartbeat and the <c>verified</c> event, inside the caller's
+    /// transaction: <c>work_verify</c> commits it alone, the one-call close commits it with the move
+    /// or rolls it back with the refusal.
+    /// </summary>
+    private async Task RecordVerificationAsync(
+        NpgsqlConnection connection,
+        NpgsqlTransaction transaction,
+        ItemRow item,
+        Actor actor,
+        VerifyRunner runner,
+        string? command,
+        string resultLine,
+        bool passed,
+        string? counts,
+        string? redCheck,
+        CancellationToken cancellationToken)
+    {
+        const string sql =
+            """
+            INSERT INTO verification
+                (id, workspace_id, item_id, command, result_line, passed, counts, run_by, red_check, session_id)
+            VALUES (@id, @workspace, @item, @command, @result, @passed, @counts::jsonb,
+                    @runBy::verify_runner, @redCheck::jsonb, @session);
+            """;
+
+        await connection.ExecuteAsync(new CommandDefinition(
+            sql,
+            new
+            {
+                id = Guid.CreateVersion7(),
+                session = actor.SessionId,
+                workspace = item.WorkspaceId,
+                item = item.Id,
+                command = Blank(command) ? item.VerifyCmd : command!.Trim(),
+                result = Glyph.Flat(resultLine),
+                passed,
+                counts = Blank(counts) ? null : counts,
+                runBy = Pg.Label(runner),
+                redCheck = Blank(redCheck) ? null : JsonSerializer.Serialize(new { note = redCheck }),
+            },
+            transaction,
+            cancellationToken: cancellationToken));
+
+        await HeartbeatAsync(
+            connection,
+            transaction,
+            item.Id,
+            actor,
+            await TtlAsync(connection, transaction, item.WorkspaceId, cancellationToken),
+            cancellationToken);
+
+        await EventAsync(
+            connection,
+            transaction,
+            item.WorkspaceId,
+            item.Id,
+            actor,
+            "verified",
+            $"{item.Ref} {(passed ? "green" : "RED")} by {Pg.Label(runner)}: {Glyph.Flat(resultLine)}",
+            new { command, result_line = resultLine, passed, run_by = Pg.Label(runner) },
+            cancellationToken);
+    }
 }

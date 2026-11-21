@@ -58,6 +58,14 @@ public static class Transitions
     private static bool ClosesAfterLapse(ItemStatus status, bool started)
         => started && status == ItemStatus.Ready;
 
+    /// <summary>
+    /// The one-call close: a <c>done</c> that carries its own verification or criterion evidence may
+    /// come from <c>open</c> or <c>ready</c>, because the evidence is written in the same transaction
+    /// before the five conditions are checked on the result. Without the bundle nothing changes.
+    /// </summary>
+    private static bool ClosesWithEvidence(ItemStatus status, bool bundled)
+        => bundled && status is ItemStatus.Open or ItemStatus.Ready;
+
     public static bool IsTerminal(ItemStatus status) => Terminal.Contains(status);
 
     public static bool TryParse(string? to, out Move move)
@@ -101,7 +109,8 @@ public static class Transitions
     /// The moves that are legal right now, in the order doc 07 §2 draws them. The refusal for an
     /// illegal move lists these, because a prohibition without its route is a trap (doc 04 §3).
     /// </summary>
-    public static IReadOnlyList<Move> LegalFrom(ItemStatus status, string? kind = null, bool started = false)
+    public static IReadOnlyList<Move> LegalFrom(
+        ItemStatus status, string? kind = null, bool started = false, bool bundled = false)
     {
         if (IsTerminal(status))
         {
@@ -117,7 +126,8 @@ public static class Transitions
             }
         }
 
-        if (((kind is not null && ClosesDirectly.Contains(kind, StringComparer.OrdinalIgnoreCase)) || ClosesAfterLapse(status, started))
+        if (((kind is not null && ClosesDirectly.Contains(kind, StringComparer.OrdinalIgnoreCase)) || ClosesAfterLapse(status, started)
+             || ClosesWithEvidence(status, bundled))
             && !moves.Contains(Move.Done))
         {
             moves.Add(Move.Done);
@@ -128,8 +138,9 @@ public static class Transitions
         return [.. moves.OrderBy(m => (int)m)];
     }
 
-    public static bool Legal(ItemStatus from, Move to, string? kind = null, bool started = false)
-        => LegalFrom(from, kind, started).Contains(to);
+    public static bool Legal(
+        ItemStatus from, Move to, string? kind = null, bool started = false, bool bundled = false)
+        => LegalFrom(from, kind, started, bundled).Contains(to);
 
     /// <summary>
     /// doc 07 §2's two rows that are refusals rather than transitions, plus the generic illegal
@@ -159,9 +170,15 @@ public static class Transitions
         }
 
         var legal = LegalFrom(from, kind, started).Select(Name).ToList();
-        return Refusal.Blocked(
-            headline,
-            $"{Name(to)} is not reachable from {Name(from)}",
-            $"work_status(ref:\"{reference}\", to:\"{legal[0]}\") — legal from here: {string.Join(", ", legal)}");
+        var route = $"work_status(ref:\"{reference}\", to:\"{legal[0]}\") — legal from here: {string.Join(", ", legal)}";
+
+        return to == Move.Done && ClosesWithEvidence(from, bundled: true)
+            ? Refusal.Blocked(
+                headline,
+                $"{Name(to)} is not reachable from {Name(from)} without the evidence in the same call",
+                route,
+                $"work_status(ref:\"{reference}\", to:\"done\", verify:{{command:\"…\", result_line:\"…\", "
+                + "passed:true}, criteria:[{id:\"c1\", checked:true, evidence:\"…\"}]) — the one-call close")
+            : Refusal.Blocked(headline, $"{Name(to)} is not reachable from {Name(from)}", route);
     }
 }

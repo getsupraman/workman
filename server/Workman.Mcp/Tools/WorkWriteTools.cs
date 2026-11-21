@@ -31,7 +31,8 @@ public sealed class WorkWriteTools(
     [Description("""
         Moves an item: open → ready → in_progress → review → done. in_progress takes a claim on the
         working tree; done is refused until every criterion is checked, an orchestrator verification
-        exists, no child is open and no blocker finding targets it. Deferring is a move, not a
+        exists, no child is open and no blocker finding targets it. With verify and criteria it is one
+        transaction, also from open or ready; a refusal writes nothing. Deferring is a move, not a
         status: it needs target: and creates a real open item there.
         Next: after in_progress, work_verify; after done, work_next.
         """)]
@@ -52,13 +53,17 @@ public sealed class WorkWriteTools(
         bool force = false,
         [Description("For in_progress: your worktree path or branch; one writer per tree.")]
         string? tree = null,
+        [Description("For done: recorded as work_verify would, before the guard.")]
+        VerifyArg? verify = null,
+        [Description("For done: ticked as work_update would, before the guard.")]
+        CriterionArg[]? criteria = null,
         CancellationToken cancellationToken = default)
         => await WriteAsync(
             "work_status",
             @ref,
             id => writer.StatusAsync(
                 id, @ref, to, caller.Actor,
-                new StatusArgs(reason, target, resolution, commit, force, tree),
+                new StatusArgs(reason, target, resolution, commit, force, tree, verify, criteria),
                 cancellationToken),
             cancellationToken);
 

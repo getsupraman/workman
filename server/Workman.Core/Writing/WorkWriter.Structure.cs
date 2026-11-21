@@ -1058,7 +1058,8 @@ public sealed partial class WorkWriter
         NpgsqlTransaction transaction,
         ItemRow item,
         IReadOnlyList<CriterionArg> criteria,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        string call = "work_update")
     {
         if (criteria.Count == 0)
         {
@@ -1118,7 +1119,7 @@ public sealed partial class WorkWriter
         return unmet.Count == 0
             ? null
             : Refusal.Blocked(
-                $"work_update({item.Ref}) — {unmet.Count} criterion row(s) would write nothing. Nothing was written.",
+                $"{call}({item.Ref}) — {unmet.Count} criterion row(s) would write nothing. Nothing was written.",
                 unmet);
     }
 

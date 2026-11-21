@@ -125,10 +125,14 @@ public static class DoneGuard
 
         foreach (var criterion in open.Take(Listed))
         {
+            var tick = $"work_update(ref:\"{facts.Ref}\", criteria:[{{id:\"c{criterion.Seq}\", "
+                       + "checked:true, evidence:\"…\"}])";
+
             unmet.Add(new Unmet(
                 $"criterion c{criterion.Seq} \"{Glyph.Flat(criterion.Text)}\" unchecked",
-                $"work_update(ref:\"{facts.Ref}\", criteria:[{{id:\"c{criterion.Seq}\", "
-                + "checked:true, evidence:\"…\"}])"));
+                criterion == open[0]
+                    ? [tick, OneCall(facts, $"criteria:[{{id:\"c{criterion.Seq}\", checked:true, evidence:\"…\"}}]")]
+                    : [tick]));
         }
 
         if (open.Count > Listed)
@@ -164,7 +168,9 @@ public static class DoneGuard
                 ? "none recorded"
                 : $"{passed.Count} recorded, none of them run by the orchestrator";
 
-            unmet.Add(new Unmet($"no verification with run_by=orchestrator ({have})", route));
+            unmet.Add(new Unmet(
+                $"no verification with run_by=orchestrator ({have})",
+                [route, OneCall(facts, "verify:{command:\"…\", result_line:\"…\", passed:true}")]));
             return;
         }
 
@@ -240,6 +246,13 @@ public static class DoneGuard
             $"no commit artifact recorded, and kind \"{facts.Kind}\" requires one",
             $"work_status(ref:\"{facts.Ref}\", to:\"done\", commit:\"<sha>\")"));
     }
+
+    /// <summary>
+    /// The one-call close, named beside the multi-call route: the evidence and the move in one
+    /// transaction, checked by the same five conditions on the result.
+    /// </summary>
+    private static string OneCall(DoneFacts facts, string evidence)
+        => $"work_status(ref:\"{facts.Ref}\", to:\"done\", {evidence}) does it in the same call as the close";
 
     private static bool Same(string left, string right)
         => string.Equals(Glyph.Flat(left), Glyph.Flat(right), StringComparison.OrdinalIgnoreCase);

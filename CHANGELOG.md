@@ -19,6 +19,14 @@ Server only. No migration; existing data is not changed.
   scope that fits prints as before.
 - **`work_brief` names the server release** on a `server 3.2.3` line under its header. `serverInfo.version` and the
   brief read one constant, `Workman.Core.ServerVersion`, so they cannot differ; a release now bumps that constant.
+- **One-call close: `work_status(to:"done")` takes `verify` and `criteria`.** `verify:{command, result_line,
+  passed, red_check?}` and `criteria:[{id, checked, evidence?}]` are written through `work_verify`'s and
+  `work_update`'s own code in the same transaction as the move, and the five done conditions are checked on the
+  result. A refusal writes nothing and lists every unmet condition; a red run or a `command` other than the item's
+  `verify_cmd` in the call refuses the close even over an older green run. With them `done` is reachable from
+  `open` and `ready`; with any other move, or from a worker-role caller, they are refused. Without them nothing
+  changes. The refusals that route to `work_verify`/`work_update`, the server instructions' loop and docs 01 and
+  07 name the one-call form. `tools/list` changes for orchestrators (`work_status` schema).
 
 ### Changed
 

@@ -58,6 +58,7 @@ open ──▶ ready ──▶ in_progress ──▶ review ──▶ done
 | `in_progress` | `review` | free. |
 | `review`/`in_progress` | `done` | **the five conditions, §3.** |
 | `ready`, once started | `done` | **the five conditions, §3**, unchanged. Only for an item with `started_at` set — one whose lease lapsed and the sweep returned to `ready` (§5). A never-started `ready` item is still refused: `done is not reachable from ready`. |
+| `open`/`ready`, with the bundle | `done` | **the five conditions, §3**, unchanged, checked after the call's own `verify` and `criteria` are written in the same transaction (the one-call close, below). Without `verify` or `criteria` a never-started item is refused as above. |
 | `review`/`in_progress` | `in_progress` | rework. Records the attempt count; **a fresh worker, not the old one** — that is orchestration doctrine, not a schema rule. |
 | any non-terminal | `cancelled` | requires `reason`. `destructiveHint: true`. |
 | any | `superseded` | **not directly.** `work_link(supersedes)` sets it in the same transaction (U1 trigger), and the same transaction moves the target's unconsumed notes to the replacing item (F-08). |
@@ -157,6 +158,34 @@ Allowed on every condition, and **never hidden** — the refusal names it (doc 0
 This is deliberate. An escape hatch that is hidden gets worked around; one that leaves a mark gets
 used honestly. `controller` §8's *"do not answer it on their behalf"* has a counterpart here: an agent
 genuinely blocked at 3am should be able to proceed **and leave evidence that it did**.
+
+### The one-call close
+
+```
+work_status(ref, to:"done", verify:{command, result_line, passed, red_check?},
+            criteria:[{id, checked, evidence?}], commit?)
+```
+
+An honest close used to cost four calls (claim, `work_verify`, `work_update`, `done`), and under
+load agents reached for `force` instead. `verify` and `criteria` bundle those writes into the move:
+
+- **Only with `to:"done"`.** With any other move the call is refused and writes nothing.
+- **One transaction, guard last.** The ticks go through `work_update`'s criterion code (an unknown id
+  refuses the call), the verification through `work_verify`'s insert with `run_by` from the token
+  (`Actor.RunnerFor`), and only then does §3 run, on the result. Without the bundle nothing changes.
+- **A refusal writes nothing**: no verification, no tick, no event. It lists every unmet condition at
+  once, as above.
+- **Two more conditions, for the bundle's own run.** `verify.passed:false`, or a `verify.command` other
+  than the item's `verify_cmd`, refuses the close even when an older green orchestrator run exists:
+  the run in this call is the evidence of this close. `command`, `result_line` and `passed` are
+  required.
+- **Reachable from `open` and `ready`**, never-started, only with the bundle (§2).
+- **A worker cannot close.** `work_status` needs the orchestrator policy, and the writer refuses a
+  worker-role caller that supplies the bundle anyway (C344).
+- **`force`** still works: the bundle is written, then the force path runs, and the bundle's unmet
+  conditions are listed in the `forced_transition`.
+
+The refusals that route to `work_verify` or `work_update` name this form beside them.
 
 ---
 

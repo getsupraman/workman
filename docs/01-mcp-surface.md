@@ -151,7 +151,7 @@ Names are `work_*`-prefixed so they survive aggregation across servers.
 | **`work_update`** | Field-level patch of `title`/`intent`/`verify_cmd`/`risk`/`criteria`/`priority`. Takes `expected_revision`; a mismatch returns the current revision and what changed. **Criteria:** `{id:"c2", …}` patches criterion 2, which must exist — an id never creates one; `{text:"…"}` with no id appends as the next number. A row that would write nothing (an unknown id, an id with nothing to set, neither id nor text) refuses the **whole** call before anything is written, naming the ids that exist and the append form. The `OK` line counts exactly the criteria written. A call that sets no field and no criterion (every field absent or blank) is refused with `nothing changed`, and writes no revision, no heartbeat and no event. **Repos (a project only):** `repo:{remote, root}` binds one more repo; with `take:true` it moves those keys from the project that holds them; `unbind:{remote, root}` removes them (doc 02 §project_repo, *Binding*). **Dates:** `due` and `not_before` as on `work_create`; `null` leaves a date unchanged, `""` clears it. Each change journals `dates_changed {field, from, to}`; `work_get` prints the dates, the slip count (due moved later) and `late` for an item closed after its due. |
 | **`work_move`** | Reparent / reorder. Separate from `update` because it is the risky one. Fractional `seq` means inserting `2.1b` between `2.1` and `2.2` rewrites **one row**. The new parent — `parent:`, or the anchor's parent for `before`/`after` — must be a kind the item's `allowed_parent_kinds` names; a project sits under nothing (doc 07 §1). |
 | **`work_link`** | `blocks`, `supersedes`, `duplicates`, `derived_from`, `verifies`. Cycle-checked on write. `supersedes` sets the target to `superseded` — which is the skill's *"a superseded task is deleted, not annotated"*, enforced. |
-| **`work_status`** | The guarded transition (§4). `destructiveHint: true` for `cancel`. |
+| **`work_status`** | The guarded transition (§4); `done` may carry its own `verify` and `criteria` (the one-call close). `destructiveHint: true` for `cancel`. |
 
 ### 3.3 Write — content
 
@@ -296,6 +296,21 @@ REFUSED: 2.4 → done. 3 conditions unmet.
 Each rule is individually overridable with `force: true` + `reason`, which writes a
 `forced_transition` event that **`work_audit` lists permanently**. Escape
 hatches that are silent get used; escape hatches that leave a mark do not.
+
+**The one-call close (mcp-fit/3).** `done` takes the evidence in the same call:
+
+```
+work_status(ref:"2.4", to:"done", commit:"a1b2c3d",
+            verify:{command:"dotnet test --filter Runs", result_line:"Passed! 187/187", passed:true},
+            criteria:[{id:"c2", checked:true, evidence:"DeletesSkipped asserted"}])
+```
+
+The ticks and the verification are written first, through `work_update`'s and `work_verify`'s own
+code (`run_by` from the token), and the conditions above are checked on the result, in one
+transaction. A refusal writes nothing and lists every unmet condition; a red `verify` or one whose
+`command` is not the item's `verify_cmd` refuses the close even over an older green run. With the
+bundle, `done` is reachable from `open` and `ready` too; `verify` or `criteria` with any other move is
+refused, and so is a worker-role caller that supplies them. Without them nothing changes. Doc 07 §3.
 
 `in_progress` requires a claim (`agent`, TTL, heartbeat). A second claim on the same item, or on a
 sibling within a `serialized` scope, is refused — which is *"writing agents run one at a time, never

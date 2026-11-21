@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using Dapper;
 using Npgsql;
 using Workman.Core.Data;
@@ -21,13 +22,28 @@ public sealed record WriteResult(string Text, bool Refused)
 }
 
 /// <summary>Everything <c>work_status</c> takes besides the ref and the move.</summary>
+/// <param name="Verify">The one-call close: a verification written in the same transaction as <c>done</c>.</param>
+/// <param name="Criteria">The one-call close: criterion ticks written in the same transaction as <c>done</c>.</param>
 public sealed record StatusArgs(
     string? Reason = null,
     string? Target = null,
     string? Resolution = null,
     string? Commit = null,
     bool Force = false,
-    string? Tree = null);
+    string? Tree = null,
+    VerifyArg? Verify = null,
+    CriterionArg[]? Criteria = null)
+{
+    /// <summary>Whether the call carries its own evidence, which is what makes <c>done</c> reachable from open or ready.</summary>
+    public bool Bundled => Verify is not null || Criteria is { Length: > 0 };
+}
+
+/// <summary>The verification <c>work_status(to:"done")</c> records before its guard runs, as <c>work_verify</c> would.</summary>
+public sealed record VerifyArg(
+    [property: JsonPropertyName("command")] string? Command = null,
+    [property: JsonPropertyName("result_line")] string? ResultLine = null,
+    [property: JsonPropertyName("passed")] bool? Passed = null,
+    [property: JsonPropertyName("red_check")] string? RedCheck = null);
 
 /// <summary>
 /// The write side. It lives in <c>Workman.Core</c> beside the renderers for the same reason they
@@ -106,6 +122,11 @@ public sealed partial class WorkWriter(NpgsqlDataSource dataSource, BoardQueries
             return WriteResult.No(unresolved!);
         }
 
+        if (BundleRefusal(scope.Ref, move, actor, args) is { } unbundled)
+        {
+            return WriteResult.No(unbundled);
+        }
+
         await using var tenant = await _connections.TenantAsync(cancellationToken);
         var (connection, transaction) = tenant;
 
@@ -121,6 +142,147 @@ public sealed partial class WorkWriter(NpgsqlDataSource dataSource, BoardQueries
             return WriteResult.No(
                 await SchemaRefusalAsync(connection, item, to!, actor, args, refused, cancellationToken));
         }
+    }
+
+    /// <summary>
+    /// The one-call close, refused before anything is opened: evidence only travels with <c>done</c>,
+    /// a worker never closes (its <c>work_verify</c> is its route), and the verification carries what
+    /// <c>work_verify</c> would need — the command, the line it printed and whether it passed.
+    /// </summary>
+    private static string? BundleRefusal(string reference, Move move, Actor actor, StatusArgs args)
+    {
+        if (!args.Bundled)
+        {
+            return null;
+        }
+
+        if (move != Move.Done)
+        {
+            return Refusal.Blocked(
+                $"work_status({reference} → {Transitions.Name(move)}) with verify or criteria.",
+                "verify and criteria only travel with to:\"done\" — they are the evidence of the close",
+                $"work_status(ref:\"{reference}\", to:\"{Transitions.Name(move)}\") without them",
+                $"work_verify(ref:\"{reference}\", command:\"…\", result_line:\"…\") or "
+                + $"work_update(ref:\"{reference}\", criteria:[…]) to record evidence on its own");
+        }
+
+        if (actor.Role == ActorRole.Worker)
+        {
+            return Refusal.Blocked(
+                $"work_status({reference} → done) with verify from a worker.",
+                "a worker cannot close: its evidence is recorded as a worker's and closing is the "
+                + "orchestrator's call",
+                $"work_verify(ref:\"{reference}\", command:\"…\", result_line:\"…\") then "
+                + $"work_report(ref:\"{reference}\", status:\"done\", …) and hand back");
+        }
+
+        var unmet = new List<Unmet>();
+        var example = $"work_status(ref:\"{reference}\", to:\"done\", verify:{{command:\"<verify_cmd>\", "
+                      + "result_line:\"Passed! 187/187\", passed:true}, …)";
+
+        if (args.Verify is { } verify)
+        {
+            if (string.IsNullOrWhiteSpace(verify.Command))
+            {
+                unmet.Add(new Unmet("verify.command is missing — the guard compares it with the item's verify_cmd", example));
+            }
+
+            if (string.IsNullOrWhiteSpace(verify.ResultLine))
+            {
+                unmet.Add(new Unmet(
+                    "verify.result_line is missing — it is the line the command actually printed, never an exit code",
+                    example));
+            }
+
+            if (verify.Passed is null)
+            {
+                unmet.Add(new Unmet("verify.passed is missing — say whether the run was green", example));
+            }
+        }
+
+        return unmet.Count == 0
+            ? null
+            : Refusal.Blocked($"work_status({reference} → done) with an incomplete verify. Nothing was written.", unmet);
+    }
+
+    /// <summary>
+    /// The bundle's own conditions, beside the five: a red run recorded in this call, or one that ran
+    /// a different command, is not the evidence of this close even if an older green run exists.
+    /// </summary>
+    private static IReadOnlyList<Unmet> BundleUnmet(ItemRow item, StatusArgs args)
+    {
+        if (args.Verify is not { } verify)
+        {
+            return [];
+        }
+
+        var unmet = new List<Unmet>();
+        var route = $"work_status(ref:\"{item.Ref}\", to:\"done\", verify:{{command:\""
+                    + $"{(string.IsNullOrWhiteSpace(item.VerifyCmd) ? "…" : item.VerifyCmd)}\", "
+                    + "result_line:\"…\", passed:true}, …) once it is green";
+
+        if (verify.Passed is false)
+        {
+            unmet.Add(new Unmet($"the verification in this call did not pass: \"{Glyph.Flat(verify.ResultLine)}\"", route));
+        }
+
+        if (item.VerifyCmd is { Length: > 0 } expected
+            && !string.Equals(Glyph.Flat(verify.Command), Glyph.Flat(expected), StringComparison.OrdinalIgnoreCase))
+        {
+            unmet.Add(new Unmet(
+                $"the verification in this call ran \"{Glyph.Flat(verify.Command)}\", not this item's "
+                + $"verify_cmd \"{Glyph.Flat(expected)}\"",
+                route));
+        }
+
+        return unmet;
+    }
+
+    /// <summary>
+    /// The one-call close's writes, through the same steps <c>work_update</c> and <c>work_verify</c>
+    /// take, inside the move's transaction and before its guard. A refusal from here returns before
+    /// the commit, so the transaction rolls back with nothing written.
+    /// </summary>
+    private async Task<string?> WriteBundleAsync(
+        NpgsqlConnection connection,
+        NpgsqlTransaction transaction,
+        ItemRow item,
+        Actor actor,
+        StatusArgs args,
+        CancellationToken cancellationToken)
+    {
+        if (args.Criteria is { Length: > 0 } criteria)
+        {
+            var unwritable = await CriteriaRefusalAsync(
+                connection, transaction, item, criteria, cancellationToken, "work_status");
+            if (unwritable is not null)
+            {
+                return unwritable;
+            }
+
+            await connection.ExecuteAsync(new CommandDefinition(
+                "UPDATE item SET revision = revision + 1 WHERE id = @id;",
+                new { id = item.Id },
+                transaction,
+                cancellationToken: cancellationToken));
+
+            var touched = await PatchCriteriaAsync(connection, transaction, item.Id, criteria, cancellationToken);
+
+            await EventAsync(
+                connection, transaction, item.WorkspaceId, item.Id, actor, "updated",
+                $"{item.Ref} updated, {touched} criterion(s)",
+                new { fields = Array.Empty<string>(), criteria = touched },
+                cancellationToken);
+        }
+
+        if (args.Verify is { } verify)
+        {
+            await RecordVerificationAsync(
+                connection, transaction, item, actor, actor.RunnerFor(null), verify.Command, verify.ResultLine!,
+                verify.Passed!.Value, null, verify.RedCheck, cancellationToken);
+        }
+
+        return null;
     }
 
     /// <summary>
@@ -162,7 +324,7 @@ public sealed partial class WorkWriter(NpgsqlDataSource dataSource, BoardQueries
         CancellationToken cancellationToken)
     {
         var started = item.StartedAt is not null;
-        if (!Transitions.Legal(item.Status, move, item.Kind, started))
+        if (!Transitions.Legal(item.Status, move, item.Kind, started, args.Bundled))
         {
             return WriteResult.No(Transitions.Refuse(item.Ref, item.Status, move, item.Kind, started));
         }
@@ -172,6 +334,12 @@ public sealed partial class WorkWriter(NpgsqlDataSource dataSource, BoardQueries
             return await DeferAsync(connection, transaction, item, actor, args, cancellationToken);
         }
 
+        if (await WriteBundleAsync(connection, transaction, item, actor, args, cancellationToken) is { } unwritable)
+        {
+            await transaction.RollbackAsync(cancellationToken);
+            return WriteResult.No(unwritable);
+        }
+
         var carried = move == Move.Done && item.Kind == "run"
             ? await CarryBacklogAsync(connection, transaction, item, actor, cancellationToken)
             : null;
@@ -179,6 +347,7 @@ public sealed partial class WorkWriter(NpgsqlDataSource dataSource, BoardQueries
         var refusal = await GuardAsync(connection, transaction, item, move, actor, args, cancellationToken);
         if (refusal is not null)
         {
+            await transaction.RollbackAsync(cancellationToken);
             return WriteResult.No(refusal);
         }
 
@@ -233,7 +402,7 @@ public sealed partial class WorkWriter(NpgsqlDataSource dataSource, BoardQueries
 
         await transaction.CommitAsync(cancellationToken);
 
-        return WriteResult.Ok(Wrote(item, status, args, forced, claimLine, carried, findings));
+        return WriteResult.Ok(Wrote(item, status, args, forced, claimLine, carried, findings, actor));
     }
 
     private static string Wrote(
@@ -243,12 +412,24 @@ public sealed partial class WorkWriter(NpgsqlDataSource dataSource, BoardQueries
         string[]? forced,
         string? claimLine,
         string? carried,
-        IReadOnlyList<BlockerFact> findings)
+        IReadOnlyList<BlockerFact> findings,
+        Actor actor)
     {
         var lines = new List<string>
         {
             $"OK  {item.Ref}  {Transitions.Name(item.Status)} → {Transitions.Name(status)}",
         };
+
+        if (args.Verify is { } verify)
+        {
+            lines.Add($"    verify  {(verify.Passed is true ? "✓" : "✗")} by {Pg.Label(actor.RunnerFor(null))}: "
+                      + Glyph.Row(verify.ResultLine, 76));
+        }
+
+        if (args.Criteria is { Length: > 0 } criteria)
+        {
+            lines.Add($"    criteria {Glyph.Row(string.Join(", ", criteria.Select(c => c.Id ?? "+new")), 80)}");
+        }
 
         if (carried is { Length: > 0 })
         {
@@ -294,10 +475,12 @@ public sealed partial class WorkWriter(NpgsqlDataSource dataSource, BoardQueries
         lines.Add(status switch
         {
             ItemStatus.InProgress => $"Next: do the work, then work_verify(ref:\"{item.Ref}\", "
-                                     + "command:\"…\", result_line:\"…\", run_by:\"orchestrator\").",
+                                     + "command:\"…\", result_line:\"…\", run_by:\"orchestrator\") — or close in "
+                                     + $"one call: work_status(ref:\"{item.Ref}\", to:\"done\", verify:{{…}}, criteria:[…]).",
             ItemStatus.Done => "Next: work_next() — the frontier has just moved.",
             ItemStatus.Review => $"Next: work_verify(ref:\"{item.Ref}\", …) then "
-                                 + $"work_status(ref:\"{item.Ref}\", to:\"done\").",
+                                 + $"work_status(ref:\"{item.Ref}\", to:\"done\") — or both in one: "
+                                 + $"work_status(ref:\"{item.Ref}\", to:\"done\", verify:{{…}}, criteria:[…]).",
             ItemStatus.Blocked => $"Next: work_threads(scope:\"{item.Ref}\", include:\"deps\") — "
                                   + "what this is waiting on.",
             _ => "Next: work_next() for what is ready now.",
@@ -357,8 +540,11 @@ public sealed partial class WorkWriter(NpgsqlDataSource dataSource, BoardQueries
         StatusArgs args,
         CancellationToken cancellationToken)
     {
-        var unmet = DoneGuard.Evaluate(
-            await DoneFactsAsync(connection, transaction, item, args.Commit, cancellationToken));
+        IReadOnlyList<Unmet> unmet =
+        [
+            .. DoneGuard.Evaluate(await DoneFactsAsync(connection, transaction, item, args.Commit, cancellationToken)),
+            .. BundleUnmet(item, args),
+        ];
 
         if (item.Kind == "question" && string.IsNullOrWhiteSpace(args.Reason))
         {
@@ -460,8 +646,11 @@ public sealed partial class WorkWriter(NpgsqlDataSource dataSource, BoardQueries
             return null;
         }
 
-        var unmet = DoneGuard.Evaluate(
-            await DoneFactsAsync(connection, transaction, item, args.Commit, cancellationToken));
+        IReadOnlyList<Unmet> unmet =
+        [
+            .. DoneGuard.Evaluate(await DoneFactsAsync(connection, transaction, item, args.Commit, cancellationToken)),
+            .. BundleUnmet(item, args),
+        ];
 
         return unmet.Count == 0 ? null : [.. unmet.Select(u => u.Problem)];
     }

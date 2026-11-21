@@ -29,7 +29,7 @@ replaces PLAN.md / LEDGER.md files: do not write those, write here.
 
 THE LOOP — everything else is a detour off this spine:
   work_brief  ->  work_next  ->  work_status(in_progress)  ->  do the work
-              ->  work_verify  ->  work_status(done)  ->  work_next
+              ->  work_status(done, verify:{...}, criteria:[...])  ->  work_next
 
 START EVERY SESSION WITH work_brief. It is the recovery payload: goal, where you are, the
 literal next action, the constraints that bind you, open assumptions, and notes addressed to
@@ -74,7 +74,7 @@ wish.
 | Block | Earns its place because |
 |---|---|
 | What this is + *"do not write those files"* | Without it the agent writes `LEDGER.md` **and** uses the tools, and the two disagree — the exact failure mode being replaced. |
-| The loop | Seven tools in one line. Turns a flat list into a workflow, which no single tool description can do. |
+| The loop | The spine in two lines, ending in the one-call close: `work_status(done)` carrying its own `verify` and `criteria`, so an honest close costs one call rather than four. Turns a flat list into a workflow, which no single tool description can do. |
 | Start with `work_brief` | The single highest-value habit. Makes cold start and post-compaction recovery the same action. |
 | The closure guard | The forced-closure contract, stated **before** the agent hits it, plus the promise that the refusal is actionable — so a refusal reads as guidance rather than as a wall. |
 | Deferral is a move | The one rule an agent would otherwise route around by inventing a "deferred" status. |

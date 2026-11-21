@@ -18,7 +18,7 @@ public static class WorkmanServerInstructions
 
         THE LOOP — everything else is a detour off this spine:
           work_brief  ->  work_next  ->  work_status(in_progress)  ->  do the work
-                      ->  work_verify  ->  work_status(done)  ->  work_next
+                      ->  work_status(done, verify:{...}, criteria:[...])  ->  work_next
 
         START EVERY SESSION WITH work_brief. It is the recovery payload: goal, where you are, the
         literal next action, the constraints that bind you, open assumptions, and notes addressed to
