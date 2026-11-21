@@ -524,6 +524,12 @@ public sealed partial class BoardReader(WorkmanQueries queries, BoardQueries boa
                 assumption.QualifiedRef));
         }
 
+        foreach (var answered in await board.AnsweredQuestionsAsync(item.Id, cancellationToken))
+        {
+            var shown = Shown(answered.Ref, answered.QualifiedRef);
+            lines.Add(AnsweredLine(shown, width => Glyph.Row(answered.Decision, width), answered.Ref, answered.QualifiedRef));
+        }
+
         // ws/13: one line per addressee. Grouped on the bare ref, two runs' 4.1 merged into a line
         // whose work_brief(scope:"4.1") is refused as ambiguous — and each brief consumes only its
         // own notes anyway. A shared bare ref is printed qualified, as every other call is (ws/10).
@@ -565,6 +571,24 @@ public sealed partial class BoardReader(WorkmanQueries queries, BoardQueries boa
         }
 
         return lines;
+    }
+
+    /// <summary>
+    /// mcp-fit/7: a question's close carries its answer in <c>reason</c> (<c>WorkWriter.AnswerAsync</c>). The decision is
+    /// quoted in at most 40 characters, fewer when the ref would push the line past <see cref="Columns.Width"/>, and
+    /// never fewer than 12: a ref is never shortened (doc 06 §1), so only a long one makes the line wider.
+    /// </summary>
+    internal static AttentionLine AnsweredLine(string shown, Func<int, string> decision, string reference, string qualified)
+    {
+        var call = $"work_status(ref:\"{shown}\", to:\"done\", reason:\"…\")";
+        string What(string quoted) => $"{shown} may be answered: decision \"{quoted}\"";
+        var room = Columns.Width - $"{Glyph.Warn} {What(string.Empty)} — {call}".Length;
+        return new AttentionLine(
+            AttentionRank.QuestionAnswered,
+            What(decision(Math.Clamp(room, 12, 40))),
+            call,
+            reference,
+            qualified);
     }
 
     /// <summary>The ref of the scope <paramref name="item"/> numbers in: itself for a run or project, else its run's.</summary>

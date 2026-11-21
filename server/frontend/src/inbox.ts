@@ -9,6 +9,7 @@ const INBOX_KINDS: Record<string, Kind> = {
   blocker_finding: { label: 'Blocker finding', dot: 'stop', many: (n) => `${n} ${plural(n, 'blocker finding')} open` },
   question: { label: 'Question', dot: 'stop', many: (n) => `${n} open ${plural(n, 'question')}` },
   overdue: { label: 'Overdue', dot: 'stop', many: (n) => `${n} overdue` },
+  wait: { label: 'Waiting on', dot: 'claimed', many: (n) => `${n} ${plural(n, 'wait')} open` },
   expired_claim: { label: 'Claim expired', dot: 'stop', many: (n) => `${n} ${plural(n, 'claim')} expired` },
   stale_in_progress: { label: 'Stalled', dot: 'stop', many: (n) => `${n} stalled` },
   assumption_due: { label: 'Assumption due', dot: 'claimed', many: (n) => `${n} with assumptions due` },
@@ -33,6 +34,50 @@ const shown = (rows: InboxRow[]) => rows.filter((r) => !HIDDEN_KINDS.has(r.kind)
 export const needsYouCount = (box: Inbox | undefined) => (box === undefined ? undefined : needsYou(box.rows).length)
 
 export const forController = (rows: InboxRow[]) => shown(rows).filter((r) => r.audience === 'controller')
+
+/** mcp-fit/7: Needs you's sections, in reading order; housekeeping follows them, as before. */
+export const NEEDS_YOU_GROUPS = [
+  ['decide', 'Decide'],
+  ['waiting', 'Waiting on others'],
+  ['blocked-undated', 'Blocked, no date'],
+] as const
+
+export type NeedsYouGroup = (typeof NEEDS_YOU_GROUPS)[number][0]
+
+/**
+ * The section a person's row is drawn in: the server's `group`. A row from a server that sends none, or a group this
+ * client does not know, is a decision, as every such row was before groups existed.
+ */
+export function rowGroup(row: InboxRow): NeedsYouGroup {
+  const known = NEEDS_YOU_GROUPS.find(([key]) => key === row.group)
+  return known ? known[0] : 'decide'
+}
+
+export type NeedsYouSection = { key: NeedsYouGroup; label: string; rows: InboxRow[] }
+
+/**
+ * The person's rows as sections, decide first, empty ones left out. Each keeps the server's order (newest first),
+ * except waiting, which reads by its due: soonest first, undated last, ties as the server sent them.
+ */
+export function needsYouSections(rows: readonly InboxRow[]): NeedsYouSection[] {
+  return NEEDS_YOU_GROUPS.map(([key, label]) => {
+    const mine = rows.filter((r) => rowGroup(r) === key)
+    return { key, label, rows: key === 'waiting' ? byDue(mine) : mine }
+  }).filter((s) => s.rows.length > 0)
+}
+
+const dueTime = (row: InboxRow) => (row.dueAt ? Date.parse(row.dueAt) : Number.POSITIVE_INFINITY)
+const byDue = (rows: InboxRow[]) =>
+  rows
+    .map((row, at) => ({ row, at }))
+    .sort((a, b) => dueTime(a.row) - dueTime(b.row) || a.at - b.at)
+    .map((x) => x.row)
+
+/** The Overview card's line: one count per non-empty section, decide first ("2 to decide · 3 waiting"). */
+export function needsYouCounts(rows: readonly InboxRow[]): { key: NeedsYouGroup; n: number; label: string }[] {
+  const words: Record<NeedsYouGroup, string> = { decide: 'to decide', waiting: 'waiting', 'blocked-undated': 'blocked, no date' }
+  return needsYouSections(rows).map((s) => ({ key: s.key, n: s.rows.length, label: `${s.rows.length} ${words[s.key]}` }))
+}
 
 /** Needs you's filter bar, as the run page's: `?kind=`, All by default. */
 export const INBOX_FILTERS = [

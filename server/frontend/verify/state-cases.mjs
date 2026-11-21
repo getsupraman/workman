@@ -21,7 +21,7 @@ import { PHONE_QUERY, closesOnMove, pageName } from '../src/menu.ts'
 import { appLine, connectionLine, feedStatus, groupApps, groupLine, revokeWarning, sessionsLabel } from '../src/apps.ts'
 import { BOARDS_MAX, boardsRead } from '../src/boards.ts'
 import { PROMPTS_MAX, promptChunks, promptScopes, promptsByScope } from '../src/prompts.ts'
-import { asInboxFilter, cardFacts, choreRow, decisionRow, filterInbox, forController, groupHousekeeping, inboxOrder, keepSelected, needsYou, needsYouCount, rowProject, withInboxFilter } from '../src/inbox.ts'
+import { asInboxFilter, cardFacts, choreRow, decisionRow, filterInbox, forController, groupHousekeeping, inboxOrder, keepSelected, needsYou, needsYouCount, needsYouCounts, needsYouSections, rowGroup, NEEDS_YOU_GROUPS, rowProject, withInboxFilter } from '../src/inbox.ts'
 import { expiresIn, isLastAdmin, isLinkPath, joinStep, joinToken, nameProblem, passwordMessage, passwordProblem, resetStep, resetToken, roleLabel, showSwitcher, slugFrom, slugProblem } from '../src/admin.ts'
 import { addDays, agendaGroups, agendaOrder, agendaRowFacts, agendaUntil, dateChips, dayHeading, dueEnd, zonedDay } from '../src/dates.ts'
 import { HONESTY_LABELS, INBOX_FILTERS, honestyCells, inboxKind } from '../src/inbox.ts'
@@ -1221,6 +1221,41 @@ console.log('\n── a confirmation by a person: its own state, card and count 
   check('the card has its own pill and style', [/p-confirmed/.test(card), /ev-confirmed/.test(card)], [true, true])
   check('the card never says Passed, never the green pill, never run by', [/Passed/.test(card), /p-proven/.test(card), /run by/.test(card)], [false, false, false])
   check('the card prints confirmedText', /confirmedText\(/.test(card), true)
+}
+
+console.log('\n── needs you in groups (mcp-fit/7): decide, waiting, blocked-undated ─────────')
+{
+  const at = (id, group, over = {}) => inboxRow(over.kind ?? 'blocked', 'human', { id, group, ...over })
+  const rows = [
+    at('w-late', 'waiting', { kind: 'wait', dueAt: '2099-06-01T00:00:00Z' }),
+    at('b-undated', 'blocked-undated'),
+    at('w-none', 'waiting', { kind: 'wait', dueAt: null }),
+    at('q1', 'decide', { kind: 'question' }),
+    at('b-held', 'waiting', { dueAt: '2099-06-01T00:00:00Z' }),
+    at('w-soon', 'waiting', { kind: 'wait', dueAt: '2099-01-01T00:00:00Z' }),
+    at('o1', 'decide', { kind: 'overdue' }),
+  ]
+  const sections = needsYouSections(rows)
+  check('sections: decide, waiting, blocked-undated, in that order', sections.map((s) => s.key), ['decide', 'waiting', 'blocked-undated'])
+  check('the section order is the groups order', NEEDS_YOU_GROUPS.map(([k]) => k), ['decide', 'waiting', 'blocked-undated'])
+  check('each section counts its rows', sections.map((s) => s.rows.length), [2, 4, 1])
+  check('decide keeps the server order', sections[0].rows.map((r) => r.item.id), ['q1', 'o1'])
+  check('waiting reads by due, undated last, ties as sent', sections[1].rows.map((r) => r.item.id), ['w-soon', 'w-late', 'b-held', 'w-none'])
+  check('an empty section is left out', needsYouSections([at('q1', 'decide')]).map((s) => s.key), ['decide'])
+  check('overview card: counts per section, decide first', needsYouCounts(rows).map((c) => c.label), ['2 to decide', '4 waiting', '1 blocked, no date'])
+
+  const old = [inboxRow('question', 'human', { id: 'q' }), inboxRow('blocked', 'human', { id: 'b' })]
+  check('no group from an older server: a decision, as before', old.map(rowGroup), ['decide', 'decide'])
+  check('an unknown group: a decision', rowGroup(at('x', 'later')), 'decide')
+  check('no group: one decide section, the server order kept', needsYouSections(old).map((s) => [s.key, s.rows.map((r) => r.item.id)]), [['decide', ['q', 'b']]])
+  check('no group: the card counts them all as decisions', needsYouCounts(old).map((c) => c.label), ['2 to decide'])
+
+  const view = readFileSync(new URL('../src/views/Inbox.tsx', import.meta.url), 'utf8')
+  const drawn = view.indexOf('each={sections()}')
+  check('the page draws the sections before housekeeping', drawn > 0 && drawn < view.indexOf('Housekeeping for the controller'), true)
+  check('arrow keys walk the rows as the sections draw them', /inboxOrder\(sections\(\)\.flatMap/.test(view), true)
+  const card = readFileSync(new URL('../src/views/Overview.tsx', import.meta.url), 'utf8')
+  check('the overview card prints the section counts', /needsYouCounts\(needsYou\(box\(\)\.rows\)\)/.test(card), true)
 }
 
 console.log(failures === 0 ? '\nAll checks passed.' : `\n${failures} check(s) failed.`)

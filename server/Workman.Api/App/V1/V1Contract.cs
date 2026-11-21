@@ -284,9 +284,27 @@ public sealed record InboxRowView(
     string? Tree,
     ItemRefView? Target,
     int Count,
-    string? Url);
+    string? Url,
+    string Group = InboxGroups.Housekeeping,
+    string? Due = null,
+    DateTimeOffset? DueAt = null);
 
-public sealed record InboxView(DateTimeOffset AsOf, long Seq, IReadOnlyList<InboxRowView> Rows);
+/// <summary>
+/// mcp-fit/7: the section of Needs you a row belongs in, in the order a person reads them. <c>Due</c> and <c>DueAt</c>
+/// on a row are the date it is read by: a waiting row's wait's due, else the item's own; null for housekeeping.
+/// </summary>
+public static class InboxGroups
+{
+    public const string Decide = "decide";
+    public const string Waiting = "waiting";
+    public const string BlockedUndated = "blocked-undated";
+    public const string Housekeeping = "housekeeping";
+}
+
+/// <summary>mcp-fit/7: the rows per group, in the order of <see cref="InboxGroups"/>.</summary>
+public sealed record InboxGroupCountsView(int Decide, int Waiting, int BlockedUndated, int Housekeeping);
+
+public sealed record InboxView(DateTimeOffset AsOf, long Seq, IReadOnlyList<InboxRowView> Rows, InboxGroupCountsView Groups);
 
 public sealed record JournalPageView(
     DateTimeOffset AsOf,

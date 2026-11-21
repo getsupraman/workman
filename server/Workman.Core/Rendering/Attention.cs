@@ -27,8 +27,15 @@ public enum AttentionRank
     DueSoonBlocked = 5,
 
     AssumptionPastRevisit = 6,
-    UnconsumedNote = 7,
-    StaleInProgress = 8,
+
+    /// <summary>
+    /// mcp-fit/7: an open question a decision note already answers. Below the assumptions, whose wrong belief costs
+    /// more, and above the notes: closing it is one call, and until then it sits in a person's Needs you.
+    /// </summary>
+    QuestionAnswered = 7,
+
+    UnconsumedNote = 8,
+    StaleInProgress = 9,
 }
 
 /// <summary>

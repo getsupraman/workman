@@ -292,9 +292,16 @@ export type InboxRow = {
   target: ItemRef | null
   count: number
   url: string | null
+  /** mcp-fit/7: decide, waiting, blocked-undated or housekeeping. Absent from an older server. */
+  group?: string
+  /** The due the row is read by (a waiting row's wait's), as written; and the instant it ends. */
+  due?: string | null
+  dueAt?: string | null
 }
 
-export type Inbox = { asOf: string; seq: number; rows: InboxRow[] }
+export type InboxGroupCounts = { decide: number; waiting: number; blockedUndated: number; housekeeping: number }
+
+export type Inbox = { asOf: string; seq: number; rows: InboxRow[]; groups?: InboxGroupCounts }
 
 /** doc 10 `GET /api/v1/agenda`: one row of its three lists. */
 export type AgendaRow = {

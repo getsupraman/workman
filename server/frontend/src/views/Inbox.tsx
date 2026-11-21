@@ -14,6 +14,7 @@ import {
   inboxOrder,
   keepSelected,
   needsYou,
+  needsYouSections,
   withInboxFilter,
   type HousekeepingGroup,
   type InboxFilter,
@@ -150,6 +151,7 @@ export default function Inbox() {
     },
     { rows: [], resolved: null },
   )
+  const sections = createMemo(() => needsYouSections(human().rows))
   const inInbox = (id: string) => rows().some((r) => r.item.id === id)
 
   /** On this page an inbox item opens beside the list; anything else goes to its own page. */
@@ -170,7 +172,7 @@ export default function Inbox() {
   let keyed = false
   useListKeys((m) => {
     if (inbox() === undefined) return false
-    const order = inboxOrder(human().rows, groups(), showHousekeeping(), openGroups())
+    const order = inboxOrder(sections().flatMap((s) => s.rows), groups(), showHousekeeping(), openGroups())
     const to = step(order, params.item, m)
     if (to === undefined) return false
     if (to !== params.item) {
@@ -208,7 +210,7 @@ export default function Inbox() {
           <div class="page-h">
             <div>
               <h1>Needs you</h1>
-              <div class="sub">The questions, blocked work and overdue items that wait on a decision from you, newest first.</div>
+              <div class="sub">What waits on a decision from you first, then what waits on someone else, then what is blocked with no date.</div>
             </div>
           </div>
 
@@ -232,20 +234,30 @@ export default function Inbox() {
                           </For>
                         </nav>
                       </Show>
-                      <Index
-                        each={human().rows}
+                      <For
+                        each={sections()}
                         fallback={<div class="empty">{waiting().length > 0 ? 'Nothing matches this filter.' : 'Nothing needs you.'}</div>}
                       >
-                        {(row) => (
-                          <InboxRowView
-                            row={row()}
-                            asOf={box().asOf}
-                            href={rowHref(row())}
-                            selected={params.item === row().item.id}
-                            resolved={human().resolved === row().item.id}
-                          />
+                        {(section) => (
+                          <>
+                            <div class="group-h inbox-sec">
+                              {section.label}
+                              <span class="gc">{section.rows.length}</span>
+                            </div>
+                            <Index each={section.rows}>
+                              {(row) => (
+                                <InboxRowView
+                                  row={row()}
+                                  asOf={box().asOf}
+                                  href={rowHref(row())}
+                                  selected={params.item === row().item.id}
+                                  resolved={human().resolved === row().item.id}
+                                />
+                              )}
+                            </Index>
+                          </>
                         )}
-                      </Index>
+                      </For>
                     </div>
                   </div>
 

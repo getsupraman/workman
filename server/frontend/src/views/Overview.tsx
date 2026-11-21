@@ -6,7 +6,7 @@ import { account, bars, inbox, load, overview, refreshOverview } from '../store.
 import { promptChunks, promptScopes, promptsByScope } from '../prompts.ts'
 import { CLOSED, barTally, countTitle, counted, refState } from '../state.ts'
 import { backlogHref, inboxHref, itemHref, projectHref, runHref } from '../nav.ts'
-import { HONESTY_LABELS, forController, honestyCells, needsYou, needsYouCount, openTasks } from '../inbox.ts'
+import { HONESTY_LABELS, forController, honestyCells, needsYou, needsYouCount, needsYouCounts, needsYouSections, openTasks } from '../inbox.ts'
 import { byActivity } from '../projects.ts'
 import { projectRuns, runRow } from '../lists.ts'
 import { UNKNOWN, ago, claimHolder, clock, day, plural, projectName, projectTagline, short } from '../format.ts'
@@ -63,10 +63,14 @@ export default function Overview() {
               </div>
               <Known value={inbox()}>
                 {(box) => {
-                  const human = () => needsYou(box().rows)
+                  const human = () => needsYouSections(needsYou(box().rows)).flatMap((s) => s.rows)
+                  const counts = () => needsYouCounts(needsYou(box().rows))
                   const chores = () => forController(box().rows).length
                   return (
                     <>
+                      <Show when={counts().length > 0}>
+                        <div class="inbox-counts">{counts().map((c) => c.label).join(' · ')}</div>
+                      </Show>
                       <Index each={human().slice(0, INBOX_SHOWN)} fallback={<div class="empty">Nothing needs you.</div>}>
                         {(row) => <InboxRowView row={row()} asOf={box().asOf} href={inboxHref(row().item.id)} compact />}
                       </Index>

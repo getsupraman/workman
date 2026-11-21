@@ -44,7 +44,14 @@ public static partial class ApiV1
         }
 
         var rows = await InboxRowsAsync(snapshot, scopes, book, board, api, web.Current, clock.GetUtcNow(), cancellationToken);
-        return Results.Ok(new InboxView(snapshot.AsOf, snapshot.Seq, rows));
+        return Results.Ok(new InboxView(snapshot.AsOf, snapshot.Seq, rows, GroupCounts(rows)));
+    }
+
+    private static InboxGroupCountsView GroupCounts(IReadOnlyList<InboxRowView> rows)
+    {
+        int Count(string group) => rows.Count(r => r.Group == group);
+        return new InboxGroupCountsView(
+            Count(InboxGroups.Decide), Count(InboxGroups.Waiting), Count(InboxGroups.BlockedUndated), Count(InboxGroups.Housekeeping));
     }
 
     private sealed record Waiting(
@@ -56,7 +63,8 @@ public static partial class ApiV1
         string? Detail = null,
         string? Actor = null,
         string? Tree = null,
-        int Count = 1);
+        int Count = 1,
+        Guid? WaitId = null);
 
     /// <summary>
     /// Everything waiting on a human under the scopes, newest first. Each source is the query the
@@ -84,6 +92,20 @@ public static partial class ApiV1
             waiting.Add(new Waiting(
                 "blocked", row.Id, "blocked, and nothing open blocks it — it waits on a decision",
                 row.Since, q => $"work_status(ref:\"{q}\", to:\"in_progress\")"));
+        }
+
+        foreach (var row in Every(await api.BlockedOnAWaitAsync(scopes, cancellationToken)))
+        {
+            waiting.Add(new Waiting(
+                "blocked", row.Id, "blocked by an open wait — it waits on someone else's answer",
+                row.Since, q => $"work_status(ref:\"{q}\", to:\"in_progress\")", WaitId: row.WaitId));
+        }
+
+        foreach (var wait in Every(await api.OpenWaitsAsync(scopes, cancellationToken)))
+        {
+            waiting.Add(new Waiting(
+                "wait", wait.Id, "open wait — close it when the answer arrives",
+                wait.Since, q => $"work_status(ref:\"{q}\", to:\"done\")"));
         }
 
         foreach (var blocker in Every(await board.BlockerFindingsAsync(scopes, cancellationToken)))
@@ -173,7 +195,14 @@ public static partial class ApiV1
             }
         }
 
-        await book.PlacedAsync(waiting.Select(w => w.ItemId), cancellationToken);
+        var waits = waiting.Where(w => w.WaitId is not null).Select(w => w.WaitId!.Value).ToList();
+        await book.PlacedAsync(waiting.Select(w => w.ItemId).Concat(waits), cancellationToken);
+
+        // mcp-fit/7: the due a group reads and the not_before that hides a row until it starts.
+        var dates = (await board.DatesAsync(
+                [.. waiting.Where(w => w.Kind is not "done_unverified").Select(w => w.ItemId).Concat(waits).Distinct()],
+                cancellationToken))
+            .ToDictionary(d => d.ItemId);
 
         // The facts the agents' lines do not carry: one query per source, for every row at once.
         var reasons = (await api.BlockedReasonsAsync(
@@ -187,8 +216,16 @@ public static partial class ApiV1
 
         return [.. waiting
             .DistinctBy(w => (w.Kind, w.ItemId))
-            .Select(w =>
+            .Select(w => (Row: w, Group: GroupOf(w, dates)))
+            .Where(g => g.Group == InboxGroups.Housekeeping
+                        || dates.GetValueOrDefault(g.Row.ItemId)?.NotBeforeStart is not { } start
+                        || start <= now)
+            .Select(g =>
             {
+                var (w, group) = g;
+                var dated = group == InboxGroups.Housekeeping
+                    ? null
+                    : dates.GetValueOrDefault(w.WaitId ?? w.ItemId);
                 var item = book.Item(w.ItemId);
                 var since = w.Since == DateTimeOffset.MinValue ? book.Row(w.ItemId).OpenedAt : w.Since;
                 var fact = facts.GetValueOrDefault(w.ItemId);
@@ -196,7 +233,7 @@ public static partial class ApiV1
 
                 var detail = w.Kind switch
                 {
-                    "question" => OneLine(book.Row(w.ItemId).Intent),
+                    "question" or "wait" => OneLine(book.Row(w.ItemId).Intent),
                     "blocked" => OneLine(reasons.GetValueOrDefault(w.ItemId)),
                     "blocker_finding" => OneLine(Against(fact?.Source, target?.Title)),
                     _ => w.Detail,
@@ -209,18 +246,37 @@ public static partial class ApiV1
                     book.RunOf(w.ItemId),
                     w.What,
                     since,
-                    w.Call(item.QualifiedRef),
-                    w.Kind is "question" or "blocked" or "overdue" ? "human" : "controller",
+                    w.WaitId is { } waitId
+                        ? $"work_status(ref:\"{book.Item(waitId).QualifiedRef}\", to:\"done\") when its answer arrives"
+                        : w.Call(item.QualifiedRef),
+                    w.Kind is "question" or "blocked" or "overdue" or "wait" ? "human" : "controller",
                     detail,
                     w.Kind == "done_unverified" ? fact?.ClosedBy : w.Actor,
                     w.Tree,
                     target,
                     w.Count,
-                    webBase is not null && item.FullRef is { Length: > 0 } fullRef ? WebLinks.Link(webBase, fullRef) : null);
+                    webBase is not null && item.FullRef is { Length: > 0 } fullRef ? WebLinks.Link(webBase, fullRef) : null,
+                    group,
+                    dated?.Due,
+                    dated?.Due is null ? null : dated.DueEnd);
             })
             .OrderByDescending(r => r.Since)
             .ThenBy(r => r.Key, StringComparer.Ordinal)];
     }
+
+    /// <summary>
+    /// mcp-fit/7 (doc 10 inbox <c>group</c>): a wait, and a blocked item a wait holds, wait; a blocked item nothing
+    /// open holds needs a decision by its due, or has no date; questions and overdue items are decisions; every
+    /// controller kind is housekeeping.
+    /// </summary>
+    private static string GroupOf(Waiting row, IReadOnlyDictionary<Guid, ItemDatesRow> dates) => row.Kind switch
+    {
+        "wait" => InboxGroups.Waiting,
+        "blocked" when row.WaitId is not null => InboxGroups.Waiting,
+        "blocked" => dates.GetValueOrDefault(row.ItemId)?.Due is null ? InboxGroups.BlockedUndated : InboxGroups.Decide,
+        "question" or "overdue" => InboxGroups.Decide,
+        _ => InboxGroups.Housekeeping,
+    };
 
     /// <summary>When an assumption fell due: the revisit item's close, or its revisit_at — the later one that happened.</summary>
     private static DateTimeOffset? DueSince(AssumptionRow assumption)
