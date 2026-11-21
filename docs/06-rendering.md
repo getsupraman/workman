@@ -417,6 +417,11 @@ same done guard as `accepted`, so they cannot close without an orchestrator veri
 **The unconsumed-note line is one line per addressee**: `N note(s) addressed to <ref> unconsumed —
 work_brief(scope:"<ref>", for:"worker")`, where `<ref>` is bare unless another item in the workspace
 shares it, in which case it is qualified (`run-one/4.1`), the same rule as ws/10's calls and URIs.
+It carries a second route on its own indented line directly under it, `  or work_note(acknowledge:"<ref>")`
+(mcp-fit/5): the pair would not fit the 100 columns of §1 on one line. Acknowledging takes the notes out of
+attention, the inbox and the board flag without consuming them; the next worker brief still renders them. An
+acknowledged note raises no line. A continuation line is the only line in the block that is neither a `⚠` line
+nor the `+N more` line, and there is at most one under each `⚠` line.
 
 > **Changed 2026-10-22 (ws/13).** The line grouped on the bare ref, so at project scope the notes to
 > `run-one/4.1` and `run-two/4.1` were one line whose `work_brief(scope:"4.1")` is refused as

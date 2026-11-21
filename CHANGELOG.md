@@ -7,10 +7,26 @@ All notable changes to the Workman server and the `workman` plugin are recorded 
 
 ## [Unreleased]
 
-Server only. One migration, `20261121090000_HumanConfirmation`: it adds `item.verify_manual` (default false) and
-`verification.confirmed_by` / `quote` with their check constraints; existing rows are not changed.
+Server only. Two migrations. `20261121090000_HumanConfirmation` adds `item.verify_manual` (default false) and
+`verification.confirmed_by` / `quote` with their check constraints. `20261121120000_NoteAcknowledged` adds
+`note.acknowledged_at` / `acknowledged_by`, which are set together or not at all. Existing rows are not changed.
 
 ### Added
+
+- **Notes can be acknowledged without being consumed.** `work_note(acknowledge:"<ref>")`, on its own, marks every
+  unconsumed note addressed to that item as acknowledged. Those notes leave the attention line, the inbox's
+  `unconsumed_note` row and the board's `unconsumed_notes` flag, so a reviewer can clear them without calling
+  `work_brief(for:"worker")`. They are still unconsumed: the next worker brief of the item renders them and consumes
+  them there. Only an orchestrator, a controller or a human can acknowledge; a worker is refused, as is
+  `acknowledge` combined with `kind`, `body` or `to`. The attention line names the call as a second route. On
+  `work_note`, `kind` and `body` are now optional in the schema (they are still required for a note), and its
+  description was shortened to pay for the new parameter. `tools/list` changes for every profile.
+
+- **Rollups say what they leave out.** A container's rollup in `work_tree` reads
+  `130/303 done · not counted: 17 open waits, 1 open finding`. The suffix is omitted when nothing is left out,
+  and it replaces the old `· N findings open`. `/api/v1`'s `Rollup` gains `notCounted {waits, findings}`,
+  additively. The dashboard prints it muted beside the run header's count and in the tooltip of the overview's
+  and sidebar's compact counts. The numbers themselves do not change.
 
 - **A confirmation by a person, and an explicit manual marker.** `work_verify(ref, confirmed_by, quote)` — or the
   one-call close's `verify:{confirmed_by, quote}` — records a named person's words as its own kind of evidence: a
@@ -43,6 +59,10 @@ Server only. One migration, `20261121090000_HumanConfirmation`: it adds `item.ve
   07 name the one-call form. `tools/list` changes for orchestrators (`work_status` schema).
 
 ### Changed
+
+- **No never-red warning on a manual check.** `work_audit`'s `verify-never-red` check skips items marked
+  `verify_manual:true`. Nothing is inferred from the command's text; every other open item with a `verify_cmd` is
+  still flagged.
 
 - **`work_search` honours `limit` up to 200** (it stopped at 50) and says `more hits exist` when the result was
   cut.

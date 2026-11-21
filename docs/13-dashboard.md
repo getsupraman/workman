@@ -338,6 +338,12 @@ One function, `src/state.ts` `state()`, colours every dot, pill and segment. Fir
 | `idle` | open | hollow ring |
 
 Leaves are the doc 10 rollup kinds: task, followup, subtask, spike, question, incident.
+
+**What a rollup leaves out** (mcp-fit/5). Open waits and open findings are never in an "X of Y", so the count says
+so rather than dropping them: the run header prints, muted after its sentence, *Not counted: 17 open waits, 1 open
+finding.* (omitted when there are none), and the compact counts of the overview strip and the sidebar carry it in
+their tooltip (*130 of 303 done · not counted: 17 open waits, 1 open finding*). Both read the rollup's `notCounted`
+(doc 10); nothing is recomputed in the client, and a server without it falls back to *N findings open.*
 `verify/state-cases.mjs` enumerates every case and fails on any change of precedence.
 
 ## Theme tokens
