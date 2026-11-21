@@ -120,8 +120,11 @@ token with `workman.sessions`; doc 14 §2), or **Release** on the dashboard's Se
 point at it. It is renamed to `<name>~released~<its id, 32 hex>`, which its own id makes unique; its
 token is revoked (`revoked_at`), its client key is let go, and `session_name_released` (`{name,
 tombstone}`) is journaled on it. The next mint or header under the name creates a new row. A session
-that still holds live claims is refused (409, naming the refs): it may still be working, and
-`DELETE /api/agent-sessions/{id}` is the existing way to release its claims first. A row already
+that still holds live claims of its own is refused (409, naming the refs): it may still be working, and
+`DELETE /api/agent-sessions/{id}` is the existing way to release its claims first. A claim another
+session took *for* it (see "Claims for delegated work" below) does not refuse the release: it is
+released with it (`release_reason = 'session_released'`, a `claim_session_released` event), and its
+item returns to `ready` as the expiry sweep returns one. A row already
 released is 409. The header path is unchanged: a header never takes over a name, and the release is
 the operator's alone.
 
@@ -144,13 +147,45 @@ but the oldest live claim per tree, then restores the old index.
   `last_seen_at` is touched on every tool call and resource read.
 - **Lease renewal:** any call from the claiming session — a read included — renews its live claims'
   lease (today a 30-minute lease lapses under a multi-hour unit and the inbox shows "claim expired" for
-  healthy work).
+  healthy work). A claim taken for another session renews on the calls of either session; see below.
 - **One writer per tree means one *session* per tree:** the same session may claim several items in the
   tree it already holds (today a controller cannot claim two tasks one nested agent works on in one
   worktree). A *different* session is still refused, naming the holder by name.
 - Text surfaces print the session where they print an actor today: claims in `work_tree`/`work_get`
   rows and the worker brief ("held by aw-m1"), refusals ("held by skills-5d"), history rows, the
   expired-claim attention line. A sessionless writer prints as its role, as before.
+
+## Claims for delegated work (mcp-fit/6)
+A controller claims an item, and a nested session it launched does the work, for minutes or for hours.
+Renewal on the claiming session's calls alone let the lease lapse while the worker was busy, so the
+attention filled with "claim expired" and teams set `in_progress` only at the close. Now the
+controller claims *for* the worker:
+
+`work_status(ref, "in_progress", lease: 240, for_session: "wk-a")`
+
+- **`lease`** is minutes, 1..480 (C346). Above 480 is refused with the cap and the call that fits, and
+  nothing is written. Without it the workspace's `claim_ttl_minutes` applies (30 by default).
+- **`for_session`** names a live session of the workspace and the caller's user, by the name it was
+  launched under (`agent_launch`). An unknown, released (tombstoned) or revoked name is refused, and
+  nothing is written.
+- Both are an orchestrator's, controller's or human's (C344): a worker passing either is refused and
+  nothing is written. A worker's own plain `in_progress` is as it was. Each may be given alone: `lease`
+  alone sets the caller's own claim's lease; `for_session` alone takes the default lease.
+- **The holder is the named session.** `claim.session_id` is that session, so Working now, the board,
+  `work_get`, `work_tree`, refusals and the expired-claim line print its name, with the claimer after
+  it: `wk-a (for ctl-a)`. `claim.claimed_by` (the claimer's label) and `claim.claimed_by_session_id`
+  record who claimed it, and `claim.lease_minutes` the lease (NULL: the workspace's). Migration
+  `DelegatedClaims`, additive.
+- **Renewal.** Any call from the holding session or from the claiming session renews the claim, to its
+  own lease, not the default. A call from any other session does not.
+- **Release.** Releasing the named session's name (above) or revoking it (`DELETE`, `agent_stop`)
+  releases the claim and returns its item to `ready`. The claiming controller, as any orchestrator, can
+  move the item out of `in_progress` at any time, which releases the claim as every move does. Its plain
+  `work_status(ref, "in_progress")` takes the item back, in place or after such a move, and makes it
+  the holder again with the default lease.
+- **Trees.** The claim is the named session's on its tree (`claim_one_session_per_tree`, unchanged): on
+  that tree, while the worker holds it, another session — the controller included — claims nothing
+  else. Name the worker's own worktree with `tree:` when it has one.
 
 ## Read API (doc 10) consequences — not in this unit
 `Claim.session` and every journal event's `session`: `{ id, name, role, client, launchedBy|null,

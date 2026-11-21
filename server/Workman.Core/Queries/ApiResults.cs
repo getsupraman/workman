@@ -56,7 +56,8 @@ public sealed record ClaimDetail(
     DateTimeOffset AcquiredAt,
     DateTimeOffset HeartbeatAt,
     DateTimeOffset ExpiresAt,
-    DateTimeOffset? ReleasedAt);
+    DateTimeOffset? ReleasedAt,
+    string? ClaimedBy);
 
 public sealed record SessionRow(
     Guid Id,

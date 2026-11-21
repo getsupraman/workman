@@ -44,11 +44,12 @@ public sealed class ImportVisibilityTests(PostgresFixture fixture)
     /// one-call close (mcp-fit/3), +208 tokens on the granted list; the worker list did not move; both re-pinned when
     /// work_verify gained confirmed_by and quote, a confirmation by a person, and work_create/work_update and the
     /// one-call close's verify gained verify_manual and the confirmation form (mcp-fit/4), +108 tokens on the granted list; both
-    /// re-pinned when work_note gained acknowledge and kind/body became optional, its text trimmed to pay for it (mcp-fit/5), -6.
+    /// re-pinned when work_note gained acknowledge and kind/body became optional, its text trimmed to pay for it (mcp-fit/5), -6; the orchestrator list re-pinned when work_status gained lease and
+    /// for_session, a claim for a named session, its text trimmed to pay for it (mcp-fit/6), +19.
     /// Both are hashed sorted by name with LF line endings, so every host and checkout pins the same bytes.
     /// </summary>
     private const string WorkerList = "baf17db545ac6f825091dcf0c4d7f90ca559f092b64c680eb529a91e8ba676b6";
-    private const string OrchestratorList = "775b125366cc9ca852ece94fa24fb35090e80ad7eab90a90c02a2baca2351782";
+    private const string OrchestratorList = "ea5acb8fb81cdc8eb6406614ee0fd44dfe8152fd3e814c71d75553968b126848";
     private const string ControllerList = OrchestratorList;
 
     [Fact]
@@ -98,10 +99,10 @@ public sealed class ImportVisibilityTests(PostgresFixture fixture)
         var tools = await client.ListToolsAsync(cancellationToken: Ct);
         var import = Assert.Single(tools, t => t.Name == "work_import");
 
-        // A ratchet, by the budget test's measure (chars / 4): 538 for the tool, 7570 for the granted list (7576 before mcp-fit/5 added work_note acknowledge; 7468 before mcp-fit/4 added work_verify confirmed_by and quote and verify_manual; 7260 before mcp-fit/3 added work_status verify and criteria; 7175 before mcp-fit/2 added history beforeSeq, search and threads paging; 7174 before work_create named the wait kind, deadlines/3; 6918 before deadlines/4, 6849 before deadlines/2).
+        // A ratchet, by the budget test's measure (chars / 4): 538 for the tool, 7589 for the granted list (7570 before mcp-fit/6 added work_status lease and for_session; 7576 before mcp-fit/5 added work_note acknowledge; 7468 before mcp-fit/4 added work_verify confirmed_by and quote and verify_manual; 7260 before mcp-fit/3 added work_status verify and criteria; 7175 before mcp-fit/2 added history beforeSeq, search and threads paging; 7174 before work_create named the wait kind, deadlines/3; 6918 before deadlines/4, 6849 before deadlines/2).
         var cost = (JsonSerializer.Serialize(import.ProtocolTool).Length + 3) / 4;
         var total = (JsonSerializer.Serialize(tools.Where(t => t.Name.StartsWith("work_", StringComparison.Ordinal)).Select(t => t.ProtocolTool)).Length + 3) / 4;
-        Assert.True(cost <= 540 && total <= 7570, $"work_import costs {cost} tokens in tools/list; the granted session's work_* list {total}");
+        Assert.True(cost <= 540 && total <= 7589, $"work_import costs {cost} tokens in tools/list; the granted session's work_* list {total}");
 
         var text = await ReadServer.CallAsync(client, "work_import", new Dictionary<string, object?>
         {

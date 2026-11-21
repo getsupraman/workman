@@ -7,11 +7,23 @@ All notable changes to the Workman server and the `workman` plugin are recorded 
 
 ## [Unreleased]
 
-Server only. Two migrations. `20261121090000_HumanConfirmation` adds `item.verify_manual` (default false) and
+Server only. Three migrations. `20261121090000_HumanConfirmation` adds `item.verify_manual` (default false) and
 `verification.confirmed_by` / `quote` with their check constraints. `20261121120000_NoteAcknowledged` adds
-`note.acknowledged_at` / `acknowledged_by`, which are set together or not at all. Existing rows are not changed.
+`note.acknowledged_at` / `acknowledged_by`, which are set together or not at all. `20261121150000_DelegatedClaims`
+adds `claim.lease_minutes` (1..480 or NULL), `claimed_by` and `claimed_by_session_id`. Existing rows are not changed.
 
 ### Added
+
+- **Claims for delegated work.** `work_status(ref, "in_progress", lease:<minutes>, for_session:"<session>")` lets an
+  orchestrator, a controller or a human claim an item for the session that works it, with a lease of up to 480
+  minutes. Above 480, an unknown, released or revoked session, and a worker passing either are refused, and nothing
+  is written. Without `lease` the default stays 30 minutes. The named session is the holder: Working now,
+  `work_get`, `work_tree`, refusals and the expired-claim line print `wk-a (for ctl-a)`. The calls of the holder and
+  of the claiming session renew it to its own lease. Releasing or revoking the named session releases the claim
+  (`release_reason = 'session_released'` or `'revoked'`) and the item returns to ready; a session's own claims still
+  refuse its release. The claimer can move the item out of `in_progress` at any time, and its plain `in_progress`
+  takes it back. `/api/v1`'s `Claim` gains `claimedBy`, additively. `work_status`'s text was shortened to pay for the
+  two parameters. `tools/list` changes for the orchestrator and controller profiles.
 
 - **Notes can be acknowledged without being consumed.** `work_note(acknowledge:"<ref>")`, on its own, marks every
   unconsumed note addressed to that item as acknowledged. Those notes leave the attention line, the inbox's

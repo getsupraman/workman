@@ -142,7 +142,8 @@ internal sealed class V1Book(ApiQueries api, BoardQueries board)
             claim.HeartbeatAt,
             claim.ExpiresAt,
             claim.ExpiresAt < asOf,
-            session?.Name);
+            session?.Name,
+            claim.ClaimedBy);
     }
 
     public async Task<IReadOnlyList<JournalEventView>> EventsAsync(

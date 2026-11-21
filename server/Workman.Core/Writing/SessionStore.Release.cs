@@ -30,7 +30,8 @@ public sealed partial class SessionStore
     /// <summary>
     /// doc 11 — frees a session name for the next mint without deleting the row: claims, events and
     /// evidence keep pointing at it under a tombstone name, its token is revoked and its client key let
-    /// go. A session that still holds live claims is refused; revoking it releases them first.
+    /// go. A session that still holds live claims of its own is refused; revoking it releases them first. A claim
+    /// another session took for it (mcp-fit/6) does not refuse: it is released, and its item returns to ready.
     /// </summary>
     public async Task<ReleaseResult> ReleaseNameAsync(
         Guid workspaceId,
@@ -46,7 +47,8 @@ public sealed partial class SessionStore
             SELECT s.name AS "Name",
                    (SELECT string_agg(i.ref, ', ' ORDER BY i.ref)
                     FROM   claim c JOIN item i ON i.id = c.item_id
-                    WHERE  c.session_id = s.id AND c.released_at IS NULL AND c.expires_at > now()) AS "Held"
+                    WHERE  c.session_id = s.id AND c.released_at IS NULL AND c.expires_at > now()
+                      AND  c.claimed_by IS NULL) AS "Held"
             FROM   agent_session s
             WHERE  s.id = @id AND s.workspace_id = @workspace
             FOR    UPDATE OF s;
@@ -73,6 +75,30 @@ public sealed partial class SessionStore
 
         await connection.ExecuteAsync(new CommandDefinition(
             """
+            WITH released AS (
+              UPDATE claim c
+                 SET released_at = now(), release_reason = 'session_released'
+                FROM item i
+               WHERE i.id = c.item_id
+                 AND c.session_id = @session
+                 AND c.released_at IS NULL
+                 AND c.claimed_by IS NOT NULL
+              RETURNING c.item_id, i.ref, c.claimed_by
+            ),
+            returned AS (
+              UPDATE item i
+                 SET status = 'ready'
+                FROM released r
+               WHERE i.id = r.item_id AND i.status = 'in_progress'
+              RETURNING i.id
+            )
+            INSERT INTO event (workspace_id, item_id, actor, role, kind, payload, summary, session_id)
+            SELECT @workspace, r.item_id, @actor, @role::actor_role, 'claim_session_released',
+                   jsonb_build_object('session', @name::text, 'claimed_by', r.claimed_by),
+                   r.ref || ' claim by ' || @name::text || ' (for ' || r.claimed_by || ') released — session released',
+                   @session
+            FROM   released r;
+
             UPDATE agent_session
                SET name       = @tombstone,
                    revoked_at = coalesce(revoked_at, now()),
@@ -88,6 +114,7 @@ public sealed partial class SessionStore
                 session = sessionId,
                 workspace = workspaceId,
                 tombstone,
+                name = row.Name,
                 actor = actor.Name,
                 role = Pg.Label(actor.Role),
                 payload = JsonSerializer.Serialize(new { name = row.Name, tombstone }),

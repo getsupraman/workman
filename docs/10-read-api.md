@@ -286,11 +286,12 @@ Session = { "id": "uuid", "name": "aw-m1", "role": "worker", "externalRole": "re
 Claim   = { "item": ItemRef, "run": ItemRef, "session": Session | null, "agent": "controller",  // agent = legacy label
             "role": "worker", "tree": "P:/…/m1-tool-args" | null, "acquiredAt": "…", "heartbeatAt": "…",
             "expiresAt": "…", "expired": false,
-            "heldBySession": "aw-m4-2b" | null }
+            "heldBySession": "aw-m4-2b" | null, "claimedBy": "ctl-a" | null }
           // heldBySession: the holding session's name (claim.session_id → agent_session.name), so a
           // client shows "aw-m4-2b · controller" without reaching into session; null for a claim
           // taken without a session (an OAuth caller that named none), shown by role alone.
           // Every Claim carries it: overview workingNow, board rows, the item page, /sessions.
+          // claimedBy: who claimed it for the holding session (work_status for_session, doc 11), else null.
 JournalEvent = { "seq": 1, "at": "…", "item": ItemRef | null, "run": ItemRef | null, "session": Session | null,
                  "actor": "controller", "role": "controller", "kind": "…", "summary": "…", "payload": { } }
 ```

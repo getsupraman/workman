@@ -29,11 +29,11 @@ public sealed class WorkWriteTools(
     [Authorize(Policy = WorkmanPolicies.Orchestrator)]
     [McpServerTool(Name = "work_status", Title = "Move: the guarded transition")]
     [Description("""
-        Moves an item: open → ready → in_progress → review → done. in_progress takes a claim on the
-        working tree; done is refused until every criterion is checked, an orchestrator verification
-        exists, no child is open and no blocker finding targets it. With verify and criteria it is one
-        transaction, also from open or ready; a refusal writes nothing. Deferring is a move, not a
-        status: it needs target: and creates a real open item there.
+        Moves an item: open, ready, in_progress, review, done. in_progress claims the working tree;
+        done is refused until every criterion is checked, an orchestrator verification exists, no
+        child is open and no blocker finding targets it. With verify and criteria: one
+        transaction, also from open or ready; a refusal writes nothing. deferred needs target: and
+        creates an open item there.
         Next: after in_progress, work_verify; after done, work_next.
         """)]
     public async Task<CallToolResult> StatusAsync(
@@ -45,25 +45,29 @@ public sealed class WorkWriteTools(
         string? reason = null,
         [Description("Required for deferred: where the work goes, or \"backlog\".")]
         string? target = null,
-        [Description("For done: accepted (default), reworked, replanned, escalated, skipped, wontfix, duplicate, obsolete.")]
+        [Description("accepted (default), reworked, replanned, escalated, skipped, wontfix, duplicate, obsolete.")]
         string? resolution = null,
-        [Description("A commit sha to record as it closes.")]
+        [Description("A commit sha to record.")]
         string? commit = null,
-        [Description("Close over unmet conditions. Needs reason; leaves a permanent forced_transition.")]
+        [Description("Close over unmet conditions; needs reason, and is audited.")]
         bool force = false,
-        [Description("For in_progress: your worktree path or branch; one writer per tree.")]
+        [Description("For in_progress: your worktree path or branch.")]
         string? tree = null,
-        [Description("For done: recorded as work_verify would, before the guard.")]
+        [Description("For done: a work_verify, before the guard.")]
         VerifyArg? verify = null,
-        [Description("For done: ticked as work_update would, before the guard.")]
+        [Description("For done: criterion ticks, before the guard.")]
         CriterionArg[]? criteria = null,
+        [Description("Minutes, 1..480.")]
+        int? lease = null,
+        [Description("Who holds the claim.")]
+        string? for_session = null,
         CancellationToken cancellationToken = default)
         => await WriteAsync(
             "work_status",
             @ref,
             id => writer.StatusAsync(
                 id, @ref, to, caller.Actor,
-                new StatusArgs(reason, target, resolution, commit, force, tree, verify, criteria),
+                new StatusArgs(reason, target, resolution, commit, force, tree, verify, criteria, lease, for_session),
                 cancellationToken),
             cancellationToken);
 

@@ -193,7 +193,8 @@ public sealed partial class ApiQueries(NpgsqlDataSource dataSource)
         c.acquired_at  AS "AcquiredAt",
         c.heartbeat_at AS "HeartbeatAt",
         c.expires_at   AS "ExpiresAt",
-        c.released_at  AS "ReleasedAt"
+        c.released_at  AS "ReleasedAt",
+        c.claimed_by   AS "ClaimedBy"
         """;
 
     private const string SessionColumns =

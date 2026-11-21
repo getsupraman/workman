@@ -201,7 +201,8 @@ public sealed partial class SessionStore(NpgsqlDataSource dataSource)
 
     /// <summary>
     /// doc 11 — any call from the claiming session renews its live claims. A lease that lapses under
-    /// a healthy multi-hour unit is the "claim expired" the inbox showed for work still going on.
+    /// a healthy multi-hour unit is the "claim expired" the inbox showed for work still going on. A claim taken for a
+    /// session renews on the calls of its holder and of the session that claimed it, to its own lease (mcp-fit/6).
     /// </summary>
     private static async Task RenewAsync(
         NpgsqlConnection connection,
@@ -214,13 +215,13 @@ public sealed partial class SessionStore(NpgsqlDataSource dataSource)
             """
             UPDATE claim
                SET heartbeat_at = now(),
-                   expires_at   = now() + make_interval(mins => (
+                   expires_at   = now() + make_interval(mins => coalesce(lease_minutes, (
                      SELECT CASE WHEN settings->>'claim_ttl_minutes' ~ '^[0-9]+$'
                                       AND (settings->>'claim_ttl_minutes')::int > 0
                                  THEN (settings->>'claim_ttl_minutes')::int
                                  ELSE @fallback END
-                     FROM workspace WHERE id = @workspace))
-             WHERE session_id = @session AND released_at IS NULL;
+                     FROM workspace WHERE id = @workspace)))
+             WHERE (session_id = @session OR claimed_by_session_id = @session) AND released_at IS NULL;
             """;
 
         await connection.ExecuteAsync(new CommandDefinition(

@@ -32,8 +32,16 @@ public sealed record StatusArgs(
     bool Force = false,
     string? Tree = null,
     VerifyArg? Verify = null,
-    CriterionArg[]? Criteria = null)
+    CriterionArg[]? Criteria = null,
+    int? Lease = null,
+    string? ForSession = null)
 {
+    /// <summary>Whether the call sets a lease or claims for another session: an orchestrator's, for in_progress only (mcp-fit/6).</summary>
+    public bool Delegates => Lease is not null || !string.IsNullOrWhiteSpace(ForSession);
+
+    /// <summary>The session named by <see cref="ForSession"/>, resolved inside the move's transaction.</summary>
+    internal Actor? Holder { get; init; }
+
     /// <summary>Whether the call carries its own evidence, which is what makes <c>done</c> reachable from open or ready.</summary>
     public bool Bundled => Verify is not null || Criteria is { Length: > 0 };
 }
@@ -97,7 +105,9 @@ public sealed partial class WorkWriter(NpgsqlDataSource dataSource, BoardQueries
         string QualifiedRef,
         Guid? SessionId,
         Guid? HolderUserId,
-        string Holder);
+        string Holder,
+        Guid? ClaimedBySessionId,
+        string? ClaimedBy);
 
     /// <summary>
     /// doc 07 §2 and §3. The transition table decides what is reachable, the five conditions decide
@@ -133,6 +143,11 @@ public sealed partial class WorkWriter(NpgsqlDataSource dataSource, BoardQueries
         if (BundleRefusal(scope.Ref, move, actor, args) is { } unbundled)
         {
             return WriteResult.No(unbundled);
+        }
+
+        if (DelegationRefusal(scope.Ref, move, actor, args) is { } undelegated)
+        {
+            return WriteResult.No(undelegated);
         }
 
         await using var tenant = await _connections.TenantAsync(cancellationToken);
@@ -335,7 +350,7 @@ public sealed partial class WorkWriter(NpgsqlDataSource dataSource, BoardQueries
             or "claim_one_session_per_tree")
         {
             await using var reread = await _connections.BeginTenantAsync(connection, cancellationToken);
-            var held = await ClaimRefusalAsync(connection, reread, item, actor, args.Tree, cancellationToken);
+            var held = await ClaimRefusalAsync(connection, reread, item, actor, args, cancellationToken);
             if (held is not null)
             {
                 return held;
@@ -363,6 +378,18 @@ public sealed partial class WorkWriter(NpgsqlDataSource dataSource, BoardQueries
         if (move == Move.Deferred)
         {
             return await DeferAsync(connection, transaction, item, actor, args, cancellationToken);
+        }
+
+        if (move == Move.InProgress && !string.IsNullOrWhiteSpace(args.ForSession))
+        {
+            var (holder, unheld) = await HolderAsync(connection, transaction, item, actor, args.ForSession!, cancellationToken);
+            if (holder is null)
+            {
+                await transaction.RollbackAsync(cancellationToken);
+                return WriteResult.No(unheld!);
+            }
+
+            args = args with { Holder = holder };
         }
 
         if (await WriteBundleAsync(connection, transaction, item, actor, args, cancellationToken) is { } unwritable)
@@ -410,7 +437,7 @@ public sealed partial class WorkWriter(NpgsqlDataSource dataSource, BoardQueries
             : [];
 
         var claimLine = status == ItemStatus.InProgress
-            ? await AcquireAsync(connection, transaction, item, actor, args.Tree, cancellationToken)
+            ? await AcquireAsync(connection, transaction, item, actor, args, cancellationToken)
             : await ReleaseAsync(connection, transaction, item, status, cancellationToken);
 
         await EventAsync(
@@ -544,7 +571,7 @@ public sealed partial class WorkWriter(NpgsqlDataSource dataSource, BoardQueries
                 return await ReadyRefusalAsync(connection, transaction, item, cancellationToken);
 
             case Move.InProgress:
-                return await ClaimRefusalAsync(connection, transaction, item, actor, args.Tree, cancellationToken);
+                return await ClaimRefusalAsync(connection, transaction, item, actor, args, cancellationToken);
 
             case Move.Blocked when string.IsNullOrWhiteSpace(args.Reason):
                 return Refusal.Blocked(

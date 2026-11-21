@@ -1,3 +1,4 @@
+using System.Data;
 using Dapper;
 using Npgsql;
 using Workman.Core.Domain;
@@ -37,10 +38,11 @@ public sealed partial class WorkWriter
         NpgsqlTransaction transaction,
         ItemRow item,
         Actor actor,
-        string? tree,
+        StatusArgs args,
         CancellationToken cancellationToken)
     {
-        var treeLock = await TreeLockAsync(connection, transaction, item, actor, tree, cancellationToken);
+        var holder = args.Holder ?? actor;
+        var treeLock = await TreeLockAsync(connection, transaction, item, actor, args.Tree, cancellationToken);
         var retake = Retake(item.Ref, treeLock.Tree);
 
         const string sql =
@@ -55,7 +57,9 @@ public sealed partial class WorkWriter
                                        AS "QualifiedRef",
                    c.session_id        AS "SessionId",
                    c.holder_user_id    AS "HolderUserId",
-                   coalesce(hs.name, c.agent_name) AS "Holder"
+                   coalesce(hs.name, c.agent_name) AS "Holder",
+                   c.claimed_by_session_id AS "ClaimedBySessionId",
+                   c.claimed_by        AS "ClaimedBy"
             FROM   claim c
             JOIN   item i ON i.id = c.item_id
             LEFT   JOIN item s ON s.id = i.ref_scope_id AND s.id <> i.id
@@ -74,7 +78,7 @@ public sealed partial class WorkWriter
             transaction,
             cancellationToken: cancellationToken))).AsList();
 
-        var live = held.FirstOrDefault(h => h.ItemId == item.Id ? !Retakes(h, actor) : !SameSession(h, actor));
+        var live = held.FirstOrDefault(h => h.ItemId == item.Id ? !Retakes(h, actor, holder) : !SameSession(h, holder));
         if (live is null)
         {
             return null;
@@ -88,7 +92,7 @@ public sealed partial class WorkWriter
         {
             return Refusal.Blocked(
                 $"work_status({item.Ref} → in_progress). {item.Ref} is already claimed.",
-                $"{live.Holder} holds a live claim on {item.Ref}; {Lease(live)}",
+                $"{HolderText(live)} holds a live claim on {item.Ref}; {Lease(live)}",
                 "work_next() for something else that is ready",
                 $"{retake} once that lease lapses — "
                 + "the sweep releases it and returns the item to ready");
@@ -113,15 +117,114 @@ public sealed partial class WorkWriter
         return Refusal.Blocked(
             $"work_status({item.Ref} → in_progress). Another writer holds this working tree.",
             $"{live.QualifiedRef} holds the write claim on \"{Glyph.Flat(live.SerializationKey)}\" "
-            + $"(held by {live.Holder}{you}); {Lease(live)}",
+            + $"(held by {HolderText(live)}{you}); {Lease(live)}",
             [.. routes]);
     }
 
-    /// <summary>The holder re-taking its own item: the same session, or the same user and name where the claim has none.</summary>
-    private static bool Retakes(ClaimHolder holder, Actor actor)
-        => holder.SessionId is { } session
+    /// <summary>
+    /// The holder re-taking its own item: the same session, or the same user and name where the claim has none. A claim
+    /// taken for a session (mcp-fit/6) is also re-taken by the session that claimed it, and re-claimed for its holder.
+    /// </summary>
+    private static bool Retakes(ClaimHolder held, Actor actor, Actor holder)
+        => held.SessionId is { } session
             ? session == actor.SessionId
-            : SameHolder(holder, actor);
+              || session == holder.SessionId
+              || (held.ClaimedBySessionId is { } claimer && claimer == actor.SessionId)
+            : SameHolder(held, actor);
+
+    /// <summary>The holder as surfaces print it: <c>wk-a (for ctl)</c> for a claim taken for a session.</summary>
+    private static string HolderText(ClaimHolder held)
+        => held.ClaimedBy is { Length: > 0 } by ? $"{held.Holder} (for {by})" : held.Holder;
+
+    /// <summary>The longest lease an orchestrator may set (C346); the default stays the workspace's.</summary>
+    internal const int MaxLeaseMinutes = 480;
+
+    /// <summary>
+    /// mcp-fit/6 — <c>lease</c> and <c>for_session</c>, refused before anything is opened: they travel with
+    /// <c>in_progress</c> only, an orchestrator, controller or human sets them (C344), and the lease is capped.
+    /// </summary>
+    private static string? DelegationRefusal(string reference, Move move, Actor actor, StatusArgs args)
+    {
+        if (!args.Delegates)
+        {
+            return null;
+        }
+
+        var plain = $"work_status(ref:\"{reference}\", to:\"in_progress\")";
+
+        if (move != Move.InProgress)
+        {
+            return Refusal.Blocked(
+                $"work_status({reference} → {Transitions.Name(move)}) with lease or for_session. Nothing was written.",
+                "lease and for_session only travel with to:\"in_progress\" — they shape the claim it takes",
+                $"work_status(ref:\"{reference}\", to:\"{Transitions.Name(move)}\") without them");
+        }
+
+        if (actor.Role is not (ActorRole.Orchestrator or ActorRole.Controller or ActorRole.Human))
+        {
+            return Refusal.Blocked(
+                $"work_status({reference} → in_progress) with lease or for_session from a {Pg.Label(actor.Role)}. "
+                + "Nothing was written.",
+                "only an orchestrator sets a lease or claims for another session; your own claim takes the "
+                + "workspace's lease and renews on every call you make",
+                $"{plain} without them",
+                "work_report(…) to hand back, and ask your orchestrator for a longer lease");
+        }
+
+        if (args.Lease is { } lease && lease is < 1 or > MaxLeaseMinutes)
+        {
+            return Refusal.Blocked(
+                $"work_status({reference} → in_progress, lease:{lease}). Nothing was written.",
+                $"lease is 1..{MaxLeaseMinutes} minutes; without it the workspace's default applies, and any call "
+                + "of the holding session renews it",
+                $"work_status(ref:\"{reference}\", to:\"in_progress\", lease:{MaxLeaseMinutes}{For(args)})");
+        }
+
+        return null;
+    }
+
+    private static string For(StatusArgs args)
+        => string.IsNullOrWhiteSpace(args.ForSession) ? string.Empty : $", for_session:\"{args.ForSession!.Trim()}\"";
+
+    private sealed record HolderRow(Guid Id, string Name);
+
+    /// <summary>
+    /// The session <c>for_session</c> names: a live one of this workspace and of the caller's user, by the name it was
+    /// launched under. A released name is a tombstone and a revoked session holds nothing, so both are refused.
+    /// </summary>
+    private static async Task<(Actor? Holder, string? Refused)> HolderAsync(
+        NpgsqlConnection connection,
+        NpgsqlTransaction transaction,
+        ItemRow item,
+        Actor actor,
+        string name,
+        CancellationToken cancellationToken)
+    {
+        var wanted = name.Trim();
+        var row = await connection.QuerySingleOrDefaultAsync<HolderRow>(new CommandDefinition(
+            """
+            SELECT id AS "Id", name AS "Name"
+            FROM   agent_session
+            WHERE  workspace_id = @workspace AND user_id IS NOT DISTINCT FROM @user AND name = @name
+              AND  revoked_at IS NULL
+            FOR    UPDATE;
+            """,
+            new { workspace = item.WorkspaceId, user = actor.UserId, name = wanted },
+            transaction,
+            cancellationToken: cancellationToken));
+
+        if (row is null)
+        {
+            return (null, Refusal.Blocked(
+                $"work_status({item.Ref} → in_progress, for_session:\"{Glyph.Flat(wanted)}\"). Nothing was written.",
+                $"no live session is named \"{Glyph.Flat(wanted)}\" in this workspace — it was never launched, or "
+                + "it was released or stopped",
+                "agent_list() for the names of the live sessions, then the same call with one of them",
+                $"work_status(ref:\"{item.Ref}\", to:\"in_progress\") to hold it yourself"));
+        }
+
+        return (actor with { SessionId = row.Id, Session = row.Name }, null);
+    }
 
     /// <summary>
     /// Users share role names, so a name alone is not a holder: a claim with no user is the caller's only when the caller
@@ -157,60 +260,93 @@ public sealed partial class WorkWriter
         NpgsqlTransaction transaction,
         ItemRow item,
         Actor actor,
-        string? tree,
+        StatusArgs args,
         CancellationToken cancellationToken)
     {
-        var ttl = await TtlAsync(connection, transaction, item.WorkspaceId, cancellationToken);
-        var treeLock = await TreeLockAsync(connection, transaction, item, actor, tree, cancellationToken);
+        var holder = args.Holder ?? actor;
+        var delegated = args.Holder is not null;
+        var lease = args.Lease;
+        var ttl = lease ?? await TtlAsync(connection, transaction, item.WorkspaceId, cancellationToken);
+        var treeLock = await TreeLockAsync(connection, transaction, item, actor, args.Tree, cancellationToken);
+        var label = delegated ? $"{holder.Label} (for {actor.Label})" : actor.Label;
 
+        // A plain re-take by the holder keeps the claim as it is, lease and claimer included; anything else re-shapes it:
+        // a claim for a session, a lease, or the claimer taking its item back, who is then the holder.
         const string extend =
             """
             UPDATE claim
-               SET heartbeat_at = now(), expires_at = now() + make_interval(mins => @ttl),
-                   session_id = coalesce(@session, session_id)
+               SET heartbeat_at          = now(),
+                   expires_at            = now() + make_interval(mins => CASE WHEN @keep AND session_id = @holder
+                                                                              THEN coalesce(lease_minutes, @ttl)
+                                                                              ELSE @ttl END),
+                   claimed_by            = CASE WHEN @keep AND session_id = @holder THEN claimed_by
+                                                ELSE @claimedBy END,
+                   claimed_by_session_id = CASE WHEN @keep AND session_id = @holder THEN claimed_by_session_id
+                                                ELSE @claimedBySession END,
+                   lease_minutes         = CASE WHEN @keep AND session_id = @holder THEN lease_minutes
+                                                ELSE @lease END,
+                   session_id            = coalesce(@holder, session_id)
              WHERE item_id = @item AND released_at IS NULL
                AND (session_id = @session
+                    OR session_id = @holder
+                    OR claimed_by_session_id = @session
                     OR (session_id IS NULL AND agent_name = @agent AND holder_user_id IS NOT DISTINCT FROM @user));
             """;
 
         var extended = await connection.ExecuteAsync(new CommandDefinition(
             extend,
-            new { item = item.Id, agent = actor.Name, user = actor.UserId, session = actor.SessionId, ttl },
+            Typed(new()
+            {
+                ["item"] = (item.Id, DbType.Guid),
+                ["agent"] = (actor.Name, DbType.String),
+                ["user"] = (actor.UserId, DbType.Guid),
+                ["session"] = (actor.SessionId, DbType.Guid),
+                ["holder"] = (holder.SessionId, DbType.Guid),
+                ["keep"] = (!delegated && lease is null, DbType.Boolean),
+                ["claimedBy"] = (delegated ? actor.Label : null, DbType.String),
+                ["claimedBySession"] = (delegated ? actor.SessionId : null, DbType.Guid),
+                ["lease"] = (lease, DbType.Int32),
+                ["ttl"] = (ttl, DbType.Int32),
+            }),
             transaction,
             cancellationToken: cancellationToken));
 
-        await SessionTreeAsync(connection, transaction, actor, treeLock.Tree, cancellationToken);
+        await SessionTreeAsync(connection, transaction, holder, treeLock.Tree, cancellationToken);
 
         if (extended > 0)
         {
-            return $"extended, {ttl}m left, held by {actor.Label}";
+            return $"extended, held by {label}";
         }
 
         const string acquire =
             """
             INSERT INTO claim
                 (id, item_id, serialization_key, key_workspace_id, key_user_id, tree, writes, agent_name, holder_user_id,
-                 role, acquired_at, heartbeat_at, expires_at, session_id)
+                 role, acquired_at, heartbeat_at, expires_at, session_id, lease_minutes, claimed_by, claimed_by_session_id)
             VALUES (@id, @item, @key, @keyWorkspace, @keyUser, @tree, true, @agent, @user,
-                    @role::actor_role, now(), now(), now() + make_interval(mins => @ttl), @session);
+                    @role::actor_role, now(), now(), now() + make_interval(mins => @ttl), @session,
+                    @lease, @claimedBy, @claimedBySession);
             """;
 
         await connection.ExecuteAsync(new CommandDefinition(
             acquire,
-            new
+            Typed(new()
             {
-                id = Guid.CreateVersion7(),
-                item = item.Id,
-                key = treeLock.Key,
-                keyWorkspace = treeLock.Workspace,
-                keyUser = treeLock.User,
-                tree = treeLock.Tree,
-                agent = actor.Name,
-                user = actor.UserId,
-                role = Pg.Label(actor.Role),
-                ttl,
-                session = actor.SessionId,
-            },
+                ["id"] = (Guid.CreateVersion7(), DbType.Guid),
+                ["item"] = (item.Id, DbType.Guid),
+                ["key"] = (treeLock.Key, DbType.String),
+                ["keyWorkspace"] = (treeLock.Workspace, DbType.Guid),
+                ["keyUser"] = (treeLock.User, DbType.Guid),
+                ["tree"] = (treeLock.Tree, DbType.String),
+                ["agent"] = (actor.Name, DbType.String),
+                ["user"] = (actor.UserId, DbType.Guid),
+                ["role"] = (Pg.Label(actor.Role), DbType.String),
+                ["ttl"] = (ttl, DbType.Int32),
+                ["session"] = (holder.SessionId, DbType.Guid),
+                ["lease"] = (lease, DbType.Int32),
+                ["claimedBy"] = (delegated ? actor.Label : null, DbType.String),
+                ["claimedBySession"] = (delegated ? actor.SessionId : null, DbType.Guid),
+            }),
             transaction,
             cancellationToken: cancellationToken));
 
@@ -221,11 +357,31 @@ public sealed partial class WorkWriter
             item.Id,
             actor,
             "claim_acquired",
-            $"{item.Ref} claimed by {actor.Label} for {ttl}m",
-            new { agent = actor.Name, session = actor.Session, serialization_key = treeLock.Key, tree = treeLock.Tree, ttl_minutes = ttl },
+            $"{item.Ref} claimed by {label} for {ttl}m",
+            new
+            {
+                agent = actor.Name,
+                session = holder.Session,
+                claimed_by = delegated ? actor.Label : null,
+                serialization_key = treeLock.Key,
+                tree = treeLock.Tree,
+                ttl_minutes = ttl,
+            },
             cancellationToken);
 
-        return $"acquired by {actor.Label}, {ttl}m lease on \"{Glyph.Flat(treeLock.Key)}\"";
+        return $"acquired by {label}, {ttl}m lease on \"{Glyph.Flat(treeLock.Key)}\"";
+    }
+
+    /// <summary>Parameters whose nulls still carry a type, which a <c>CASE</c> or <c>coalesce</c> cannot infer.</summary>
+    private static DynamicParameters Typed(Dictionary<string, (object? Value, DbType Type)> values)
+    {
+        var parameters = new DynamicParameters();
+        foreach (var (name, (value, type)) in values)
+        {
+            parameters.Add(name, value, type);
+        }
+
+        return parameters;
     }
 
     /// <summary>doc 11 — the tree a session last claimed on, and its first one as its cwd if no header named one.</summary>
@@ -273,7 +429,8 @@ public sealed partial class WorkWriter
 
     /// <summary>
     /// doc 07 §5 — "any write by the claim holder extends it. No separate heartbeat call: a tool
-    /// that needs a keep-alive gets forgotten." Every write tool calls this on its way out.
+    /// that needs a keep-alive gets forgotten." Every write tool calls this on its way out. A claim taken for a
+    /// session renews on its claimer's writes too, to its own lease (mcp-fit/6).
     /// </summary>
     private static async Task HeartbeatAsync(
         NpgsqlConnection connection,
@@ -286,11 +443,12 @@ public sealed partial class WorkWriter
         const string sql =
             """
             UPDATE claim c
-               SET heartbeat_at = now(), expires_at = now() + make_interval(mins => @ttl)
+               SET heartbeat_at = now(), expires_at = now() + make_interval(mins => coalesce(c.lease_minutes, @ttl))
               FROM item i
              WHERE i.id = @item
                AND c.released_at IS NULL
                AND (c.session_id = @session
+                    OR c.claimed_by_session_id = @session
                     OR (c.session_id IS NULL AND c.agent_name = @agent AND c.holder_user_id IS NOT DISTINCT FROM @user))
                AND (c.item_id = i.id OR c.item_id = ANY(i.ancestors));
             """;

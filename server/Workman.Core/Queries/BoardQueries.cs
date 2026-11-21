@@ -800,7 +800,7 @@ public sealed partial class BoardQueries(NpgsqlDataSource dataSource)
                      WHERE  aa.item_id = i.id AND aa.kind = 'commit'
                      ORDER  BY aa.at DESC LIMIT 1) a ON true
             LEFT   JOIN LATERAL (
-                     SELECT coalesce(hs.name, cc.agent_name) AS label
+                     SELECT coalesce(hs.name, cc.agent_name) || coalesce(' (for ' || cc.claimed_by || ')', '') AS label
                      FROM   claim cc LEFT JOIN agent_session hs ON hs.id = cc.session_id
                      WHERE  cc.item_id = i.id AND cc.released_at IS NULL AND cc.expires_at >= now()
                      LIMIT  1) h ON true
@@ -894,7 +894,7 @@ public sealed partial class BoardQueries(NpgsqlDataSource dataSource)
                       i.ref        AS "ItemRef",
                       CASE WHEN s.ref IS NULL THEN i.ref ELSE s.ref || '/' || i.ref END
                                    AS "QualifiedRef",
-                      coalesce(hs.name, c.agent_name) AS "AgentName",
+                      coalesce(hs.name, c.agent_name) || coalesce(' (for ' || c.claimed_by || ')', '') AS "AgentName",
                       c.expires_at AS "ExpiresAt",
                       c.tree       AS "Tree",
                       c.item_id,
@@ -938,7 +938,7 @@ public sealed partial class BoardQueries(NpgsqlDataSource dataSource)
                       CASE WHEN s.ref IS NULL THEN i.ref ELSE s.ref || '/' || i.ref END
                                    AS "QualifiedRef",
                       i.title      AS "Title",
-                      coalesce(hs.name, c.agent_name) AS "AgentName",
+                      coalesce(hs.name, c.agent_name) || coalesce(' (for ' || c.claimed_by || ')', '') AS "AgentName",
                       c.expires_at AS "ExpiresAt",
                       c.item_id
                FROM   claim c
