@@ -43,7 +43,14 @@ public sealed record VerifyArg(
     [property: JsonPropertyName("command")] string? Command = null,
     [property: JsonPropertyName("result_line")] string? ResultLine = null,
     [property: JsonPropertyName("passed")] bool? Passed = null,
-    [property: JsonPropertyName("red_check")] string? RedCheck = null);
+    [property: JsonPropertyName("red_check")] string? RedCheck = null,
+    [property: JsonPropertyName("confirmed_by")] string? ConfirmedBy = null,
+    [property: JsonPropertyName("quote")] string? Quote = null)
+{
+    /// <summary>The confirmation form, <c>{confirmed_by, quote}</c>, instead of a command's run (mcp-fit/4).</summary>
+    [JsonIgnore]
+    public bool Confirmation => !string.IsNullOrWhiteSpace(ConfirmedBy) || !string.IsNullOrWhiteSpace(Quote);
+}
 
 /// <summary>
 /// The write side. It lives in <c>Workman.Core</c> beside the renderers for the same reason they
@@ -77,7 +84,8 @@ public sealed partial class WorkWriter(NpgsqlDataSource dataSource, BoardQueries
         bool RequiresVerify,
         bool RequiresCommit,
         bool RequiresCriteria,
-        DateTimeOffset? StartedAt);
+        DateTimeOffset? StartedAt,
+        bool VerifyManual);
 
     private sealed record ClaimHolder(
         Guid ItemId,
@@ -180,6 +188,19 @@ public sealed partial class WorkWriter(NpgsqlDataSource dataSource, BoardQueries
         var example = $"work_status(ref:\"{reference}\", to:\"done\", verify:{{command:\"<verify_cmd>\", "
                       + "result_line:\"Passed! 187/187\", passed:true}, …)";
 
+        if (args.Verify is { Confirmation: true } confirmation)
+        {
+            return ConfirmationShapeRefusal(
+                $"work_status({reference} → done) with an incomplete confirmation. Nothing was written.",
+                $"work_status(ref:\"{reference}\", to:\"done\", verify:{{confirmed_by:\"<person>\", quote:\"<their words>\"}}, …)",
+                actor,
+                confirmation.ConfirmedBy,
+                confirmation.Quote,
+                confirmation.Command,
+                confirmation.ResultLine,
+                confirmation.Passed is not null);
+        }
+
         if (args.Verify is { } verify)
         {
             if (string.IsNullOrWhiteSpace(verify.Command))
@@ -211,7 +232,7 @@ public sealed partial class WorkWriter(NpgsqlDataSource dataSource, BoardQueries
     /// </summary>
     private static IReadOnlyList<Unmet> BundleUnmet(ItemRow item, StatusArgs args)
     {
-        if (args.Verify is not { } verify)
+        if (args.Verify is not { } verify || verify.Confirmation)
         {
             return [];
         }
@@ -275,7 +296,17 @@ public sealed partial class WorkWriter(NpgsqlDataSource dataSource, BoardQueries
                 cancellationToken);
         }
 
-        if (args.Verify is { } verify)
+        if (args.Verify is { Confirmation: true } confirmation)
+        {
+            if (ConfirmableRefusal(item, "work_status") is { } unconfirmable)
+            {
+                return unconfirmable;
+            }
+
+            await RecordConfirmationAsync(
+                connection, transaction, item, actor, confirmation.ConfirmedBy!, confirmation.Quote!, cancellationToken);
+        }
+        else if (args.Verify is { } verify)
         {
             await RecordVerificationAsync(
                 connection, transaction, item, actor, actor.RunnerFor(null), verify.Command, verify.ResultLine!,
@@ -420,7 +451,12 @@ public sealed partial class WorkWriter(NpgsqlDataSource dataSource, BoardQueries
             $"OK  {item.Ref}  {Transitions.Name(item.Status)} → {Transitions.Name(status)}",
         };
 
-        if (args.Verify is { } verify)
+        if (args.Verify is { Confirmation: true } confirmation)
+        {
+            lines.Add($"    confirm {Confirmed.Text(confirmation.ConfirmedBy, confirmation.Quote)}");
+            lines.Add("            recorded as a person's confirmation, not as a verification");
+        }
+        else if (args.Verify is { } verify)
         {
             lines.Add($"    verify  {(verify.Passed is true ? "✓" : "✗")} by {Pg.Label(actor.RunnerFor(null))}: "
                       + Glyph.Row(verify.ResultLine, 76));
@@ -783,7 +819,8 @@ public sealed partial class WorkWriter(NpgsqlDataSource dataSource, BoardQueries
                    k.requires_verify   AS "RequiresVerify",
                    k.requires_commit   AS "RequiresCommit",
                    k.requires_criteria AS "RequiresCriteria",
-                   i.started_at   AS "StartedAt"
+                   i.started_at   AS "StartedAt",
+                   i.verify_manual AS "VerifyManual"
             FROM   item i
             JOIN   item_kind k ON k.key = i.kind
             WHERE  i.id = @id
@@ -809,7 +846,7 @@ public sealed partial class WorkWriter(NpgsqlDataSource dataSource, BoardQueries
 
         const string verificationSql =
             """
-            SELECT passed AS "Passed", command AS "Command", run_by AS "RunBy"
+            SELECT passed AS "Passed", command AS "Command", run_by AS "RunBy", confirmed_by AS "ConfirmedBy"
             FROM   verification WHERE item_id = @id ORDER BY at DESC;
             """;
 
@@ -875,7 +912,8 @@ public sealed partial class WorkWriter(NpgsqlDataSource dataSource, BoardQueries
             verifications,
             children,
             blockers,
-            subtreeFindings);
+            subtreeFindings,
+            item.VerifyManual);
     }
 
     /// <summary>

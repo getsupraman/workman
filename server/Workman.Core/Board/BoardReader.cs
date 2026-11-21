@@ -296,7 +296,9 @@ public sealed partial class BoardReader(WorkmanQueries queries, BoardQueries boa
                     verify.ResultLine,
                     verify.RunBy.ToString().ToLowerInvariant(),
                     Since(verify.At),
-                    verify.Passed),
+                    verify.Passed,
+                    verify.ConfirmedBy,
+                    verify.Quote),
             Attention: attention,
             NotesConsumed: IsWorkerVariant(variant) && shown.Any(n => n.ToItemId == item.Id),
             Dates: await DatesAsync(scope, callable, cancellationToken));
@@ -651,7 +653,7 @@ public sealed partial class BoardReader(WorkmanQueries queries, BoardQueries boa
         // character for character, and a mismatch used to be invisible until the refusal.
         if (facts?.VerifyCmd is { Length: > 0 } verifyCmd)
         {
-            lines.Add($"  verify    {verifyCmd}");
+            lines.Add(facts.VerifyManual ? $"  verify    (manual) {verifyCmd}" : $"  verify    {verifyCmd}");
         }
 
         lines.Add("  report    status / files / verify / red_check / deviations / assumptions / risks / not_done");

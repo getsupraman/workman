@@ -175,7 +175,7 @@ public static partial class ApiV1
                     claim,
                     row.Commit,
                     row is { VerificationPassed: { } passed, VerificationRunBy: { } runBy, VerificationAt: { } at }
-                        ? new VerificationSummaryView(passed, V1Text.Snake(runBy), at)
+                        ? new VerificationSummaryView(passed, V1Text.Snake(runBy), at, row.VerificationConfirmedBy)
                         : null,
                     [.. blockedBy[row.Id].Distinct().Select(book.Item)],
                     Flags(row, claim),
@@ -185,7 +185,8 @@ public static partial class ApiV1
                     dated?.Due,
                     dated?.NotBefore,
                     dated?.Late ?? false,
-                    (int)(dated?.Slips ?? 0));
+                    (int)(dated?.Slips ?? 0),
+                    row.VerifyManual);
             }).ToList();
 
             var root = book.Row(id);
@@ -218,10 +219,11 @@ public static partial class ApiV1
 
         // BoardQueries.DoneUnverifiedAsync's predicate exactly — a NULL resolution fails its
         // `<> 'obsolete'` — so a board's flags always sum to the overview's count.
+        // ...and its confirmed twin, BoardQueries.DoneConfirmedAsync's: a close on a person's word is neither (C343).
         if (row is { Status: ItemStatus.Done, RequiresVerify: true, OrchestratorVerified: false }
             && row.Resolution is { } resolution && resolution != ItemResolution.Obsolete)
         {
-            flags.Add("done_unverified");
+            flags.Add(row.Confirmed ? "confirmed" : "done_unverified");
         }
 
         if (row.Forced)

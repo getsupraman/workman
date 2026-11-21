@@ -106,7 +106,9 @@ public static partial class ApiV1
                 V1Text.Snake(v.RunBy),
                 book.Session(v.SessionId),
                 RedCheck(v.RedCheck),
-                v.At))],
+                v.At,
+                v.ConfirmedBy,
+                v.Quote))],
             [.. artifacts.Select(a => new ArtifactView(a.Kind, a.Value, a.At))],
             [.. children.Select(c => new ChildView(book.Item(c.Id), new CriteriaCountView(c.CriteriaChecked, c.CriteriaTotal)))],
             [.. findings.Select(f => new FindingView(book.Item(f.Id), f.Severity, f.Source))],
@@ -138,7 +140,8 @@ public static partial class ApiV1
             dated?.Due,
             dated?.NotBefore,
             dated?.Late ?? false,
-            (int)(dated?.Slips ?? 0)));
+            (int)(dated?.Slips ?? 0),
+            item.VerifyManual));
     }
 
     /// <summary>

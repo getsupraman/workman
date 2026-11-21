@@ -5,7 +5,11 @@ namespace Workman.Core.Writing;
 
 public sealed record CriterionFact(int Seq, string Text, bool Checked);
 
-public sealed record VerificationFact(bool Passed, string? Command, VerifyRunner RunBy);
+/// <param name="ConfirmedBy">A confirmation by a person (mcp-fit/4): a human row carrying the person's name and words.</param>
+public sealed record VerificationFact(bool Passed, string? Command, VerifyRunner RunBy, string? ConfirmedBy = null)
+{
+    public bool Confirmation => ConfirmedBy is { Length: > 0 };
+}
 
 public sealed record BlockerFact(string Ref, string Title);
 
@@ -29,7 +33,15 @@ public sealed record DoneFacts(
     IReadOnlyList<VerificationFact> Verifications,
     IReadOnlyList<string> OpenChildren,
     IReadOnlyList<BlockerFact> Blockers,
-    IReadOnlyList<FindingFact>? SubtreeFindings = null);
+    IReadOnlyList<FindingFact>? SubtreeFindings = null,
+    bool VerifyManual = false)
+{
+    /// <summary>
+    /// Whether a confirmation by a person can stand for condition 2: only when there is no command to run, or the
+    /// command is explicitly marked manual (C343, C345 — never read from the text of <see cref="VerifyCmd"/>).
+    /// </summary>
+    public bool Confirmable => VerifyManual || string.IsNullOrWhiteSpace(VerifyCmd);
+}
 
 /// <summary>
 /// The five conditions of doc 07 §3, as a pure function of the facts. No database here, so the
@@ -162,6 +174,11 @@ public static class DoneGuard
         var passed = facts.Verifications.Where(v => v.Passed).ToList();
         var byOrchestrator = passed.Where(v => v.RunBy == VerifyRunner.Orchestrator).ToList();
 
+        if (byOrchestrator.Count == 0 && facts.Confirmable && passed.Any(v => v.Confirmation))
+        {
+            return;
+        }
+
         if (byOrchestrator.Count == 0)
         {
             var have = passed.Count == 0
@@ -170,7 +187,9 @@ public static class DoneGuard
 
             unmet.Add(new Unmet(
                 $"no verification with run_by=orchestrator ({have})",
-                [route, OneCall(facts, "verify:{command:\"…\", result_line:\"…\", passed:true}")]));
+                facts.Confirmable
+                    ? [route, OneCall(facts, "verify:{command:\"…\", result_line:\"…\", passed:true}"), ConfirmRoute(facts)]
+                    : [route, OneCall(facts, "verify:{command:\"…\", result_line:\"…\", passed:true}")]));
             return;
         }
 
@@ -253,6 +272,11 @@ public static class DoneGuard
     /// </summary>
     private static string OneCall(DoneFacts facts, string evidence)
         => $"work_status(ref:\"{facts.Ref}\", to:\"done\", {evidence}) does it in the same call as the close";
+
+    /// <summary>The route for an item a person's word can close: its check is manual, or there is no command.</summary>
+    private static string ConfirmRoute(DoneFacts facts)
+        => $"work_verify(ref:\"{facts.Ref}\", confirmed_by:\"<person>\", quote:\"<their words>\") if a person "
+           + (facts.VerifyManual ? "made this manual check" : "confirmed it");
 
     private static bool Same(string left, string right)
         => string.Equals(Glyph.Flat(left), Glyph.Flat(right), StringComparison.OrdinalIgnoreCase);

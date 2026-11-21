@@ -15,7 +15,7 @@ public static partial class ApiV1
     private static readonly IReadOnlyDictionary<string, string[]> KindFilters = new Dictionary<string, string[]>
     {
         ["transition"] = ["status", "forced_transition", "deferred"],
-        ["verification"] = ["verified"],
+        ["verification"] = ["verified", "confirmed"],
         ["report"] = ["reported"],
         ["finding"] = ["finding"],
         ["note"] = ["note"],

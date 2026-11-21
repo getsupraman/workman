@@ -75,7 +75,9 @@ public sealed record VerificationRow(
     string ResultLine,
     bool Passed,
     VerifyRunner RunBy,
-    DateTimeOffset At);
+    DateTimeOffset At,
+    string? ConfirmedBy,
+    string? Quote);
 
 /// <summary>
 /// Per-item evidence and shape for the flag vocabulary of doc 06 §2, keyed by <see cref="Id"/>: a
@@ -101,7 +103,9 @@ public sealed record ItemFacts(
     DateTimeOffset? StartedAt,
     bool Moved,
     string? HeldBy,
-    string? VerifyCmd);
+    string? VerifyCmd,
+    bool VerifyManual,
+    int Confirmations);
 
 public sealed record BlockerRow(
     string FindingRef,
@@ -161,6 +165,15 @@ public sealed record GateRow(string PhaseRef, string QualifiedRef, int TaskCount
 /// spans every run under a project and where <c>phase-4</c> names four different phases.
 /// </summary>
 public sealed record UnverifiedRow(string Ref, string QualifiedRef, Guid Id, DateTimeOffset? ClosedAt);
+
+/// <summary>A close that rests on a person's confirmation (mcp-fit/4): who confirmed it, and their latest words.</summary>
+public sealed record ConfirmedRow(
+    string Ref,
+    string QualifiedRef,
+    Guid Id,
+    DateTimeOffset? ClosedAt,
+    string ConfirmedBy,
+    string Quote);
 
 public sealed record EventRow(
     long Seq,

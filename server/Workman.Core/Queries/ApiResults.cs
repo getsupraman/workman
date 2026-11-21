@@ -84,7 +84,7 @@ public sealed record RunRow(
 
 public sealed record RunOfProjectRow(Guid ProjectId, Guid RunId);
 
-public sealed record ScopeVerificationRow(Guid ScopeId, bool Passed, DateTimeOffset At);
+public sealed record ScopeVerificationRow(Guid ScopeId, bool Passed, DateTimeOffset At, bool Confirmed);
 
 public sealed record RunConfigRow(Guid RunId, string? Branch, string? Worktree);
 
@@ -118,7 +118,10 @@ public sealed record BoardRow(
     bool Forced,
     bool UnconsumedNotes,
     int RollupTotal,
-    int RollupDone);
+    int RollupDone,
+    string? VerificationConfirmedBy,
+    bool Confirmed,
+    bool VerifyManual);
 
 public sealed record ItemDetailRow(
     string? Intent,
@@ -131,7 +134,8 @@ public sealed record ItemDetailRow(
     string? ClosedBy,
     DateTimeOffset OpenedAt,
     DateTimeOffset? StartedAt,
-    DateTimeOffset? ClosedAt);
+    DateTimeOffset? ClosedAt,
+    bool VerifyManual);
 
 public sealed record CriterionDetail(int Seq, string Text, bool Checked, string? Evidence, DateTimeOffset? CheckedAt);
 
@@ -157,7 +161,9 @@ public sealed record VerificationDetail(
     VerifyRunner RunBy,
     Guid? SessionId,
     string? RedCheck,
-    DateTimeOffset At);
+    DateTimeOffset At,
+    string? ConfirmedBy,
+    string? Quote);
 
 public sealed record ArtifactRow(string Kind, string Value, DateTimeOffset At);
 

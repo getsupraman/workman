@@ -28,7 +28,8 @@ public sealed record NewItemArg(
     [property: JsonPropertyName("priority")] int? Priority = null,
     [property: JsonPropertyName("repo")] RepoArg? Repo = null,
     [property: JsonPropertyName("due")] string? Due = null,
-    [property: JsonPropertyName("not_before")] string? NotBefore = null);
+    [property: JsonPropertyName("not_before")] string? NotBefore = null,
+    [property: JsonPropertyName("verify_manual")] bool? VerifyManual = null);
 
 /// <summary>One criterion as <c>work_update</c> addresses it: <c>c2</c>, checked, with its evidence.</summary>
 public sealed record CriterionArg(
@@ -50,7 +51,8 @@ public sealed record UpdateArgs(
     RepoArg? Unbind = null,
     bool Take = false,
     string? Due = null,
-    string? NotBefore = null);
+    string? NotBefore = null,
+    bool? VerifyManual = null);
 
 public sealed partial class WorkWriter
 {
@@ -254,6 +256,7 @@ public sealed partial class WorkWriter
                 DueAt = due.Value?.At,
                 NotBeforeOn = notBefore.Value?.Day,
                 NotBeforeAt = notBefore.Value?.At,
+                VerifyManual = wanted.VerifyManual is true,
             };
 
             // A top-level project the server numbers can meet a project-N it cannot see, one whose members the caller
@@ -500,6 +503,7 @@ public sealed partial class WorkWriter
                    SET title      = coalesce(@title, title),
                        intent     = coalesce(@intent, intent),
                        verify_cmd = coalesce(@verify, verify_cmd),
+                       verify_manual = coalesce(@verify_manual, verify_manual),
                        risk_tags  = coalesce(@risk, risk_tags),
                        priority   = coalesce(@priority, priority),
                        due_on        = CASE WHEN @due_set THEN @due_on::date ELSE due_on END,
@@ -516,6 +520,10 @@ public sealed partial class WorkWriter
                 Bind(command, "title", Blank(args.Title) ? null : Glyph.Flat(args.Title));
                 Bind(command, "intent", Blank(args.Intent) ? null : args.Intent);
                 Bind(command, "verify", Blank(args.VerifyCmd) ? null : args.VerifyCmd);
+                command.Parameters.Add(new NpgsqlParameter("verify_manual", NpgsqlTypes.NpgsqlDbType.Boolean)
+                {
+                    Value = (object?)args.VerifyManual ?? DBNull.Value,
+                });
                 Bind(command, "risk", args.RiskTags);
                 Bind(command, "priority", args.Priority is { } p ? (short)Math.Clamp(p, -9, 9) : null);
                 Bind(command, "due_set", dueChange.Set);
@@ -1243,6 +1251,7 @@ public sealed partial class WorkWriter
         if (!Blank(args.Title)) fields.Add("title");
         if (!Blank(args.Intent)) fields.Add("intent");
         if (!Blank(args.VerifyCmd)) fields.Add("verify_cmd");
+        if (args.VerifyManual is not null) fields.Add("verify_manual");
         if (args.RiskTags is { Length: > 0 }) fields.Add("risk_tags");
         if (args.Priority is not null) fields.Add("priority");
         if (args.Due is not null) fields.Add("due");

@@ -51,7 +51,8 @@ public sealed partial class BoardReader
 
             if (row.VerifyCmd is { Length: > 0 })
             {
-                lines.AddRange(BriefRenderer.Wrap("      verify  ", row.VerifyCmd, 14));
+                lines.AddRange(BriefRenderer.Wrap(
+                    "      verify  ", fact is { VerifyManual: true } ? $"(manual) {row.VerifyCmd}" : row.VerifyCmd, 14));
             }
             else
             {
@@ -316,13 +317,16 @@ public sealed partial class BoardReader
                 lines.AddRange(BriefRenderer.Wrap(label, criterion.Text, label.Length));
             }
 
+            if (fact is { VerifyManual: true, VerifyCmd: { Length: > 0 } manualCmd })
+            {
+                lines.AddRange(BriefRenderer.Wrap("  verify    ", $"(manual) {manualCmd}", 12));
+            }
+
             foreach (var verification in verifications[item.Id])
             {
                 lines.AddRange(BriefRenderer.Wrap(
                     "  evidence  ",
-                    $"{(verification.Passed ? "✓" : "✗")} {verification.ResultLine} "
-                    + $"by {verification.RunBy.ToString().ToLowerInvariant()}, "
-                    + Glyph.Ago(Since(verification.At)),
+                    $"{EvidenceText(verification)}, {Glyph.Ago(Since(verification.At))}",
                     12));
             }
 
@@ -798,6 +802,18 @@ public sealed partial class BoardReader
                 $"work_verify(ref:\"{shown}\", result_line:\"…\", run_by:\"orchestrator\")"));
         }
 
+        // C343: a close on a person's word is listed apart from both of the above, never as either.
+        foreach (var confirmed in await board.DoneConfirmedAsync(scope.Item.Id, cancellationToken))
+        {
+            var shown = ShownRef(confirmed.Ref, confirmed.QualifiedRef, homeRef);
+            rows.Add(new AuditRow(
+                "done-confirmed",
+                shown,
+                $"closed on a person's confirmation, not a verification — {Confirmed.Text(confirmed.ConfirmedBy, confirmed.Quote)}",
+                $"work_verify(ref:\"{shown}\", command:\"…\", result_line:\"…\", run_by:\"orchestrator\") if it can be "
+                + "checked by a run; otherwise it stands on their word, on the record"));
+        }
+
         foreach (var dep in await queries.UnclosedDependenciesAsync(scope.Item.Id, cancellationToken))
         {
             var (waiting, on) = await DependencyRefsAsync(scope, dep, cancellationToken, runQualified: true);
@@ -971,6 +987,15 @@ public sealed partial class BoardReader
     private Task<string> CallableAsync(ScopeRef item, ItemFacts? facts, CancellationToken cancellationToken)
         => board.CallableRefAsync(item, facts is { RefShared: true }, cancellationToken);
 
+    /// <summary>
+    /// One verification row as every text view prints it: a confirmation by a person in its own words (C343), never
+    /// as a pass or under a runner's name; a run as its mark, the line it printed and who ran it.
+    /// </summary>
+    internal static string EvidenceText(VerificationRow verification)
+        => verification.ConfirmedBy is { Length: > 0 }
+            ? Confirmed.Text(verification.ConfirmedBy, verification.Quote)
+            : $"{(verification.Passed ? "✓" : "✗")} {verification.ResultLine} by {verification.RunBy.ToString().ToLowerInvariant()}";
+
     private static string EvidenceOf(ItemFacts? facts) => facts switch
     {
         null => Glyph.None,
@@ -1070,7 +1095,12 @@ public sealed partial class BoardReader
             flags.Add(Flag.BlockedBy(string.Join(" ", blockers.Take(2))));
         }
 
-        if (facts is { RequiresVerify: true, OrchestratorVerifications: 0, Moved: false }
+        if (facts is { RequiresVerify: true, OrchestratorVerifications: 0, Moved: false, Confirmations: > 0 }
+            && status is ItemStatus.Done or ItemStatus.Review)
+        {
+            flags.Add(Flag.Confirmed);
+        }
+        else if (facts is { RequiresVerify: true, OrchestratorVerifications: 0, Moved: false }
             && status is ItemStatus.Done or ItemStatus.Review)
         {
             flags.Add(Flag.NoVerify);

@@ -315,7 +315,8 @@ public sealed partial class ApiQueries(NpgsqlDataSource dataSource)
             SELECT DISTINCT ON (sc.id)
                    sc.id    AS "ScopeId",
                    v.passed AS "Passed",
-                   v.at     AS "At"
+                   v.at     AS "At",
+                   v.confirmed_by IS NOT NULL AS "Confirmed"
             FROM   unnest(@scopes) AS sc(id)
             JOIN   item i ON i.id = sc.id OR i.ancestors @> ARRAY[sc.id]::uuid[]
             JOIN   verification v ON v.item_id = i.id
@@ -409,7 +410,11 @@ public sealed partial class ApiQueries(NpgsqlDataSource dataSource)
         EXISTS (SELECT 1 FROM note n
                 WHERE n.to_item_id = i.id AND n.consumed_at IS NULL)                  AS "UnconsumedNotes",
         (r.open_count + r.doing_count + r.blocked_count + r.review_count + r.done_count)::int AS "RollupTotal",
-        r.done_count::int AS "RollupDone"
+        r.done_count::int AS "RollupDone",
+        v.confirmed_by AS "VerificationConfirmedBy",
+        EXISTS (SELECT 1 FROM verification cv
+                WHERE cv.item_id = i.id AND cv.passed AND cv.confirmed_by IS NOT NULL) AS "Confirmed",
+        i.verify_manual AS "VerifyManual"
         """;
 
     /// <summary>The joins <see cref="BoardColumns"/> reads, <c>p.path</c> the document path among them.</summary>
@@ -426,7 +431,7 @@ public sealed partial class ApiQueries(NpgsqlDataSource dataSource)
                   WHERE  aa.item_id = i.id AND aa.kind = 'commit'
                   ORDER  BY aa.at DESC LIMIT 1) a ON true
          LEFT   JOIN LATERAL (
-                  SELECT vv.passed, vv.run_by, vv.at FROM verification vv
+                  SELECT vv.passed, vv.run_by, vv.at, vv.confirmed_by FROM verification vv
                   WHERE  vv.item_id = i.id
                   ORDER  BY vv.at DESC, vv.id DESC LIMIT 1) v ON true
          """;
@@ -445,7 +450,8 @@ public sealed partial class ApiQueries(NpgsqlDataSource dataSource)
                    i.closed_by           AS "ClosedBy",
                    i.opened_at           AS "OpenedAt",
                    i.started_at          AS "StartedAt",
-                   i.closed_at           AS "ClosedAt"
+                   i.closed_at           AS "ClosedAt",
+                   i.verify_manual       AS "VerifyManual"
             FROM   item i WHERE i.id = @id;
             """;
 
@@ -502,7 +508,9 @@ public sealed partial class ApiQueries(NpgsqlDataSource dataSource)
                    run_by       AS "RunBy",
                    session_id   AS "SessionId",
                    red_check::text AS "RedCheck",
-                   at           AS "At"
+                   at           AS "At",
+                   confirmed_by AS "ConfirmedBy",
+                   quote        AS "Quote"
             FROM   verification WHERE item_id = @id
             ORDER  BY at, id;
             """;

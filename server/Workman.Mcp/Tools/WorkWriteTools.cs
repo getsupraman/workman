@@ -79,24 +79,32 @@ public sealed class WorkWriteTools(
         [Description("The item this evidence belongs to.")]
         string @ref,
         [Description("The line it printed, e.g. \"Passed! Failed: 0, Passed: 91\" — never an exit code.")]
-        string result_line,
+        string? result_line = null,
         [Description("The command. Defaults to the item's verify_cmd.")]
         string? command = null,
         [Description("Record red runs too — an audit looks for them.")]
-        bool passed = true,
+        bool? passed = null,
         [Description("orchestrator | worker | ci | human. A worker token is always worker.")]
         string? run_by = null,
         [Description("JSON counts, e.g. {\"passed\":187,\"failed\":0}.")]
         string? counts = null,
         [Description("What you reverted to prove it could fail, and how many failed.")]
         string? red_check = null,
+        [Description("Who confirmed it. Needs quote; verify_cmd empty or manual.")]
+        string? confirmed_by = null,
+        [Description("Their words.")]
+        string? quote = null,
         CancellationToken cancellationToken = default)
         => await WriteAsync(
             "work_verify",
             @ref,
-            id => writer.VerifyAsync(
-                id, @ref, caller.Actor, command, result_line, passed, run_by, counts, red_check,
-                cancellationToken),
+            id => string.IsNullOrWhiteSpace(confirmed_by) && string.IsNullOrWhiteSpace(quote)
+                ? writer.VerifyAsync(
+                    id, @ref, caller.Actor, command, result_line, passed ?? true, run_by, counts, red_check,
+                    cancellationToken)
+                : writer.ConfirmAsync(
+                    id, @ref, caller.Actor, confirmed_by, quote, command, result_line, passed is not null,
+                    cancellationToken),
             cancellationToken);
 
     [Authorize(Policy = WorkmanPolicies.Worker)]
@@ -185,13 +193,15 @@ public sealed class WorkWriteTools(
         bool take = false,
         [Description("YYYY-MM-DD or ISO date-time; \"\" clears.")] string? due = null,
         [Description("As due.")] string? not_before = null,
+        [Description("The check is a person's.")]
+        bool? verify_manual = null,
         CancellationToken cancellationToken = default)
         => await WriteAsync(
             "work_update",
             @ref,
             id => writer.UpdateAsync(
                 id, caller.Actor, @ref,
-                new UpdateArgs(title, intent, verify_cmd, risk_tags, priority, criteria, expected_revision, repo, archived, unbind, take, due, not_before),
+                new UpdateArgs(title, intent, verify_cmd, risk_tags, priority, criteria, expected_revision, repo, archived, unbind, take, due, not_before, verify_manual),
                 cancellationToken),
             cancellationToken);
 

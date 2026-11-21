@@ -104,6 +104,201 @@ public sealed partial class WorkWriter
     }
 
     /// <summary>
+    /// mcp-fit/4 — a confirmation by a person: their name and their words, recorded as its own kind of evidence and
+    /// never as a passed verification (C343). It is refused before anything is written when it is half given, mixed
+    /// with a command's run, recorded by a worker (C344), or aimed at an item whose real, non-manual
+    /// <c>verify_cmd</c> is the check: a person's word does not stand in for a command that can be run.
+    /// </summary>
+    public async Task<WriteResult> ConfirmAsync(
+        Guid workspaceId,
+        string? reference,
+        Actor actor,
+        string? confirmedBy,
+        string? quote,
+        string? command = null,
+        string? resultLine = null,
+        bool passedGiven = false,
+        CancellationToken cancellationToken = default)
+    {
+        var (scope, unresolved) = await ResolveAsync(workspaceId, reference, cancellationToken);
+        if (scope is null)
+        {
+            return WriteResult.No(unresolved!);
+        }
+
+        if (ConfirmationShapeRefusal(
+                $"work_verify({scope.Ref}) with an incomplete confirmation. Nothing was written.",
+                $"work_verify(ref:\"{scope.Ref}\", confirmed_by:\"<person>\", quote:\"<their words>\")",
+                actor,
+                confirmedBy,
+                quote,
+                command,
+                resultLine,
+                passedGiven) is { } malformed)
+        {
+            return WriteResult.No(malformed);
+        }
+
+        await using var tenant = await _connections.TenantAsync(cancellationToken);
+        var (connection, transaction) = tenant;
+
+        var item = await LoadAsync(connection, transaction, scope.Id, cancellationToken);
+
+        if (ConfirmableRefusal(item, "work_verify") is { } unconfirmable)
+        {
+            return WriteResult.No(unconfirmable);
+        }
+
+        await RecordConfirmationAsync(connection, transaction, item, actor, confirmedBy!, quote!, cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
+
+        var lines = new List<string>
+        {
+            $"OK  {item.Ref}  confirmation recorded",
+            $"    {Confirmed.Text(confirmedBy, quote)}",
+            "    recorded as a person's confirmation, counted apart from verifications and forced closes",
+            string.Empty,
+            Transitions.IsTerminal(item.Status)
+                ? $"Next: nothing to move — {item.Ref} is already {Transitions.Name(item.Status)}; this is kept with its record."
+                : $"Next: work_status(ref:\"{item.Ref}\", to:\"done\").",
+        };
+
+        return WriteResult.Ok(string.Join("\n", lines));
+    }
+
+    /// <summary>
+    /// What a confirmation must carry and who may record one, the same for <c>work_verify</c> and the one-call
+    /// close: both the person and the quote, none of a command's run, and an actor who can close — never a worker.
+    /// </summary>
+    private static string? ConfirmationShapeRefusal(
+        string headline,
+        string example,
+        Actor actor,
+        string? confirmedBy,
+        string? quote,
+        string? command,
+        string? resultLine,
+        bool passedGiven)
+    {
+        if (actor.Role is not (ActorRole.Orchestrator or ActorRole.Controller or ActorRole.Human))
+        {
+            return Refusal.Blocked(
+                $"{headline.Split(" with ")[0]} — a {Pg.Label(actor.Role)} cannot record a confirmation. Nothing was written.",
+                "only an orchestrator, a controller or a human records a person's confirmation — a worker hands back "
+                + "what it heard, and the orchestrator records it (C344)",
+                "work_report(ref:\"…\", status:\"done\", verify:\"<who confirmed it, and their words>\", …) and hand back");
+        }
+
+        var unmet = new List<Unmet>();
+
+        if (Blank(confirmedBy))
+        {
+            unmet.Add(new Unmet("confirmed_by is missing — name the person who confirmed it", example));
+        }
+
+        if (Blank(quote))
+        {
+            unmet.Add(new Unmet("quote is missing — their words are the evidence, a name alone is not", example));
+        }
+
+        var mixed = new[] { (!Blank(command), "command"), (!Blank(resultLine), "result_line"), (passedGiven, "passed") }
+            .Where(f => f.Item1)
+            .Select(f => f.Item2)
+            .ToList();
+
+        if (mixed.Count > 0)
+        {
+            unmet.Add(new Unmet(
+                $"a confirmation carries no {string.Join(", ", mixed)} — a person's word is not a command's run",
+                [example, "work_verify(ref:\"…\", command:\"…\", result_line:\"…\") for a run, on its own"]));
+        }
+
+        return unmet.Count == 0 ? null : Refusal.Blocked(headline, unmet);
+    }
+
+    /// <summary>
+    /// C343 — a confirmation can close an item only when its check is a person's: no <c>verify_cmd</c>, or one marked
+    /// manual with <c>verify_manual</c>. On a real command it is refused here, at write time, with both ways on.
+    /// </summary>
+    private static string? ConfirmableRefusal(ItemRow item, string tool)
+    {
+        if (item.VerifyManual || Blank(item.VerifyCmd))
+        {
+            return null;
+        }
+
+        return Refusal.Blocked(
+            $"{tool}({item.Ref}) with a confirmation, but its verify_cmd is a command. Nothing was written.",
+            [
+                new Unmet(
+                    $"{item.Ref} is judged by \"{Glyph.Flat(item.VerifyCmd)}\", which is not marked manual — a person's "
+                    + "word does not stand in for a command that can be run",
+                    [
+                        $"work_verify(ref:\"{item.Ref}\", command:\"{Glyph.Flat(item.VerifyCmd)}\", result_line:\"…\", "
+                        + "run_by:\"orchestrator\") — run the command",
+                        $"work_update(ref:\"{item.Ref}\", verify_manual:true) if it really is a manual check, then confirm again",
+                    ]),
+            ]);
+    }
+
+    /// <summary>
+    /// The confirmation row: <c>run_by = human</c>, passed, no command, the person and their words — and the quote as
+    /// <c>result_line</c>, so a surface that knows nothing of confirmations still prints their words, not a pass.
+    /// </summary>
+    private async Task RecordConfirmationAsync(
+        NpgsqlConnection connection,
+        NpgsqlTransaction transaction,
+        ItemRow item,
+        Actor actor,
+        string confirmedBy,
+        string quote,
+        CancellationToken cancellationToken)
+    {
+        const string sql =
+            """
+            INSERT INTO verification
+                (id, workspace_id, item_id, command, result_line, passed, run_by, session_id, confirmed_by, quote)
+            VALUES (@id, @workspace, @item, NULL, @quote, true, 'human'::verify_runner, @session, @person, @quote);
+            """;
+
+        var person = Glyph.Flat(confirmedBy);
+        var words = Glyph.Flat(quote);
+
+        await connection.ExecuteAsync(new CommandDefinition(
+            sql,
+            new
+            {
+                id = Guid.CreateVersion7(),
+                workspace = item.WorkspaceId,
+                item = item.Id,
+                session = actor.SessionId,
+                person,
+                quote = words,
+            },
+            transaction,
+            cancellationToken: cancellationToken));
+
+        await HeartbeatAsync(
+            connection,
+            transaction,
+            item.Id,
+            actor,
+            await TtlAsync(connection, transaction, item.WorkspaceId, cancellationToken),
+            cancellationToken);
+
+        await EventAsync(
+            connection,
+            transaction,
+            item.WorkspaceId,
+            item.Id,
+            actor,
+            "confirmed",
+            $"{item.Ref} {Confirmed.Text(person, words)}",
+            new { confirmed_by = person, quote = words },
+            cancellationToken);
+    }
+
+    /// <summary>
     /// doc 01 §3.4. The attempt and the report, plus an <c>assumption</c> row per line of
     /// <c>assumptions[]</c> — the field the skills call the highest-value line in the format, which
     /// is the point of taking the report as a schema rather than as text.

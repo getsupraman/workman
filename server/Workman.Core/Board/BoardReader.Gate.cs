@@ -128,8 +128,7 @@ public sealed partial class BoardReader
                 ? ["      verify   none recorded"]
                 : BriefRenderer.Wrap(
                     "      verify   ",
-                    $"{(last.Passed ? "✓" : "✗")} {last.ResultLine} "
-                    + $"by {last.RunBy.ToString().ToLowerInvariant()}, {Glyph.Ago(Since(last.At))}",
+                    $"{EvidenceText(last)}, {Glyph.Ago(Since(last.At))}",
                     15));
         }
 

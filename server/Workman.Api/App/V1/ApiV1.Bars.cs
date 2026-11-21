@@ -61,7 +61,8 @@ public static partial class ApiV1
                             V1Text.Resolution(r.Resolution),
                             claims.GetValueOrDefault(r.Id) is { Expired: true },
                             r.Proof,
-                            [.. blockedBy[r.Id].Distinct().Select(id => book.Item(id).QualifiedRef)]);
+                            [.. blockedBy[r.Id].Distinct().Select(id => book.Item(id).QualifiedRef)],
+                            r.Confirmed);
                     })]);
             })]));
     }

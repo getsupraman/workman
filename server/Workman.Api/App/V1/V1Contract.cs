@@ -59,7 +59,7 @@ public sealed record JournalEventView(
     string? Summary,
     JsonElement Payload);
 
-public sealed record LastVerificationView(bool Passed, DateTimeOffset At);
+public sealed record LastVerificationView(bool Passed, DateTimeOffset At, bool Confirmed = false);
 
 public sealed record RunOverviewView(
     ItemRefView Item,
@@ -99,7 +99,8 @@ public sealed record CriteriaCountView(int Checked, int Total);
 // deadlines/6: Due and NotBefore as written (a day YYYY-MM-DD, or an instant in UTC); Late, closed as done after its
 // due; Slips, the times its due moved later. An item that never carried a date reads null, null, false, 0.
 
-public sealed record VerificationSummaryView(bool Passed, string RunBy, DateTimeOffset At);
+/// <param name="ConfirmedBy">Set when the latest evidence is a person's confirmation, never a passed run (C343).</param>
+public sealed record VerificationSummaryView(bool Passed, string RunBy, DateTimeOffset At, string? ConfirmedBy = null);
 
 public sealed record BoardRowView(
     ItemRefView Item,
@@ -123,7 +124,8 @@ public sealed record BoardRowView(
     string? Due = null,
     string? NotBefore = null,
     bool Late = false,
-    int Slips = 0);
+    int Slips = 0,
+    bool VerifyManual = false);
 
 public sealed record BoardView(
     DateTimeOffset AsOf,
@@ -161,7 +163,8 @@ public sealed record BarLeafView(
     string? Resolution,
     bool ClaimExpired,
     bool Proof,
-    IReadOnlyList<string> WaitingOn);
+    IReadOnlyList<string> WaitingOn,
+    bool Confirmed = false);
 
 public sealed record CriterionView(string Id, string Text, bool Checked, string? Evidence, DateTimeOffset? CheckedAt);
 
@@ -188,7 +191,9 @@ public sealed record VerificationView(
     string RunBy,
     SessionView? Session,
     string? RedCheck,
-    DateTimeOffset At);
+    DateTimeOffset At,
+    string? ConfirmedBy = null,
+    string? Quote = null);
 
 public sealed record ArtifactView(string Kind, string Value, DateTimeOffset At);
 
@@ -244,7 +249,8 @@ public sealed record ItemPageView(
     string? Due = null,
     string? NotBefore = null,
     bool Late = false,
-    int Slips = 0);
+    int Slips = 0,
+    bool VerifyManual = false);
 
 /// <summary>Set on an item <c>work_import</c> wrote: its source in the repo, and why it was judged still true.</summary>
 public sealed record ImportedView(

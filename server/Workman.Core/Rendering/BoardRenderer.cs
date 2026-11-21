@@ -11,6 +11,9 @@ namespace Workman.Core.Rendering;
 public static class Flag
 {
     public const string NoVerify = "⚠ no verify";
+
+    /// <summary>C343 — closed on a person's confirmation: neither verified nor unproven.</summary>
+    public const string Confirmed = "confirmed";
     public const string ReviewRequired = "review-req";
 
     public static string BlockedBy(string reference) => $"← {reference}";

@@ -24,6 +24,9 @@ public sealed partial class WorkWriter
     {
         public DateOnly? DueOn { get; init; }
 
+        /// <summary>C345 — set only from an explicit <c>verify_manual</c>; never read from <see cref="VerifyCmd"/>.</summary>
+        public bool VerifyManual { get; init; }
+
         public DateTimeOffset? DueAt { get; init; }
 
         public DateOnly? NotBeforeOn { get; init; }
@@ -90,7 +93,10 @@ public sealed partial class WorkWriter
             await NextSeqAsync(connection, transaction, parent.Id, cancellationToken),
             item.Title,
             item.Intent,
-            item.VerifyCmd);
+            item.VerifyCmd)
+        {
+            VerifyManual = item.VerifyManual,
+        };
 
         await InsertItemAsync(connection, transaction, carried, cancellationToken);
         await CopyCriteriaAsync(connection, transaction, item.Id, carried.Id, cancellationToken);
@@ -223,10 +229,10 @@ public sealed partial class WorkWriter
             """
             INSERT INTO item (id, workspace_id, parent_id, kind, ref, seq, title, intent,
                               verify_cmd, risk_tags, priority, severity, source,
-                              due_on, due_at, not_before_on, not_before_at)
+                              due_on, due_at, not_before_on, not_before_at, verify_manual)
             VALUES (@id, @workspace, @parent, @kind, @ref, @seq, @title, @intent,
                     @verify, @risk, @priority, @severity, @source,
-                    @due_on::date, @due_at::timestamptz, @nb_on::date, @nb_at::timestamptz);
+                    @due_on::date, @due_at::timestamptz, @nb_on::date, @nb_at::timestamptz, @verify_manual);
             """;
 
         await using var command = new NpgsqlCommand(sql, connection, transaction);
@@ -247,6 +253,7 @@ public sealed partial class WorkWriter
         Bind(command, "due_at", row.DueAt);
         Bind(command, "nb_on", row.NotBeforeOn);
         Bind(command, "nb_at", row.NotBeforeAt);
+        Bind(command, "verify_manual", row.VerifyManual);
 
         await command.ExecuteNonQueryAsync(cancellationToken);
     }

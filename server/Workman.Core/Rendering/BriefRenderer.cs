@@ -19,7 +19,9 @@ public sealed record VerifyLine(
     string ResultLine,
     string RunBy,
     TimeSpan Ago,
-    bool Passed);
+    bool Passed,
+    string? ConfirmedBy = null,
+    string? Quote = null);
 
 /// <summary>One dated row of the brief's DATES block: overdue, or due within the window.</summary>
 public sealed record DateLine(string Ref, string Title, string Due, int DaysLeft, bool Overdue, IReadOnlyList<string> Blockers);
@@ -249,6 +251,12 @@ public static class BriefRenderer
         }
 
         lines.Add(string.Empty);
+        if (verify.ConfirmedBy is { Length: > 0 })
+        {
+            lines.AddRange(Wrap("LAST VERIFY  ", $"{Confirmed.Text(verify.ConfirmedBy, verify.Quote)}, {Glyph.Ago(verify.Ago)}", 13));
+            return;
+        }
+
         var command = verify.Command is { Length: > 0 } ? $"{verify.Command} → " : string.Empty;
         lines.AddRange(Wrap(
             "LAST VERIFY  ",

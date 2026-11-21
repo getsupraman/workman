@@ -88,7 +88,9 @@ public sealed partial class BoardReader
                     verify.ResultLine,
                     verify.RunBy.ToString().ToLowerInvariant(),
                     Since(verify.At),
-                    verify.Passed),
+                    verify.Passed,
+                    verify.ConfirmedBy,
+                    verify.Quote),
             Next: open.Count > 0
                 ? $"resume run {openLines[0].Ref} — work_brief(scope:\"{openLines[0].Ref}\")"
                 : "start a run under this project — "

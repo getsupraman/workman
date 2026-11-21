@@ -691,7 +691,9 @@ public sealed partial class BoardQueries(NpgsqlDataSource dataSource)
                     v.result_line AS "ResultLine",
                     v.passed      AS "Passed",
                     v.run_by      AS "RunBy",
-                    v.at          AS "At"
+                    v.at          AS "At",
+                    v.confirmed_by AS "ConfirmedBy",
+                    v.quote       AS "Quote"
              FROM   verification v
              JOIN   item i ON i.id = v.item_id
              WHERE  {InScope}
@@ -714,7 +716,9 @@ public sealed partial class BoardQueries(NpgsqlDataSource dataSource)
                    v.result_line AS "ResultLine",
                    v.passed      AS "Passed",
                    v.run_by      AS "RunBy",
-                   v.at          AS "At"
+                   v.at          AS "At",
+                   v.confirmed_by AS "ConfirmedBy",
+                   v.quote       AS "Quote"
             FROM   verification v
             JOIN   item i ON i.id = v.item_id
             WHERE  v.item_id = ANY(@ids)
@@ -775,7 +779,9 @@ public sealed partial class BoardQueries(NpgsqlDataSource dataSource)
                    i.started_at                 AS "StartedAt",
                    coalesce(i.resolution = 'obsolete', false) AS "Moved",
                    h.label                      AS "HeldBy",
-                   i.verify_cmd                 AS "VerifyCmd"
+                   i.verify_cmd                 AS "VerifyCmd",
+                   i.verify_manual              AS "VerifyManual",
+                   coalesce(v.confirmed, 0)::int AS "Confirmations"
             FROM   item i
             JOIN   item_kind k ON k.key = i.kind
             LEFT   JOIN item s ON s.id = i.ref_scope_id AND s.id <> i.id
@@ -784,8 +790,9 @@ public sealed partial class BoardQueries(NpgsqlDataSource dataSource)
                      SELECT count(*) AS total, count(*) FILTER (WHERE ic.checked) AS ok
                      FROM   item_criterion ic WHERE ic.item_id = i.id) c ON true
             LEFT   JOIN LATERAL (
-                     SELECT count(*) FILTER (WHERE vv.passed) AS passed,
-                            count(*) FILTER (WHERE vv.passed AND vv.run_by = 'orchestrator') AS orch
+                     SELECT count(*) FILTER (WHERE vv.passed AND vv.confirmed_by IS NULL) AS passed,
+                            count(*) FILTER (WHERE vv.passed AND vv.run_by = 'orchestrator') AS orch,
+                            count(*) FILTER (WHERE vv.passed AND vv.confirmed_by IS NOT NULL) AS confirmed
                      FROM   verification vv WHERE vv.item_id = i.id) v ON true
             LEFT   JOIN LATERAL (
                      SELECT aa.value FROM artifact aa
@@ -1057,10 +1064,55 @@ public sealed partial class BoardQueries(NpgsqlDataSource dataSource)
                AND  k.requires_verify
                AND  NOT EXISTS (SELECT 1 FROM verification v
                                 WHERE v.item_id = i.id AND v.passed AND v.run_by = 'orchestrator')
+               AND  NOT EXISTS (SELECT 1 FROM verification c
+                                WHERE c.item_id = i.id AND c.passed AND c.confirmed_by IS NOT NULL)
              ORDER  BY i.closed_at DESC NULLS LAST, i.ref;
              """;
 
         return await ScopedAsync<UnverifiedRow>(sql, new { scopes = Scoped.Ids(scopeItemIds) }, cancellationToken);
+    }
+
+    /// <summary>
+    /// C343 — done on a person's confirmation and on nothing an orchestrator ran: its own count, never a verified close
+    /// and never one <see cref="DoneUnverifiedAsync(Guid, CancellationToken)"/> lists. A deferral is left out, as there.
+    /// </summary>
+    public async Task<IReadOnlyList<ConfirmedRow>> DoneConfirmedAsync(
+        Guid scopeItemId,
+        CancellationToken cancellationToken = default)
+        => [.. (await DoneConfirmedAsync([scopeItemId], cancellationToken))[scopeItemId]];
+
+    /// <summary><see cref="DoneConfirmedAsync(Guid, CancellationToken)"/> for many scopes in one command.</summary>
+    public async Task<ILookup<Guid, ConfirmedRow>> DoneConfirmedAsync(
+        IReadOnlyCollection<Guid> scopeItemIds,
+        CancellationToken cancellationToken = default)
+    {
+        const string sql =
+            $"""
+             SELECT i.ref AS "Ref",
+                    CASE WHEN s.ref IS NULL THEN i.ref ELSE s.ref || '/' || i.ref END
+                         AS "QualifiedRef",
+                    i.id        AS "Id",
+                    i.closed_at AS "ClosedAt",
+                    c.confirmed_by AS "ConfirmedBy",
+                    c.quote        AS "Quote",
+                    {Scoped.Column}
+             FROM   item i
+             {Scoped.JoinItem}
+             JOIN   item_kind k ON k.key = i.kind
+             LEFT   JOIN item s ON s.id = i.ref_scope_id AND s.id <> i.id
+             JOIN   LATERAL (
+                      SELECT cv.confirmed_by, cv.quote FROM verification cv
+                      WHERE  cv.item_id = i.id AND cv.passed AND cv.confirmed_by IS NOT NULL
+                      ORDER  BY cv.at DESC, cv.id DESC LIMIT 1) c ON true
+             WHERE  i.status = 'done'
+               AND  i.resolution <> 'obsolete'
+               AND  k.requires_verify
+               AND  NOT EXISTS (SELECT 1 FROM verification v
+                                WHERE v.item_id = i.id AND v.passed AND v.run_by = 'orchestrator')
+             ORDER  BY i.closed_at DESC NULLS LAST, i.ref;
+             """;
+
+        return await ScopedAsync<ConfirmedRow>(sql, new { scopes = Scoped.Ids(scopeItemIds) }, cancellationToken);
     }
 
     /// <summary>

@@ -31,6 +31,7 @@ public static partial class ApiV1
         // The honesty strip, summed over projects exactly as work_audit counts it: each source reads every project in
         // one command, through the query the per-project call runs.
         var doneUnverified = (await board.DoneUnverifiedAsync(scopes, cancellationToken)).Sum(g => g.Count());
+        var confirmed = (await board.DoneConfirmedAsync(scopes, cancellationToken)).Sum(g => g.Count());
         var forced = (await board.ForcedTransitionsAsync(scopes, cancellationToken)).Sum(g => g.Count());
         var ungated = (await board.UngatedPhasesAsync(scopes, cancellationToken)).Sum(g => g.Count());
         var followupsOpen = (await board.OpenFollowupsAsync(scopes, cancellationToken)).Values.Sum();
@@ -53,7 +54,7 @@ public static partial class ApiV1
                     run.ActiveClaims,
                     run.LastEventAt,
                     inboxByRun.GetValueOrDefault(run.Id),
-                    last is null ? null : new LastVerificationView(last.Passed, last.At)));
+                    last is null ? null : new LastVerificationView(last.Passed, last.At, last.Confirmed)));
             }
 
             projectViews.Add(new ProjectOverviewView(
@@ -80,6 +81,6 @@ public static partial class ApiV1
             projectViews,
             claims,
             inbox.Count,
-            new HonestyView(doneUnverified, forced, ungated, followupsOpen)));
+            new HonestyView(doneUnverified, forced, ungated, followupsOpen, confirmed)));
     }
 }

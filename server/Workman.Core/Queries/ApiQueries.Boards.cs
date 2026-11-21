@@ -19,7 +19,8 @@ public sealed record BarRow(
     ItemResolution? Resolution,
     DateTimeOffset? ClosedAt,
     bool Counted,
-    bool Proof);
+    bool Proof,
+    bool Confirmed);
 
 public sealed partial class ApiQueries
 {
@@ -84,12 +85,13 @@ public sealed partial class ApiQueries
                     i.resolution AS "Resolution",
                     i.closed_at  AS "ClosedAt",
                     {counted}    AS "Counted",
-                    coalesce(v.passed AND v.run_by <> 'worker', false) AS "Proof"
+                    coalesce(v.passed AND v.run_by <> 'worker' AND v.confirmed_by IS NULL, false) AS "Proof",
+                    coalesce(v.passed AND v.confirmed_by IS NOT NULL, false) AS "Confirmed"
              FROM   unnest(@roots) WITH ORDINALITY AS t(root, n)
              JOIN   item i ON i.id = t.root OR i.ancestors @> ARRAY[t.root]
              {WorkmanQueries.DocumentPath}
              LEFT   JOIN LATERAL (
-                      SELECT vv.passed, vv.run_by FROM verification vv
+                      SELECT vv.passed, vv.run_by, vv.confirmed_by FROM verification vv
                       WHERE  vv.item_id = i.id
                       ORDER  BY vv.at DESC, vv.id DESC LIMIT 1) v ON true
              WHERE  i.id = t.root OR i.id = ANY(@claimed) OR {counted}
