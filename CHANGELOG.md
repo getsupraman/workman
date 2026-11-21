@@ -9,6 +9,22 @@ All notable changes to the Workman server and the `workman` plugin are recorded 
 
 Server only. No migration; existing data is not changed.
 
+### Added
+
+- **`work_history` prints when each event happened and pages back past the newest 100.** Every row carries the
+  UTC time to the minute (`2026-11-20 15:57Z`); `beforeSeq` reads the events before a seq, and while older events
+  exist the page ends with `Older: work_history(beforeSeq:N)`, workspace-wide as well as under a scope.
+- **`work_threads` is bounded.** A scope whose threads do not fit one page (100 rows, 16,000 characters) prints a
+  count per kind with the call that reads each; a long kind pages with `limit` and `after` and a `More:` line. A
+  scope that fits prints as before.
+- **`work_brief` names the server release** on a `server 3.2.3` line under its header. `serverInfo.version` and the
+  brief read one constant, `Workman.Core.ServerVersion`, so they cannot differ; a release now bumps that constant.
+
+### Changed
+
+- **`work_search` honours `limit` up to 200** (it stopped at 50) and says `more hits exist` when the result was
+  cut.
+
 ### Fixed
 
 - **Every item is reachable by a ref again.** A followup created under a project with the name of a run under it
